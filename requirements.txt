@@ -1,0 +1,23 @@
+pyquil
+numpy
+networkx
+pandas
+lmfit
+scipy
+sympy
+python-rapidjson
+seaborn
+cvxpy>=1.0.0
+dataclasses; python_version < "3.7"
+
+# test dependencies
+pytest
+pytest-cov
+cobertura-clover-transform
+referenceqvm
+requests
+scikit-learn
+
+# doc dependencies
+sphinx
+sphinx-autodoc-typehints
