@@ -38,7 +38,7 @@ U_RAND = rand_ops.haar_rand_unitary(2)
 
 def test_generate_1q_state_tomography_experiment():
     prog = Program(I(0))
-    one_q_exp = generate_state_tomography_experiment(prog)
+    one_q_exp = generate_state_tomography_experiment(prog, qubits=[0])
     qubits = prog.get_qubits()
     n_qubits = len(qubits)
     dimension = 2 ** n_qubits
@@ -50,7 +50,7 @@ def test_generate_2q_state_tomography_experiment():
     p = Program()
     p.inst(H(0))
     prep_prog = p.inst(CZ(0, 1))
-    two_q_exp = generate_state_tomography_experiment(prep_prog)
+    two_q_exp = generate_state_tomography_experiment(prep_prog, qubits=[0, 1])
     qubits = prep_prog.get_qubits()
     n_qubits = len(qubits)
     dimension = 2 ** n_qubits
