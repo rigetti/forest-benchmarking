@@ -1,11 +1,13 @@
 import re
-
-from pyquil.gates import I, RX, CNOT, MEASURE
+import numpy as np
 from pyquil import Program
-from pyquil.noise import decoherence_noise_with_asymmetric_ro
 from pyquil.device import gates_in_isa
+from pyquil.gates import I, RX, CNOT, MEASURE
+from pyquil.noise import decoherence_noise_with_asymmetric_ro
 
-from forest_qcvv.readout import get_flipped_program
+from forest_qcvv.readout import get_flipped_program, measure_grouped_readout_error, marginal_for_qubits, \
+    estimate_confusion_matrix, measure_grouped_readout_error_param
+
 
 def test_get_flipped_program():
     program = Program()
@@ -43,7 +45,9 @@ def test_consistency(qvm):
     cm1 = marginal_for_qubits(cm1_3q, qubits, qubit)
     cm2 = measure_grouped_readout_error(qvm, qubits=qubit, num_shots=num_shots, group_size=1)[qubit]
     cm3 = estimate_confusion_matrix(qvm, qubit[0], num_shots)
+    cm4 = measure_grouped_readout_error_param(qvm, qubits=qubit, num_shots=num_shots, group_size=1)[qubit]
     atol = .01
     assert np.allclose(cm1, cm2, atol=atol)
     assert np.allclose(cm2, cm3, atol=atol)
     assert np.allclose(cm1, cm3, atol=atol)
+    assert np.allclose(cm2, cm4, atol=atol)

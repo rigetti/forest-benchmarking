@@ -115,31 +115,31 @@ def readout_group_param(num_qubits: int) -> Tuple[Program, List[QubitPlaceholder
 
 
 def measure_grouped_readout_error_param(qc: QuantumComputer,
-                                        qubit_labels: List[int] = [],
+                                        qubits: Tuple[int] = [],
                                         num_shots: int = 1000,
                                         group_size: int = 1) -> Dict[Tuple[int, ...], np.ndarray]:
     """
-    Measures the confusion matrix for all groups of qubits in qubit_labels of the given group size.
+    Measures the confusion matrix for all groups of qubits in qubits of the given group size.
 
     :param qc: a quantum computer whose readout error you wish to characterize
-    :param qubit_labels: a list of accessible qubits on the qc you wish to characterize. Defaults to all qubits in qc.
+    :param qubits: a list of accessible qubits on the qc you wish to characterize. Defaults to all qubits in qc.
     :param num_shots: number of shots for each group of qubits
     :param group_size: the size of the groups; there will be a group for each subset of qubits_labels with this size
-    :return: a dictionary whose keys are all possible groups of the group_size formed from the qubits in qubit_labels
+    :return: a dictionary whose keys are all possible groups of the group_size formed from the qubits in qubits
         and whose values are the confusion matrix for the corresponding group, each a 2**group_size square matrix.
     """
     # establish default as all operational qubits
-    if not qubit_labels:
-        qubit_labels = qc.qubits()
+    if not qubits:
+        qubits = qc.qubits()
 
-    qubit_labels = sorted(qubit_labels)
+    qubits = sorted(qubits)
 
     program, placeholders = readout_group_param(group_size)
 
-    groups = itertools.combinations(qubit_labels, group_size)
+    groups = itertools.combinations(qubits, group_size)
     confusion_matrices = {}
     for group in groups:
-        prog = address_qubits(program, qubit_mapping={ph: qubit for ph, qubit in zip(placeholders, qubit_labels)})
+        prog = address_qubits(program, qubit_mapping={ph: qubit for ph, qubit in zip(placeholders, qubits)})
         prog.wrap_in_numshots_loop(shots=num_shots)
         executable = qc.compiler.native_quil_to_executable(prog)
 
@@ -173,13 +173,13 @@ def measure_grouped_readout_error(qc: QuantumComputer,
                                   num_shots: int = 1000,
                                   group_size: int = 1) -> Dict[Tuple[int, ...], np.ndarray]:
     """
-    Measures the confusion matrix for all groups of qubits in qubit_labels of the given group size.
+    Measures the confusion matrix for all groups of qubits in qubits of the given group size.
 
     :param qc: a quantum computer whose readout error you wish to characterize
     :param qubits: a list of accessible qubits on the qc you wish to characterize. Defaults to all qubits in qc.
     :param num_shots: number of shots for each group of qubits
     :param group_size: the size of the groups; there will be a group for each subset of qubits_labels with this size
-    :return: a dictionary whose keys are all possible groups of the group_size formed from the qubits in qubit_labels
+    :return: a dictionary whose keys are all possible groups of the group_size formed from the qubits in qubits
     and whose values are the confusion matrix for the corresponding group, each a 2**group_size square matrix.
     """
     # establish default as all operational qubits
