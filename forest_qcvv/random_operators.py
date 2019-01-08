@@ -29,6 +29,7 @@ def haar_rand_unitary(D):
     """
     Given a Hilbert space dimension $D$ this function 
     returns a unitary operator U ∈ C^D×D drawn from the Haar measure.
+
     The error is of order 10^-16.
 
     :param D: Hilbert space dimension (scalar).
@@ -41,11 +42,11 @@ def haar_rand_unitary(D):
          http://www.ams.org/notices/200705/fea-mezzadri-web.pdf
     
     """
-    Z = ginibre_matrix_complex(D, D) #/np.sqrt(2)
+    Z = ginibre_matrix_complex(D, D)  # /np.sqrt(2)
     Q, R = np.linalg.qr(Z)
-    Diag = np.diagonal(R)
-    Lambda = np.diag(Diag) / np.absolute(Diag)
-    return np.matmul(Q, Lambda)
+    diag = np.diagonal(R)
+    lamb = np.diag(diag) / np.absolute(diag)
+    return np.matmul(Q, lamb)
 
 
 def haar_rand_state(dimension):

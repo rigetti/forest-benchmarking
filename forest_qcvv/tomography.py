@@ -1,21 +1,25 @@
-import numpy as np
-from typing import Callable, Tuple, List, Optional, Union
-from scipy.linalg import logm, pinv, eigh
-from functools import reduce
+import functools
 import itertools
 from dataclasses import dataclass, replace
+from functools import reduce
+from operator import mul
+from typing import Callable, Tuple, List, Optional, Union, Sequence
 
-from pyquil.paulis import PauliTerm, PauliSum
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.colors import LinearSegmentedColormap
 from pyquil import Program
 from pyquil.api import QuantumComputer
+from pyquil.operator_estimation import ExperimentSetting, \
+    TomographyExperiment as PyQuilTomographyExperiment, ExperimentResult
+from pyquil.paulis import sI, sX, sY, sZ, PauliSum, PauliTerm
+from scipy.linalg import logm, pinv, eigh
 
-from forest_qcvv.utils import *
-from forest_qcvv.superop_conversion import vec, unvec
-import forest_qcvv.operator_estimation as est
 import forest_qcvv.distance_measures as dm
-
-from matplotlib.colors import LinearSegmentedColormap
-import matplotlib.pyplot as plt
+import forest_qcvv.operator_estimation as est
+from forest_qcvv.superop_conversion import vec, unvec
+from forest_qcvv.utils import prepare_prod_sic_state, all_pauli_terms, all_sic_terms, \
+    n_qubit_pauli_basis, transform_pauli_moments_to_bit, transform_bit_moments_to_pauli
 
 MAXITER = "maxiter"
 OPTIMAL = "optimal"
@@ -40,19 +44,26 @@ class TomographyExperiment:
     on the `in_op`"""
 
 
-def generate_state_tomography_experiment(prog: Program) -> TomographyExperiment:
-    """
-    Generate a "TomographyExperiment" containing all the experiments needed to perform quantum state tomography.
-    Only qubits acted on by a gate in the program will be tomographed; to include a `trivial' qubit, insert an Identity
-    gate into the program that acts on that qubit.
+def _state_tomo_settings(qubits: Sequence[int]):
+    """Yield settings over itertools.product(I, X, Y, Z).
 
-    :param prog: A PyQuil program for preparing the state to be characterized.
-    :return: A "TomographyExperiment"
+    Used as a helper function for generate_state_tomography_experiment
+
+    :param qubits: The qubits to tomographize.
     """
-    qubits = prog.get_qubits()
     n_qubits = len(qubits)
-    out_ops = all_pauli_terms(n_qubits, qubits)
-    return TomographyExperiment(in_ops=None, program=prog, out_ops=out_ops)
+    for o_ops in itertools.product([sI, sX, sY, sZ], repeat=n_qubits):
+        o_op = functools.reduce(mul, (op(q) for op, q in zip(o_ops, qubits)), sI())
+
+        yield ExperimentSetting(
+            in_operator=sI(),
+            out_operator=o_op,
+        )
+
+
+def generate_state_tomography_experiment(program: Program, qubits: List[int]):
+    return PyQuilTomographyExperiment(settings=list(_state_tomo_settings(qubits)),
+                                      program=program, qubits=qubits)
 
 
 def generate_process_tomography_experiment(prog: Program) -> TomographyExperiment:
@@ -98,6 +109,19 @@ class TomographyData:
 
     counts: List[int]
     """number of shots used to calculate the `expectation`"""
+
+
+def shim_pyquil_results_to_TomographyData(program, qubits, counts, results: List[ExperimentResult]):
+    return TomographyData(
+        in_ops=[r.setting.in_operator for r in results[1:]],
+        out_ops=[r.setting.out_operator for r in results[1:]],
+        expectations=[r.expectation for r in results[1:]],
+        variances=[r.stddev ** 2 for r in results[1:]],
+        program=program,
+        number_qubits=len(qubits),
+        dimension=2 ** len(qubits),
+        counts=[counts] * (len(results) - 1),
+    )
 
 
 def acquire_tomography_data(experiment: TomographyExperiment, qc: QuantumComputer, var: float = 0.01,
@@ -427,7 +451,7 @@ def iterative_mle_state_estimate(data: TomographyData, dilution=.005, entropy_pe
 
 
 def _R(state, effects, observed_frequencies):
-    """
+    r"""
     This is Eqn 5 in [DIMLE1], i.e.
 
     R(rho) = (1/N) \sum_j (n_j/Pr_j) Pi_j

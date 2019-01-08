@@ -1,38 +1,39 @@
 import numpy as np
+from pyquil.gates import I, H, CZ
+from pyquil.quil import Program
+
+import forest_qcvv.random_operators as rand_ops
+from forest_qcvv import distance_measures as dm
 from forest_qcvv.tomography import generate_state_tomography_experiment, _R, \
     acquire_tomography_data, iterative_mle_state_estimate, project_density_matrix, \
     estimate_variance, linear_inv_state_estimate
-from forest_qcvv import distance_measures as dm
-
-import forest_qcvv.random_operators as rand_ops
-
-from pyquil.quil import Program
-from pyquil.gates import I, H, CZ
 
 np.random.seed(7)  # seed random number generation for all calls to rand_ops
-# Single qubit defs
-P0 = np.array([[1, 0], [0, 0]])
-P1 = np.array([[0, 0], [0, 1]])
-Id = P0 + P1
-plus = np.array([[1], [1]]) / np.sqrt(2)
-Pp = np.matmul(plus, np.matrix.getH(plus))
-Pm = Id - Pp
-effectsZ = [P0, P1]
-effectsX = [Pp, Pm]
-X = Pp - Pm
-Y = 1j * Pp - 1j * Pm
-Z = P0 - P1
-# Two qubit defs
-P00 = np.kron(P0, P0)
-P01 = np.kron(P0, P1)
-P10 = np.kron(P1, P0)
-P11 = np.kron(P1, P1)
-Id2 = P00 + P01 + P10 + P11
-effectsZZ = [P00, P01, P10, P11]
 
-tol = .08
+# Single qubit defs
+PROJ_ZERO = np.array([[1, 0], [0, 0]])
+PROJ_ONE = np.array([[0, 0], [0, 1]])
+ID = PROJ_ZERO + PROJ_ONE
+PLUS = np.array([[1], [1]]) / np.sqrt(2)
+PROJ_PLUS = PLUS @ PLUS.T.conj()
+PROJ_MINUS = ID - PROJ_PLUS
+Z_EFFECTS = [PROJ_ZERO, PROJ_ONE]
+X_EFFECTS = [PROJ_PLUS, PROJ_MINUS]
+X = PROJ_PLUS - PROJ_MINUS
+Y = 1j * PROJ_PLUS - 1j * PROJ_MINUS
+Z = PROJ_ZERO - PROJ_ONE
+
+# Two qubit defs
+P00 = np.kron(PROJ_ZERO, PROJ_ZERO)
+P01 = np.kron(PROJ_ZERO, PROJ_ONE)
+P10 = np.kron(PROJ_ONE, PROJ_ZERO)
+P11 = np.kron(PROJ_ONE, PROJ_ONE)
+ID_2Q = P00 + P01 + P10 + P11
+ZZ_EFFECTS = [P00, P01, P10, P11]
+
+TOL = .08
 var = .005
-Urand = rand_ops.haar_rand_unitary(2)
+U_RAND = rand_ops.haar_rand_unitary(2)
 
 
 def test_generate_1q_state_tomography_experiment():
@@ -71,38 +72,34 @@ def test_generate_2q_state_tomography_experiment():
 
 def test_R_operator_fixed_point_1_qubit():
     # Check fixed point of operator. See Eq. 5 in Řeháček et al., PRA 75, 042108 (2007).
-    rho0 = P0
-    rhop = Pp
-    freqs = [1, 0]
-    # Z basis test
-    assert np.trace(_R(rho0, effectsZ, freqs).dot(rho0).dot(_R(rho0, effectsZ, freqs)) - rho0) == 0
-    # X basis test (now we run into the problem of adding "machine_eps" in _R() def)
-    assert np.trace(
-        _R(rhop, effectsX, freqs).dot(rhop).dot(_R(rhop, effectsX, freqs)) - rhop) < 1e-12
-    # TODO: talk to Anthony and Matt about this^^
-    return
+    obs_freqs = [1, 0]
+
+    def test_trace(rho, effects):
+        return np.trace(_R(rho, effects, obs_freqs) @ rho @ _R(rho, effects, obs_freqs) - rho)
+
+    np.testing.assert_allclose(test_trace(PROJ_ZERO, Z_EFFECTS), 0.0, atol=1e-12)
+    np.testing.assert_allclose(test_trace(PROJ_PLUS, X_EFFECTS), 0.0, atol=1e-12)
 
 
 def test_R_operator_with_hand_calc_example_1_qubit():
     # This example was worked out by hand
-    rho0 = Id / 2
-    freqs = [3, 7]
-    my_by_hand_calc_ans_Z = ((3 / 0.5) * P0 + (7 / 0.5) * P1) / np.sum(freqs)
-    my_by_hand_calc_ans_X = ((3 / 0.5) * Pp + (7 / 0.5) * Pm) / np.sum(freqs)
+    rho = ID / 2
+    obs_freqs = [3, 7]
+    my_by_hand_calc_ans_Z = ((3 / 0.5) * PROJ_ZERO + (7 / 0.5) * PROJ_ONE) / np.sum(obs_freqs)
+    my_by_hand_calc_ans_X = ((3 / 0.5) * PROJ_PLUS + (7 / 0.5) * PROJ_MINUS) / np.sum(obs_freqs)
+
     # Z basis test
-    assert np.trace(_R(rho0, effectsZ, freqs / np.sum(freqs)) - my_by_hand_calc_ans_Z) == 0
+    assert np.trace(_R(rho, Z_EFFECTS, obs_freqs / np.sum(obs_freqs)) - my_by_hand_calc_ans_Z) == 0
     # X basis test
-    assert np.trace(_R(rho0, effectsX, freqs / np.sum(freqs)) - my_by_hand_calc_ans_X) == 0
-    return
+    assert np.trace(_R(rho, X_EFFECTS, obs_freqs / np.sum(obs_freqs)) - my_by_hand_calc_ans_X) == 0
 
 
 def test_R_operator_fixed_point_2_qubit():
     # Check fixed point of operator. See Eq. 5 in Řeháček et al., PRA 75, 042108 (2007).
-    rho00 = P00
-    freqs = [1, 0, 0, 0]
+    obs_freqs = [1, 0, 0, 0]
     # Z basis test
-    assert np.trace(_R(rho00, effectsZZ, freqs / np.sum(freqs)).dot(rho00).dot(_R(rho00, effectsZZ, freqs)) - rho00) == 0
-    return
+    actual = np.trace(_R(P00, ZZ_EFFECTS, obs_freqs) @ P00 @ _R(P00, ZZ_EFFECTS, obs_freqs) - P00)
+    np.testing.assert_allclose(actual, 0.0, atol=1e-12)
 
 
 def test_single_qubit_linear_inv(qvm, wfn):
@@ -111,7 +108,7 @@ def test_single_qubit_linear_inv(qvm, wfn):
     qubits = [0]
 
     # Generate random unitary
-    state_prep = Program().defgate("RandUnitary", Urand)
+    state_prep = Program().defgate("RandUnitary", U_RAND)
     state_prep.inst([("RandUnitary", q) for q in qubits])
 
     # True state
@@ -128,7 +125,7 @@ def test_single_qubit_linear_inv(qvm, wfn):
     estimate = linear_inv_state_estimate(exp_data)
 
     # Compute the Frobeius norm of the different between the estimated operator and the answer
-    assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) <= tol
+    assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) <= TOL
     assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) >= 0.00
 
 
@@ -138,7 +135,7 @@ def test_two_qubit_linear_inv(qvm, wfn):
     qubits = [0, 1]
 
     # Generate random unitary
-    state_prep = Program().defgate("RandUnitary", Urand)
+    state_prep = Program().defgate("RandUnitary", U_RAND)
     state_prep.inst([("RandUnitary", q) for q in qubits])
 
     # True state
@@ -151,7 +148,7 @@ def test_two_qubit_linear_inv(qvm, wfn):
     estimate = linear_inv_state_estimate(exp_data)
 
     # Compute the Frobeius norm of the different between the estimated operator and the answer
-    assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) <= tol
+    assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) <= TOL
     assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) >= 0.00
 
 
@@ -161,7 +158,7 @@ def test_single_qubit_mle(qvm, wfn):
     qubits = [0]
 
     # Generate random unitary
-    state_prep = Program().defgate("RandUnitary", Urand)
+    state_prep = Program().defgate("RandUnitary", U_RAND)
     state_prep.inst([("RandUnitary", q) for q in qubits])
 
     # True state
@@ -175,7 +172,7 @@ def test_single_qubit_mle(qvm, wfn):
     estimate, status = iterative_mle_state_estimate(exp_data, dilution=0.5)
 
     # Compute the Frobeius norm of the different between the estimated operator and the answer
-    assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) <= tol
+    assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) <= TOL
     assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) >= 0.00
 
 
@@ -185,7 +182,7 @@ def test_two_qubit_mle(qvm, wfn):
     qubits = [0, 1]
 
     # Generate random unitary
-    state_prep = Program().defgate("RandUnitary", Urand)
+    state_prep = Program().defgate("RandUnitary", U_RAND)
     state_prep.inst([("RandUnitary", q) for q in qubits])
 
     # True state
@@ -198,17 +195,17 @@ def test_two_qubit_mle(qvm, wfn):
     estimate, status = iterative_mle_state_estimate(exp_data, dilution=0.5)
 
     # Compute the Frobeius norm of the different between the estimated operator and the answer
-    assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) <= tol
+    assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) <= TOL
     assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) >= 0.00
 
 
-def test_MaxEnt_single_qubit(qvm, wfn):
+def test_maxent_single_qubit(qvm, wfn):
     qvm.qam.random_seed = 1
     # Single qubit test
     qubits = [0]
 
     # Generate random unitary
-    state_prep = Program().defgate("RandUnitary", Urand)
+    state_prep = Program().defgate("RandUnitary", U_RAND)
     state_prep.inst([("RandUnitary", q) for q in qubits])
 
     # True state
@@ -222,17 +219,17 @@ def test_MaxEnt_single_qubit(qvm, wfn):
     estimate, status = iterative_mle_state_estimate(exp_data, dilution=0.5, entropy_penalty=1.0)
 
     # Compute the Frobeius norm of the different between the estimated operator and the answer
-    assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) <= tol
+    assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) <= TOL
     assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) >= 0.00
 
 
-def test_MaxEnt_two_qubit(qvm, wfn):
+def test_maxent_two_qubit(qvm, wfn):
     qvm.qam.random_seed = 1
     # Two qubit test
     qubits = [0, 1]
 
     # Generate random unitary
-    state_prep = Program().defgate("RandUnitary", Urand)
+    state_prep = Program().defgate("RandUnitary", U_RAND)
     state_prep.inst([("RandUnitary", q) for q in qubits])
 
     # True state
@@ -246,7 +243,7 @@ def test_MaxEnt_two_qubit(qvm, wfn):
                                                     tol=.001)
 
     # Compute the Frobeius norm of the different between the estimated operator and the answer
-    assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) <= tol
+    assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) <= TOL
     assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) >= 0.00
 
 
@@ -256,7 +253,7 @@ def test_hedged_single_qubit(qvm, wfn):
     qubits = [0]
 
     # Generate random unitary
-    state_prep = Program().defgate("RandUnitary", Urand)
+    state_prep = Program().defgate("RandUnitary", U_RAND)
     state_prep.inst([("RandUnitary", q) for q in qubits])
 
     # True state
@@ -270,7 +267,7 @@ def test_hedged_single_qubit(qvm, wfn):
     estimate, status = iterative_mle_state_estimate(exp_data, dilution=0.5, beta=0.5)
 
     # Compute the Frobeius norm of the different between the estimated operator and the answer
-    assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) <= tol
+    assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) <= TOL
     assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) >= 0.00
 
 
@@ -280,7 +277,7 @@ def test_hedged_two_qubit(qvm, wfn):
     qubits = [0, 1]
 
     # Generate random unitary
-    state_prep = Program().defgate("RandUnitary", Urand)
+    state_prep = Program().defgate("RandUnitary", U_RAND)
     state_prep.inst([("RandUnitary", q) for q in qubits])
 
     # True state
@@ -293,7 +290,7 @@ def test_hedged_two_qubit(qvm, wfn):
     estimate, status = iterative_mle_state_estimate(exp_data, dilution=0.5, beta=0.5)
 
     # Compute the Frobeius norm of the different between the estimated operator and the answer
-    assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) <= tol
+    assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) <= TOL
     assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) >= 0.00
 
 
