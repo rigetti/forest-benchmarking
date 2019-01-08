@@ -8,50 +8,10 @@ from pyquil.gates import I, RX, RY, RZ, X
 from pyquil.quil import Program
 from pyquil.api import QuantumComputer
 from forest_qcvv.compilation import basic_compile
-from forest_qcvv.utils import transform_bit_moments_to_pauli
+from forest_qcvv.utils import transform_bit_moments_to_pauli, local_pauli_eig_prep, local_pauli_eig_meas
 import warnings
 
 import matplotlib.pyplot as plt
-
-
-def local_pauli_eig_prep(prog, op, idx: int) -> Program:
-    """
-    Generate gate sequence to prepare the +1 eigenstate of a Pauli operator, assuming we are
-    starting from the ground state ( the +1 eigenstate of Z^{\otimes n}), and append it to the
-    PyQuil program given. This mutates prog.
-
-    :param Program prog: The program to which state preparation will be attached.
-    :param str op: A string representation of the Pauli operator whose eigenstate we'd like to prepare.
-    :param int idx: The index of the qubit that the preparation is acting on
-    :return: The mutated Program.
-    """
-    if op == 'X':
-        gate = RY(pi / 2, idx)
-    elif op == 'Y':
-        gate = RX(-pi / 2, idx)
-    elif op == 'Z':
-        gate = I(idx)
-    else:
-        raise ValueError('Unknown gate operation')
-    prog.inst(gate)
-    return prog
-
-
-def local_pauli_eig_meas(prog, op, idx) -> None:
-    """
-    Generate gate sequence to measure in the eigenbasis of a Pauli operator, assuming we are only
-    able to measure in the Z eigenbasis.
-    """
-    if op == 'X':
-        gate = RY(-pi / 2, idx)
-    elif op == 'Y':
-        gate = RX(pi / 2, idx)
-    elif op == 'Z':
-        gate = I(idx)
-    else:
-        raise ValueError('Unknown gate operation')
-    prog.inst(gate)
-    return
 
 
 def prepare_state(experiment: Program, qubit: int, axis: Tuple = None) -> None:
