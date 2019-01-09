@@ -1,10 +1,11 @@
+import itertools
 from math import pi
 from typing import List, Tuple, Dict
+
 import numpy as np
-import itertools
-from pyquil.gates import I, MEASURE, RX, RZ
 from pyquil import Program
 from pyquil.api import QuantumComputer
+from pyquil.gates import I, MEASURE, RX, RZ
 from pyquil.quil import address_qubits
 from pyquil.quilatom import QubitPlaceholder
 from pyquil.quilbase import Measurement, Pragma
@@ -26,67 +27,31 @@ def get_flipped_program(program: Program):
     return flipped_prog
 
 
-def get_flipped_protoquil_program(program: Program):
-    """
-    For symmetrization, generate a program where X gates are added before measurement.
-
-    Forest 2 ProtoQuil requires that measurement instructions occur at the end of the program, so all X gates must be
-    inserted before the first measurement. 
-    """
-    program = Program(program.instructions)  # Copy
-    to_measure = []
-    while True:
-        inst = program.instructions[-1]
-        if isinstance(inst, Measurement):
-            program.pop()
-            to_measure.append((inst.qubit, inst.classical_reg))
-        else:
-            break
-
-    program += Pragma('PRESERVE_BLOCK')
-    for qu, addr in to_measure[::-1]:
-        program += RX(pi, qu)
-    program += Pragma('END_PRESERVE_BLOCK')
-
-    for qu, addr in to_measure[::-1]:
-        program += Measurement(qubit=qu, classical_reg=addr)
-
-    return program
-
-
-def get_confusion_matrix_programs(qubit: int):
-    """
-    Construct programs for measuring a confusion matrix.
-
-    This is a fancy way of saying "measure |0>"  and "measure |1>".
-
-    :returns: program that should measure |0>, program that should measure |1>.
-    """
-    zero_meas = Program()
-    zero_meas += I(qubit)
-    zero_meas += I(qubit)
-
-    # prepare one and get statistics
-    one_meas = Program()
-    one_meas += I(qubit)
-    one_meas += RX(pi, qubit)
-
-    return zero_meas, one_meas
-
-
-def estimate_confusion_matrix(qc: QuantumComputer, qubit: int, samples=10000):
+def estimate_confusion_matrix(qc: QuantumComputer, qubit: int, shots: int = 10000):
     """
     Estimate the readout confusion matrix for a given qubit.
 
     :param qc: The quantum computer to estimate the confusion matrix.
     :param qubit: The actual physical qubit to measure
-    :param samples: The number of shots to take. This function runs two programs, so
+    :param shots: The number of shots to take. This function runs two programs, so
         the total number of shots taken will be twice this number.
     :return: a 2x2 confusion matrix for the qubit, where each row sums to one.
     """
-    zero_meas, one_meas = get_confusion_matrix_programs(qubit)
-    should_be_0 = qc.run_and_measure(zero_meas, samples)[qubit]
-    should_be_1 = qc.run_and_measure(one_meas, samples)[qubit]
+    # prepare 0 (do nothing) and measure; repeat shots number of times
+    zero_meas = Program()
+    ro_zero = zero_meas.declare("ro", "BIT", 1)
+    zero_meas.measure(qubit, ro_zero[0])
+    zero_meas.wrap_in_numshots_loop(shots)
+    should_be_0 = qc.run(qc.compile(zero_meas))
+
+    # prepare one and measure; repeat shots number of times
+    one_meas = Program()
+    one_meas += RX(pi, qubit)
+    ro_one = one_meas.declare("ro", "BIT", 1)
+    one_meas.measure(qubit, ro_one[0])
+    one_meas.wrap_in_numshots_loop(shots)
+    should_be_1 = qc.run(qc.compile(one_meas))
+
     p00 = 1 - np.mean(should_be_0)
     p11 = np.mean(should_be_1)
 
@@ -139,7 +104,7 @@ def measure_grouped_readout_error_param(qc: QuantumComputer,
     groups = itertools.combinations(qubits, group_size)
     confusion_matrices = {}
     for group in groups:
-        prog = address_qubits(program, qubit_mapping={ph: qubit for ph, qubit in zip(placeholders, qubits)})
+        prog = address_qubits(program, qubit_mapping={ph: qubit for ph, qubit in zip(placeholders, group)})
         prog.wrap_in_numshots_loop(shots=num_shots)
         executable = qc.compiler.native_quil_to_executable(prog)
 
@@ -168,7 +133,7 @@ def readout_group_bitstring(qubits: Tuple[int, ...], bitstring: Tuple[int, ...])
     return program
 
 
-def measure_grouped_readout_error(qc: QuantumComputer,
+def estimate_grouped_readout_error(qc: QuantumComputer,
                                   qubits: Tuple[int, ...] = [],
                                   num_shots: int = 1000,
                                   group_size: int = 1) -> Dict[Tuple[int, ...], np.ndarray]:
