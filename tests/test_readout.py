@@ -1,12 +1,13 @@
 import re
+
 import numpy as np
 from pyquil import Program
 from pyquil.device import gates_in_isa
 from pyquil.gates import I, RX, CNOT, MEASURE
 from pyquil.noise import decoherence_noise_with_asymmetric_ro
 
-from forest_qcvv.readout import get_flipped_program, measure_grouped_readout_error, marginal_for_qubits, \
-    estimate_confusion_matrix, measure_grouped_readout_error_param
+from forest_qcvv.readout import get_flipped_program, estimate_confusion_matrix, \
+    estimate_joint_confusion_in_set, marginalize_confusion_matrix
 
 
 def test_get_flipped_program():
@@ -34,20 +35,38 @@ def test_get_flipped_program():
     assert matched == 2
 
 
-def test_consistency(qvm):
+def test_confusion_matrix_consistency(qvm):
     noise_model = decoherence_noise_with_asymmetric_ro(gates=gates_in_isa(qvm.device.get_isa()))
     qvm.qam.noise_model = noise_model
     qvm.qam.random_seed = 1
-    num_shots = 10000
+    num_shots = 500
     qubits = (0, 1, 2)
     qubit = (0,)
-    cm1_3q = measure_grouped_readout_error(qvm, qubits=qubits, num_shots=num_shots, group_size=len(qubits))[qubits]
-    cm1 = marginal_for_qubits(cm1_3q, qubits, qubit)
-    cm2 = measure_grouped_readout_error(qvm, qubits=qubit, num_shots=num_shots, group_size=1)[qubit]
-    cm3 = estimate_confusion_matrix(qvm, qubit[0], num_shots)
-    cm4 = measure_grouped_readout_error_param(qvm, qubits=qubit, num_shots=num_shots, group_size=1)[qubit]
-    atol = .01
-    assert np.allclose(cm1, cm2, atol=atol)
-    assert np.allclose(cm2, cm3, atol=atol)
-    assert np.allclose(cm1, cm3, atol=atol)
-    assert np.allclose(cm2, cm4, atol=atol)
+
+    # parameterized confusion matrices
+    cm_3q_param = estimate_joint_confusion_in_set(qvm, qubit_set=qubits, num_shots=num_shots,
+                                                  joint_group_size=len(qubits))[qubits]
+    cm_1q_param = estimate_joint_confusion_in_set(qvm, qubit_set=qubit, num_shots=num_shots,
+                                                  joint_group_size=1)[qubit]
+
+    # non-parameterized confusion matrices
+    cm_3q = estimate_joint_confusion_in_set(qvm, qubit_set=qubits, num_shots=num_shots,
+                                            joint_group_size=len(qubits),
+                                            parameterized_program=False)[qubits]
+    cm_1q = estimate_joint_confusion_in_set(qvm, qubit_set=qubit, num_shots=num_shots,
+                                            joint_group_size=1,
+                                            parameterized_program=False)[qubit]
+    # single qubit cm
+    single_q = estimate_confusion_matrix(qvm, qubit[0], num_shots)
+
+    # marginals from 3q above
+    marginal_1q_param = marginalize_confusion_matrix(cm_3q_param, qubits, qubit)
+    marginal_1q = marginalize_confusion_matrix(cm_3q, qubits, qubit)
+
+    atol = .03
+    assert np.allclose(cm_3q_param, cm_3q, atol=atol)
+    assert np.allclose(cm_1q_param, single_q, atol=atol)
+    assert np.allclose(cm_1q, single_q, atol=atol)
+    assert np.allclose(cm_1q_param, marginal_1q_param, atol=atol)
+    assert np.allclose(cm_1q, marginal_1q, atol=atol)
+    assert np.allclose(marginal_1q_param, single_q, atol=atol)
