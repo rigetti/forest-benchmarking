@@ -38,13 +38,13 @@ U_RAND = rand_ops.haar_rand_unitary(2)
 
 
 def test_generate_1q_state_tomography_experiment():
-    prog = Program(I(0))
-    one_q_exp = generate_state_tomography_experiment(prog, qubits=[0])
-    qubits = prog.get_qubits()
-    n_qubits = len(qubits)
-    dimension = 2 ** n_qubits
-    assert [one_q_exp.out_ops[idx][0] for idx in list(range(0, dimension ** 2 - 1))] == \
-           ['X', 'Y', 'Z']
+    qubits = [0]
+    prog = Program(I(qubits[0]))
+    one_q_exp = generate_state_tomography_experiment(prog, qubits=qubits)
+    dimension = 2 ** len(qubits)
+
+    assert [one_q_exp[idx][0].out_operator[qubits[0]] for idx in range(0, dimension ** 2)] == \
+           ['I', 'X', 'Y', 'Z']
 
 
 def test_generate_2q_state_tomography_experiment():
