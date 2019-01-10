@@ -11,7 +11,6 @@ Forest-QCVV is a Python package. It is currently in pre-release and must be inst
     cd forest-qcvv/
     pip install -e .
 
-
 ### Library Philosophy
 
 The core philosophy of Forest-QCVV is to separate: 
