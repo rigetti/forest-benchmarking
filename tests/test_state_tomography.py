@@ -49,27 +49,16 @@ def test_generate_1q_state_tomography_experiment():
 
 def test_generate_2q_state_tomography_experiment():
     p = Program()
-    p.inst(H(0))
-    prep_prog = p.inst(CZ(0, 1))
-    two_q_exp = generate_state_tomography_experiment(prep_prog, qubits=[0, 1])
-    qubits = prep_prog.get_qubits()
-    n_qubits = len(qubits)
-    dimension = 2 ** n_qubits
-    assert [str(two_q_exp.out_ops[idx]) for idx in list(range(0, dimension ** 2 - 1))] == \
-           ['(1+0j)*X0', '(1+0j)*Y0',
-            '(1+0j)*Z0', '(1+0j)*X1',
-            '(1+0j)*X1*X0',
-            '(1+0j)*X1*Y0',
-            '(1+0j)*X1*Z0',
-            '(1+0j)*Y1',
-            '(1+0j)*Y1*X0',
-            '(1+0j)*Y1*Y0',
-            '(1+0j)*Y1*Z0',
-            '(1+0j)*Z1',
-            '(1+0j)*Z1*X0',
-            '(1+0j)*Z1*Y0',
-            '(1+0j)*Z1*Z0']
+    p += H(0)
+    p += CZ(0, 1)
+    two_q_exp = generate_state_tomography_experiment(p, qubits=[0, 1])
+    dimension = 2 ** 2
 
+    assert [str(two_q_exp[idx][0].out_operator) for idx in list(range(0, dimension ** 2))] == \
+           ['(1+0j)*I', '(1+0j)*X1', '(1+0j)*Y1', '(1+0j)*Z1',
+            '(1+0j)*X0', '(1+0j)*X0*X1', '(1+0j)*X0*Y1', '(1+0j)*X0*Z1',
+            '(1+0j)*Y0', '(1+0j)*Y0*X1', '(1+0j)*Y0*Y1', '(1+0j)*Y0*Z1',
+            '(1+0j)*Z0', '(1+0j)*Z0*X1', '(1+0j)*Z0*Y1', '(1+0j)*Z0*Z1']
 
 def test_R_operator_fixed_point_1_qubit():
     # Check fixed point of operator. See Eq. 5 in Řeháček et al., PRA 75, 042108 (2007).
