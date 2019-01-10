@@ -60,6 +60,7 @@ def test_generate_2q_state_tomography_experiment():
             '(1+0j)*Y0', '(1+0j)*Y0*X1', '(1+0j)*Y0*Y1', '(1+0j)*Y0*Z1',
             '(1+0j)*Z0', '(1+0j)*Z0*X1', '(1+0j)*Z0*Y1', '(1+0j)*Z0*Z1']
 
+
 def test_R_operator_fixed_point_1_qubit():
     # Check fixed point of operator. See Eq. 5 in Řeháček et al., PRA 75, 042108 (2007).
     obs_freqs = [1, 0]

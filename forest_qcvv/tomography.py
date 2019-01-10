@@ -271,10 +271,7 @@ def linear_inv_state_estimate(results: List[ExperimentResult],
     ])
     expectations = np.array([result.expectation for result in results])
     rho = pinv(measurement_matrix) @ expectations
-    dim = 2 ** len(qubits)
-    rho = rho.reshape((dim, dim))
-    # TODO: how did this get transposed?
-    return rho.T
+    return unvec(rho)
 
 
 def construct_projection_operators_on_n_qubits(num_qubits) -> List[np.ndarray]:
