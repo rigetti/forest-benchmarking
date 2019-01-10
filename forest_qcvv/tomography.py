@@ -263,8 +263,7 @@ def linear_inv_state_estimate(results: List[ExperimentResult],
 
 
     :param results: A tomographically complete list of results.
-    :return: A TomographyEstimate whose estimate is a StateTomographyEstimate,
-        with qubits tensored in decreasing order.
+    :return: A point estimate of the quantum state rho.
     """
     measurement_matrix = np.vstack([
         vec(lifted_pauli(result.setting.out_operator, qubits=qubits)).T.conj()
