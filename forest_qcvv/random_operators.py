@@ -1,48 +1,55 @@
 """A module for generating random quantum states and processes. Pseudocode for many of these
 routines can be found in the appendix of the paper by Granade, Combes, and Cory (2016).
 https://arxiv.org/pdf/1509.03770.pdf"""
+from typing import Optional
+
 import numpy as np
 from numpy import linalg as la
 from scipy.linalg import sqrtm
 from sympy.combinatorics import Permutation
+from numpy.random import RandomState
 
 
-def ginibre_matrix_complex(D, K):
+def ginibre_matrix_complex(D, K, rs: Optional[RandomState] = None):
     """
     Given a scalars $D$ and $K$, returns a D × K matrix, 
     drawn from the complex Ginibre ensemble, i.e. (N(0, 1) + i · N(0, 1)).
 
-    :param D: Hilbert space dimension (scalar).
-    :param K: Ultimately becomes the rank of a state (scalar).
-    :return: Returns a D × K matrix, drawn from the Ginibre ensemble.
-    
-    See: Induced measures in the space of mixed quantum states, 
+    See: Induced measures in the space of mixed quantum states,
          Zyczkowski and Sommers,
          J. Phys A: Math. and Gen. 34, 7111 (2001).
          https://doi.org/10.1088/0305-4470/34/35/335
 
+    :param D: Hilbert space dimension (scalar).
+    :param K: Ultimately becomes the rank of a state (scalar).
+    :param rs: Optional random state.
+    :return: Returns a D × K matrix, drawn from the Ginibre ensemble.
     """
-    return np.random.randn(D, K) + 1j * np.random.randn(D, K)
+    if rs is None:
+        rs = np.random
+
+    return rs.randn(D, K) + 1j * rs.randn(D, K)
 
 
-def haar_rand_unitary(D):
+def haar_rand_unitary(dim, rs=None):
     """
-    Given a Hilbert space dimension $D$ this function 
+    Given a Hilbert space dimension D this function
     returns a unitary operator U ∈ C^D×D drawn from the Haar measure.
 
     The error is of order 10^-16.
 
-    :param D: Hilbert space dimension (scalar).
-    :return: Returns a unitary operator U ∈ C^D×D drawn from the Haar measure.
-    
-    
-    See: How to generate random matrices from the classical compact groups, 
+    See: How to generate random matrices from the classical compact groups,
          Mezzadri,
          Notices of the American Mathematical Society 54, 592 (2007).
          http://www.ams.org/notices/200705/fea-mezzadri-web.pdf
-    
+
+    :param dim: Hilbert space dimension (scalar).
+    :param rs: Optional random state
+    :return: Returns a unitary operator U ∈ C^D×D drawn from the Haar measure.
     """
-    Z = ginibre_matrix_complex(D, D)  # /np.sqrt(2)
+    if rs is None:
+        rs = np.random
+    Z = ginibre_matrix_complex(D=dim, K=dim, rs=rs)  # /np.sqrt(2)
     Q, R = np.linalg.qr(Z)
     diag = np.diagonal(R)
     lamb = np.diag(diag) / np.absolute(diag)

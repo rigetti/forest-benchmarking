@@ -1,5 +1,6 @@
 import numpy as np
 from pyquil.gates import I, H, CZ
+from pyquil.operator_estimation import measure_observables
 from pyquil.quil import Program
 
 import forest_qcvv.random_operators as rand_ops
@@ -103,53 +104,45 @@ def test_R_operator_fixed_point_2_qubit():
 
 
 def test_single_qubit_linear_inv(qvm, wfn):
-    qvm.qam.random_seed = 1
-    # Single qubit test
     qubits = [0]
 
     # Generate random unitary
-    state_prep = Program().defgate("RandUnitary", U_RAND)
+    rs = np.random.RandomState(52)
+    u_rand = rand_ops.haar_rand_unitary(2 ** 1, rs=rs)
+    state_prep = Program().defgate("RandUnitary", u_rand)
     state_prep.inst([("RandUnitary", q) for q in qubits])
 
     # True state
     psi = wfn.wavefunction(state_prep)
-    rho_true = np.outer(psi.amplitudes, np.transpose(np.conj(psi.amplitudes)))
-    tomo_progs = generate_state_tomography_experiment(state_prep)
+    rho_true = np.outer(psi.amplitudes, psi.amplitudes.T.conj())
 
     # Get data from QVM then estimate state
-    exp_data = acquire_tomography_data(tomo_progs, qvm, var)
+    tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
+    results = list(measure_observables(qc=qvm, tomo_experiment=tomo_expt, n_shots=10_000))
+    rho_est = linear_inv_state_estimate(results, qubits)
 
-    # check that input program is not mutated
-    assert state_prep == exp_data.program
-
-    estimate = linear_inv_state_estimate(exp_data)
-
-    # Compute the Frobeius norm of the different between the estimated operator and the answer
-    assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) <= TOL
-    assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) >= 0.00
+    np.testing.assert_allclose(rho_true, rho_est, atol=0.01)
 
 
 def test_two_qubit_linear_inv(qvm, wfn):
-    qvm.qam.random_seed = 1
-    # Two qubit test
     qubits = [0, 1]
 
     # Generate random unitary
-    state_prep = Program().defgate("RandUnitary", U_RAND)
+    rs = np.random.RandomState(52)
+    u_rand = rand_ops.haar_rand_unitary(2 ** 1, rs=rs)
+    state_prep = Program().defgate("RandUnitary", u_rand)
     state_prep.inst([("RandUnitary", q) for q in qubits])
 
     # True state
     psi = wfn.wavefunction(state_prep)
     rho_true = np.outer(psi.amplitudes, np.transpose(np.conj(psi.amplitudes)))
-    tomo_progs = generate_state_tomography_experiment(state_prep)
 
     # Get data from QVM then estimate state
-    exp_data = acquire_tomography_data(tomo_progs, qvm, .0005)
-    estimate = linear_inv_state_estimate(exp_data)
+    tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
+    results = list(measure_observables(qc=qvm, tomo_experiment=tomo_expt, n_shots=10_000))
+    rho_est = linear_inv_state_estimate(results, qubits)
 
-    # Compute the Frobeius norm of the different between the estimated operator and the answer
-    assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) <= TOL
-    assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) >= 0.00
+    np.testing.assert_allclose(rho_true, rho_est, atol=0.01)
 
 
 def test_single_qubit_mle(qvm, wfn):

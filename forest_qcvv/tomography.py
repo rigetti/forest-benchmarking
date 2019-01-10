@@ -245,7 +245,7 @@ class TomographyEstimate:
 
 
 def linear_inv_state_estimate(results: List[ExperimentResult],
-                              qubits: List[int]) -> TomographyEstimate:
+                              qubits: List[int]) -> np.ndarray:
     """
     Estimate a quantum state using linear inversion.
 
@@ -273,7 +273,8 @@ def linear_inv_state_estimate(results: List[ExperimentResult],
     rho = pinv(measurement_matrix) @ expectations
     dim = 2 ** len(qubits)
     rho = rho.reshape((dim, dim))
-    return rho
+    # TODO: how did this get transposed?
+    return rho.T
 
 
 def construct_projection_operators_on_n_qubits(num_qubits) -> List[np.ndarray]:
