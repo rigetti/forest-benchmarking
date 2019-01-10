@@ -291,11 +291,11 @@ def construct_projection_operators_on_n_qubits(num_qubits) -> List[np.ndarray]:
     return effects
 
 
-def iterative_mle_state_estimate(data: TomographyData, dilution=.005, entropy_penalty=0.0, beta=0.0, tol=1e-9,
-                                 maxiter=100000) -> TomographyEstimate:
+def iterative_mle_state_estimate(data: TomographyData, qubits: List[int], dilution=.005, entropy_penalty=0.0,
+                                 beta=0.0, tol=1e-9, maxiter=100_000) -> TomographyEstimate:
     """
     Given tomography data, use one of three iterative algorithms to return an estimate of the
-     state.
+    state.
     
     "... [The iterative] algorithm is characterized by a very high convergence rate and features a
     simple adaptive procedure that ensures likelihood increase in every iteration and
@@ -329,18 +329,17 @@ def iterative_mle_state_estimate(data: TomographyData, dilution=.005, entropy_pe
 
     :param state_tomography_experiment_data data: namedtuple.
     :param dilution: delta  = 1 / epsilon where epsilon is the dilution parameter used in [DIMLE1].
-    in practice epislon= 1/N
+        in practice epsilon= 1/N
     :param entropy_penalty: the entropy penalty parameter from [DIMLE2].
-    :param beta: The Hedging parameter from Ref.[HMLE].
+    :param beta: The Hedging parameter from [HMLE].
     :param tol: The largest difference in the frobenious norm between update steps that will cause
-     the algorithm to conclude that it has converged.
-    :param maxiter: the maximium number of itterations to perform before aborting the procedure.
+         the algorithm to conclude that it has converged.
+    :param maxiter: The maximum number of iterations to perform before aborting the procedure.
     :return: A TomographyEstimate whose estimate is a StateTomographyEstimate
     """
-
     exp_type = 'iterative_MLE'
     if (entropy_penalty != 0.0) and (beta != 0.0):
-        raise ValueError("One can't senisbly do entropy penalty and hedging. Do one or the other"
+        raise ValueError("One can't sensibly do entropy penalty and hedging. Do one or the other"
                          " but not both.")
     else:
         if entropy_penalty != 0.0:
@@ -349,7 +348,8 @@ def iterative_mle_state_estimate(data: TomographyData, dilution=.005, entropy_pe
             exp_type = 'heged_MLE'
 
     # Identity prop to the size of Hilbert space
-    IdH = np.eye(data.dimension, data.dimension)
+    dim = 2**len(qubits)
+    IdH = np.eye(dim, dim)
 
     freq = []
     for expectation, count in zip(data.expectations, data.counts):
@@ -436,9 +436,8 @@ def _R(state, effects, observed_frequencies):
     machine_eps = np.finfo(float).tiny
     # have a zero in the numerator, we can fix this is we look a little more carefully.
     predicted_probs = np.array([np.real(np.trace(state.dot(effect))) for effect in effects])
-    update_operator = sum(
-        [effect * observed_frequencies[i] / (predicted_probs[i] + machine_eps)
-         for i, effect in enumerate(effects)])
+    update_operator = sum([effect * observed_frequencies[i] / (predicted_probs[i] + machine_eps)
+                           for i, effect in enumerate(effects)])
     return update_operator
 
 
