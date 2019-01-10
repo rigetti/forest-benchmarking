@@ -33,7 +33,7 @@ ID_2Q = P00 + P01 + P10 + P11
 ZZ_EFFECTS = [P00, P01, P10, P11]
 
 TOL = .08
-var = .005
+VAR = .005
 U_RAND = rand_ops.haar_rand_unitary(2)
 
 
@@ -150,7 +150,7 @@ def test_single_qubit_mle(qvm, wfn):
     tomo_progs = generate_state_tomography_experiment(state_prep)
 
     # Get data from QVM then estimate state
-    exp_data = acquire_tomography_data(tomo_progs, qvm, var)
+    exp_data = acquire_tomography_data(tomo_progs, qvm, VAR)
 
     estimate, status = iterative_mle_state_estimate(exp_data, dilution=0.5)
 
@@ -174,7 +174,7 @@ def test_two_qubit_mle(qvm, wfn):
     tomo_progs = generate_state_tomography_experiment(state_prep)
 
     # Get data from QVM then estimate state
-    exp_data = acquire_tomography_data(tomo_progs, qvm, var)
+    exp_data = acquire_tomography_data(tomo_progs, qvm, VAR)
     estimate, status = iterative_mle_state_estimate(exp_data, dilution=0.5)
 
     # Compute the Frobeius norm of the different between the estimated operator and the answer
@@ -197,7 +197,7 @@ def test_maxent_single_qubit(qvm, wfn):
     tomo_progs = generate_state_tomography_experiment(state_prep)
 
     # Get data from QVM then estimate state
-    exp_data = acquire_tomography_data(tomo_progs, qvm, var)
+    exp_data = acquire_tomography_data(tomo_progs, qvm, VAR)
 
     estimate, status = iterative_mle_state_estimate(exp_data, dilution=0.5, entropy_penalty=1.0)
 
@@ -221,7 +221,7 @@ def test_maxent_two_qubit(qvm, wfn):
     tomo_progs = generate_state_tomography_experiment(state_prep)
 
     # Get data from QVM then estimate state
-    exp_data = acquire_tomography_data(tomo_progs, qvm, var)
+    exp_data = acquire_tomography_data(tomo_progs, qvm, VAR)
     estimate, status = iterative_mle_state_estimate(exp_data, dilution=0.5, entropy_penalty=1.0,
                                                     tol=.001)
 
@@ -245,7 +245,7 @@ def test_hedged_single_qubit(qvm, wfn):
     tomo_progs = generate_state_tomography_experiment(state_prep)
 
     # Get data from QVM then estimate state
-    exp_data = acquire_tomography_data(tomo_progs, qvm, var)
+    exp_data = acquire_tomography_data(tomo_progs, qvm, VAR)
 
     estimate, status = iterative_mle_state_estimate(exp_data, dilution=0.5, beta=0.5)
 
@@ -269,7 +269,7 @@ def test_hedged_two_qubit(qvm, wfn):
     tomo_progs = generate_state_tomography_experiment(state_prep)
 
     # Get data from QVM then estimate state
-    exp_data = acquire_tomography_data(tomo_progs, qvm, var)
+    exp_data = acquire_tomography_data(tomo_progs, qvm, VAR)
     estimate, status = iterative_mle_state_estimate(exp_data, dilution=0.5, beta=0.5)
 
     # Compute the Frobeius norm of the different between the estimated operator and the answer
