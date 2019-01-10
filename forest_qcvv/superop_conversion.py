@@ -25,7 +25,7 @@ def vec(matrix):
     :param matrix: A N x M numpy array.
     :return: Returns a column vector with  N x M rows.
     """
-    return matrix.reshape((-1, 1), order="F")
+    return matrix.T.reshape((-1, 1))
 
 
 def unvec(vector):
@@ -42,7 +42,7 @@ def unvec(vector):
     """
     row, col = vector.shape
     dim = int(np.sqrt(row))
-    matrix = vector.reshape(dim, dim, order="F")
+    matrix = vector.reshape(dim, dim).T
     return matrix
 
 
