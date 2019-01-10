@@ -13,6 +13,7 @@ from pyquil.api import QuantumComputer
 from pyquil.operator_estimation import ExperimentSetting, \
     TomographyExperiment as PyQuilTomographyExperiment, ExperimentResult
 from pyquil.paulis import sI, sX, sY, sZ, PauliSum, PauliTerm
+from pyquil.unitary_tools import lifted_pauli
 from scipy.linalg import logm, pinv, eigh
 
 import forest_qcvv.distance_measures as dm
@@ -243,73 +244,37 @@ class TomographyEstimate:
     """State or process estimate from tomography experiment"""
 
 
-def linear_inv_state_estimate(data: TomographyData) -> TomographyEstimate:
+def linear_inv_state_estimate(results: List[ExperimentResult],
+                              qubits: List[int]) -> TomographyEstimate:
     """
-    Estimate quantum state using linear inversion.
+    Estimate a quantum state using linear inversion.
 
-    For more details see section 3.4 of
+    This is the simplest state tomography post processing. To use this function,
+    collect state tomography data with :py:func:`generate_state_tomography_experiment`
+    and :py:func:`~pyquil.operator_estimation.measure_observables`.
 
-    Initialization and characterization of open quantum systems
-    C. Wood, PhD thesis from University of Waterloo, (2015).
-    http://hdl.handle.net/10012/9557
+    For more details on this post-processing technique,
+    see https://en.wikipedia.org/wiki/Quantum_tomography#Linear_inversion or
+    see section 3.4 of
+
+        Initialization and characterization of open quantum systems
+        C. Wood, PhD thesis from University of Waterloo, (2015).
+        http://hdl.handle.net/10012/9557
 
 
-    :param state_tomography_experiment_data data: namedtuple.
-    :return: A TomographyEstimate whose estimate is a StateTomographyEstimate, with qubits tensored in decreasing order.
+    :param results: A tomographically complete list of results.
+    :return: A TomographyEstimate whose estimate is a StateTomographyEstimate,
+        with qubits tensored in decreasing order.
     """
-    results = []
-    for pauli_est in data.expectations:
-        # get the real part of each string of pauli operators
-        results.append(pauli_est)
-
-    # insert the identity term and then convert to an np array
-    results.insert(0, 1)
-    results = np.array(results)
-
-    # Compute vectorized density operator using linear inversion.
-    measurement_matrix = construct_pinv_measurement_matrix(n_qubit_pauli_basis(data.number_qubits).ops)
-    ans = measurement_matrix.dot(results)
-    rho_est = np.reshape(ans, (data.dimension, -1))
-
-    estimate = StateTomographyEstimate(
-        state_point_est=rho_est,
-        type='linear_inversion',
-        beta=None,
-        entropy=None,
-        dilution=None,
-        loglike=None
-    )
-
-    est_data = TomographyEstimate(
-        in_ops=data.in_ops,
-        program=data.program,
-        out_ops=data.out_ops,
-        dimension=data.dimension,
-        number_qubits=data.number_qubits,
-        expectations=data.expectations,
-        variances=data.variances,
-        estimate=estimate
-    )
-
-    return est_data
-
-
-def construct_pinv_measurement_matrix(operators) -> np.ndarray:
-    """
-    Given a list of operators represented as matrices, compute the matrix that when applied to the
-    estimated expectation values, returns an estimate of the density matrix.
-
-    :param operators: A list of ndarray-like objects.
-    :return: An ndarray that when applied to a vector of expectation values returns a vectorized
-    estimate of the state.
-    """
-    # TODO: Run tests on speed and accuracy(forwards backwards = Id) for inverse vs solving eqn
-    flat_ops = []
-    for operator in operators:
-        op_expect_vector = np.conj(np.reshape(operator, (1, -1), 'F'))
-        flat_ops.append(op_expect_vector)
-    # TODO: decide if can use pinv consistently from one of np or scipy
-    return pinv(np.vstack(flat_ops))
+    measurement_matrix = np.vstack([
+        vec(lifted_pauli(result.setting.out_operator, qubits=qubits)).T.conj()
+        for result in results
+    ])
+    expectations = np.array([result.expectation for result in results])
+    rho = pinv(measurement_matrix) @ expectations
+    dim = 2 ** len(qubits)
+    rho = rho.reshape((dim, dim))
+    return rho
 
 
 def construct_projection_operators_on_n_qubits(num_qubits) -> List[np.ndarray]:
