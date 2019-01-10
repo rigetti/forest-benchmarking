@@ -21,5 +21,3 @@ The core philosophy of Forest-QCVV is to separate:
 * Data visualisation
 
 We ask that code contributed to this repository respect this separation. We also ask that an example of how to use your contrubited code is placed in the `/examples/` directory along with the standard documentation found in `/docs/`.
-
-
