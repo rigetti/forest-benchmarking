@@ -40,8 +40,8 @@ def unvec(vector):
     :param vector: A N^2 x 1 numpy array.
     :return: Returns a column vector with  N x N rows.
     """
-    row, col = vector.shape
-    dim = int(np.sqrt(row))
+    n_row = vector.shape[0]
+    dim = int(np.sqrt(n_row))
     matrix = vector.reshape(dim, dim).T
     return matrix
 
