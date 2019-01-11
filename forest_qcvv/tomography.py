@@ -11,7 +11,7 @@ from matplotlib.colors import LinearSegmentedColormap
 from pyquil import Program
 from pyquil.api import QuantumComputer
 from pyquil.operator_estimation import ExperimentSetting, \
-    TomographyExperiment as PyQuilTomographyExperiment, ExperimentResult
+    TomographyExperiment as PyQuilTomographyExperiment, ExperimentResult, measure_observables
 from pyquil.paulis import sI, sX, sY, sZ, PauliSum, PauliTerm
 from pyquil.unitary_tools import lifted_pauli
 from scipy.linalg import logm, pinv, eigh
@@ -112,7 +112,7 @@ class TomographyData:
     """number of shots used to calculate the `expectation`"""
 
 
-def shim_pyquil_results_to_TomographyData(program, qubits, counts, results: List[ExperimentResult]):
+def shim_pyquil_results_to_TomographyData(program, qubits, results: List[ExperimentResult]):
     return TomographyData(
         in_ops=[r.setting.in_operator for r in results[1:]],
         out_ops=[r.setting.out_operator for r in results[1:]],
@@ -121,7 +121,7 @@ def shim_pyquil_results_to_TomographyData(program, qubits, counts, results: List
         program=program,
         number_qubits=len(qubits),
         dimension=2 ** len(qubits),
-        counts=[counts] * (len(results) - 1),
+        counts=[r.total_counts for r in results[1:]],
     )
 
 
@@ -289,7 +289,7 @@ def construct_projection_operators_on_n_qubits(num_qubits) -> List[np.ndarray]:
     return effects
 
 
-def iterative_mle_state_estimate(data: TomographyData, qubits: List[int], dilution=.005, entropy_penalty=0.0,
+def iterative_mle_state_estimate(results: List[ExperimentResult], qubits: List[int], dilution=.005, entropy_penalty=0.0,
                                  beta=0.0, tol=1e-9, maxiter=100_000) -> TomographyEstimate:
     """
     Given tomography data, use one of three iterative algorithms to return an estimate of the
@@ -335,6 +335,11 @@ def iterative_mle_state_estimate(data: TomographyData, qubits: List[int], diluti
     :param maxiter: The maximum number of iterations to perform before aborting the procedure.
     :return: A TomographyEstimate whose estimate is a StateTomographyEstimate
     """
+    data = shim_pyquil_results_to_TomographyData(
+        program=None,
+        qubits=qubits,
+        results=results
+    )
     exp_type = 'iterative_MLE'
     if (entropy_penalty != 0.0) and (beta != 0.0):
         raise ValueError("One can't sensibly do entropy penalty and hedging. Do one or the other"

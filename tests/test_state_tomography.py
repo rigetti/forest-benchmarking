@@ -136,98 +136,93 @@ def test_two_qubit_linear_inv(qvm, wfn):
 
 
 def test_single_qubit_mle(qvm, wfn):
-    qvm.qam.random_seed = 1
-    # Single qubit test
     qubits = [0]
 
     # Generate random unitary
-    state_prep = Program().defgate("RandUnitary", U_RAND)
+    rs = np.random.RandomState(52)
+    u_rand = rand_ops.haar_rand_unitary(2 ** 1, rs=rs)
+    state_prep = Program().defgate("RandUnitary", u_rand)
     state_prep.inst([("RandUnitary", q) for q in qubits])
 
     # True state
     psi = wfn.wavefunction(state_prep)
     rho_true = np.outer(psi.amplitudes, np.transpose(np.conj(psi.amplitudes)))
-    tomo_progs = generate_state_tomography_experiment(state_prep)
 
     # Get data from QVM then estimate state
-    exp_data = acquire_tomography_data(tomo_progs, qvm, VAR)
+    tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
+    results = list(measure_observables(qc=qvm, tomo_experiment=tomo_expt, n_shots=10_000))
+    estimate, status = iterative_mle_state_estimate(results=results, qubits=qubits, dilution=0.5)
+    rho_est = estimate.estimate.state_point_est
 
-    estimate, status = iterative_mle_state_estimate(exp_data, dilution=0.5)
-
-    # Compute the Frobeius norm of the different between the estimated operator and the answer
-    assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) <= TOL
-    assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) >= 0.00
+    np.testing.assert_allclose(rho_true, rho_est, atol=0.01)
 
 
 def test_two_qubit_mle(qvm, wfn):
-    qvm.qam.random_seed = 1
-    # Two qubit test
     qubits = [0, 1]
 
     # Generate random unitary
-    state_prep = Program().defgate("RandUnitary", U_RAND)
+    rs = np.random.RandomState(52)
+    u_rand = rand_ops.haar_rand_unitary(2 ** 1, rs=rs)
+    state_prep = Program().defgate("RandUnitary", u_rand)
     state_prep.inst([("RandUnitary", q) for q in qubits])
 
     # True state
     psi = wfn.wavefunction(state_prep)
     rho_true = np.outer(psi.amplitudes, np.transpose(np.conj(psi.amplitudes)))
-    tomo_progs = generate_state_tomography_experiment(state_prep)
 
     # Get data from QVM then estimate state
-    exp_data = acquire_tomography_data(tomo_progs, qvm, VAR)
-    estimate, status = iterative_mle_state_estimate(exp_data, dilution=0.5)
+    tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
+    results = list(measure_observables(qc=qvm, tomo_experiment=tomo_expt, n_shots=10_000))
+    estimate, status = iterative_mle_state_estimate(results=results, qubits=qubits, dilution=0.5)
+    rho_est = estimate.estimate.state_point_est
 
-    # Compute the Frobeius norm of the different between the estimated operator and the answer
-    assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) <= TOL
-    assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) >= 0.00
+    np.testing.assert_allclose(rho_true, rho_est, atol=0.01)
 
 
 def test_maxent_single_qubit(qvm, wfn):
-    qvm.qam.random_seed = 1
-    # Single qubit test
     qubits = [0]
 
     # Generate random unitary
-    state_prep = Program().defgate("RandUnitary", U_RAND)
+    rs = np.random.RandomState(52)
+    u_rand = rand_ops.haar_rand_unitary(2 ** 1, rs=rs)
+    state_prep = Program().defgate("RandUnitary", u_rand)
     state_prep.inst([("RandUnitary", q) for q in qubits])
 
     # True state
     psi = wfn.wavefunction(state_prep)
     rho_true = np.outer(psi.amplitudes, np.transpose(np.conj(psi.amplitudes)))
-    tomo_progs = generate_state_tomography_experiment(state_prep)
 
     # Get data from QVM then estimate state
-    exp_data = acquire_tomography_data(tomo_progs, qvm, VAR)
+    tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
+    results = list(measure_observables(qc=qvm, tomo_experiment=tomo_expt, n_shots=10_000))
+    estimate, status = iterative_mle_state_estimate(results=results, qubits=qubits,
+                                                    dilution=0.5, entropy_penalty=1.0)
+    rho_est = estimate.estimate.state_point_est
 
-    estimate, status = iterative_mle_state_estimate(exp_data, dilution=0.5, entropy_penalty=1.0)
-
-    # Compute the Frobeius norm of the different between the estimated operator and the answer
-    assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) <= TOL
-    assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) >= 0.00
+    np.testing.assert_allclose(rho_true, rho_est, atol=0.01)
 
 
 def test_maxent_two_qubit(qvm, wfn):
-    qvm.qam.random_seed = 1
-    # Two qubit test
     qubits = [0, 1]
 
     # Generate random unitary
-    state_prep = Program().defgate("RandUnitary", U_RAND)
+    rs = np.random.RandomState(52)
+    u_rand = rand_ops.haar_rand_unitary(2 ** 1, rs=rs)
+    state_prep = Program().defgate("RandUnitary", u_rand)
     state_prep.inst([("RandUnitary", q) for q in qubits])
 
     # True state
     psi = wfn.wavefunction(state_prep)
     rho_true = np.outer(psi.amplitudes, np.transpose(np.conj(psi.amplitudes)))
-    tomo_progs = generate_state_tomography_experiment(state_prep)
 
     # Get data from QVM then estimate state
-    exp_data = acquire_tomography_data(tomo_progs, qvm, VAR)
-    estimate, status = iterative_mle_state_estimate(exp_data, dilution=0.5, entropy_penalty=1.0,
-                                                    tol=.001)
+    tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
+    results = list(measure_observables(qc=qvm, tomo_experiment=tomo_expt, n_shots=10_000))
+    estimate, status = iterative_mle_state_estimate(results=results, qubits=qubits, dilution=0.5,
+                                                    entropy_penalty=1.0, tol=.001)
+    rho_est = estimate.estimate.state_point_est
 
-    # Compute the Frobeius norm of the different between the estimated operator and the answer
-    assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) <= TOL
-    assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) >= 0.00
+    np.testing.assert_allclose(rho_true, rho_est, atol=0.01)
 
 
 def test_hedged_single_qubit(qvm, wfn):
