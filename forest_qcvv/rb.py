@@ -8,6 +8,7 @@ from lmfit import Model
 from numpy import bincount
 from numpy import pi
 from pandas import DataFrame, Series
+from pyquil.operator_estimation import measure_observables
 from scipy.stats import beta
 
 from pyquil.api import BenchmarkConnection, QuantumComputer
@@ -270,16 +271,18 @@ def run_unitarity_measurement(df: DataFrame, qc: QuantumComputer, num_trials: in
     new DataFrame.
     """
     new_df = df.copy()
-    def run(qc: QuantumComputer, seq: List[Program], subgraph: List[Tuple], num_trials: int) -> np.ndarray:
+    def run(qc: QuantumComputer, seq: List[Program], subgraph: List[List[int]], num_trials: int) -> np.ndarray:
         prog = merge_programs(seq)
         # TODO: parallelize
         results = []
         for qubits in subgraph:
-            state_prep = prog #Program([instr for instr in prog if (not isinstance(instr, Gate)) or instr.get_qubits().issubset(qubits)])
-            tomo_exp = generate_state_tomography_experiment(state_prep)
-            # TODO: explicitly specify by number of trials rather than variance
-            component_results = acquire_tomography_data(tomo_exp, qc, var=1/num_trials)
-            results.append((component_results.expectations, component_results.variances))
+            state_prep = prog
+            tomo_exp = generate_state_tomography_experiment(state_prep, qubits=qubits)
+            _rs = list(measure_observables(qc, tomo_exp, num_trials))
+            # Inelegant shim from state tomo refactor. To clean up!
+            expectations=[r.expectation for r in _rs[1:]]
+            variances=[r.stddev ** 2 for r in _rs[1:]]
+            results.append((expectations, variances))
         return results
 
     new_df["Results"] = Series(

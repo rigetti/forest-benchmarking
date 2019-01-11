@@ -20,7 +20,8 @@ import forest_qcvv.distance_measures as dm
 import forest_qcvv.operator_estimation as est
 from forest_qcvv.superop_conversion import vec, unvec
 from forest_qcvv.utils import prepare_prod_sic_state, all_pauli_terms, all_sic_terms, \
-    n_qubit_pauli_basis, transform_pauli_moments_to_bit, transform_bit_moments_to_pauli
+    n_qubit_pauli_basis, transform_pauli_moments_to_bit, transform_bit_moments_to_pauli, \
+    partial_trace
 
 MAXITER = "maxiter"
 OPTIMAL = "optimal"
