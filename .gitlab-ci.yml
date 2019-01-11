@@ -1,6 +1,5 @@
 before_script:
     - pip install tox
-    - pip install numpy # cvxpy causing pip problems, as always
 
 services:
     - name: rigetticomputing/qvm
