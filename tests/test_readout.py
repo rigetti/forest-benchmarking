@@ -7,7 +7,7 @@ from pyquil.gates import I, RX, CNOT, MEASURE
 from pyquil.noise import decoherence_noise_with_asymmetric_ro
 
 from forest_qcvv.readout import get_flipped_program, estimate_confusion_matrix, \
-    estimate_joint_confusion_in_set, marginalize_confusion_matrix
+    estimate_joint_confusion_in_set, marginalize_confusion_matrix, estimate_joint_reset_confusion
 
 
 def test_get_flipped_program():
@@ -35,7 +35,7 @@ def test_get_flipped_program():
     assert matched == 2
 
 
-def test_confusion_matrix_consistency(qvm):
+def test_readout_confusion_matrix_consistency(qvm):
     noise_model = decoherence_noise_with_asymmetric_ro(gates=gates_in_isa(qvm.device.get_isa()))
     qvm.qam.noise_model = noise_model
     qvm.qam.random_seed = 1
@@ -44,18 +44,19 @@ def test_confusion_matrix_consistency(qvm):
     qubit = (0,)
 
     # parameterized confusion matrices
-    cm_3q_param = estimate_joint_confusion_in_set(qvm, qubit_set=qubits, num_shots=num_shots,
+    cm_3q_param = estimate_joint_confusion_in_set(qvm, qubits, num_shots=num_shots,
                                                   joint_group_size=len(qubits))[qubits]
-    cm_1q_param = estimate_joint_confusion_in_set(qvm, qubit_set=qubit, num_shots=num_shots,
+    cm_1q_param = estimate_joint_confusion_in_set(qvm, qubit, num_shots=num_shots,
                                                   joint_group_size=1)[qubit]
 
     # non-parameterized confusion matrices
-    cm_3q = estimate_joint_confusion_in_set(qvm, qubit_set=qubits, num_shots=num_shots,
+    cm_3q = estimate_joint_confusion_in_set(qvm, qubits, num_shots=num_shots,
                                             joint_group_size=len(qubits),
-                                            parameterized_program=False)[qubits]
-    cm_1q = estimate_joint_confusion_in_set(qvm, qubit_set=qubit, num_shots=num_shots,
+                                            use_param_program=False)[qubits]
+    cm_1q = estimate_joint_confusion_in_set(qvm, qubit, num_shots=num_shots,
                                             joint_group_size=1,
-                                            parameterized_program=False)[qubit]
+                                            use_param_program=False,
+                                            use_active_reset=True)[qubit]
     # single qubit cm
     single_q = estimate_confusion_matrix(qvm, qubit[0], num_shots)
 
@@ -70,3 +71,19 @@ def test_confusion_matrix_consistency(qvm):
     assert np.allclose(cm_1q_param, marginal_1q_param, atol=atol)
     assert np.allclose(cm_1q, marginal_1q, atol=atol)
     assert np.allclose(marginal_1q_param, single_q, atol=atol)
+
+
+def test_reset_confusion_consistency(qvm):
+    noise_model = decoherence_noise_with_asymmetric_ro(gates=gates_in_isa(qvm.device.get_isa()))
+    qvm.qam.noise_model = noise_model
+    qvm.qam.random_seed = 1
+    num_trials = 10
+    qubits = (0, 1)
+
+    active_reset = estimate_joint_reset_confusion(qvm, qubits, num_trials, len(qubits))[qubits]
+    passive_reset = estimate_joint_reset_confusion(qvm, qubits, num_trials, len(qubits),
+                                                   use_active_reset=False)[qubits]
+
+    atol = .1
+    assert np.allclose(active_reset, passive_reset, atol=atol)
+    assert np.allclose(passive_reset[:, 0], np.ones(4).T, atol=atol)
