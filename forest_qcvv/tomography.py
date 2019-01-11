@@ -787,7 +787,26 @@ def project_density_matrix(rho) -> np.ndarray:
     return rho_projected
 
 
-def estimate_variance(exp_data: TomographyData,
+def unshim_TomographyData(data: TomographyData):
+    results = [ExperimentResult(
+        setting=ExperimentSetting(sI(), sI()),
+        expectation=1.0,
+        stddev=0.0,
+        total_counts=data.counts[0]  # hack!
+    )]
+    for iop, oop, exp, var, count in zip(data.in_ops, data.out_ops, data.expectations,
+                                         data.variances, data.counts):
+        results.append(ExperimentResult(
+            setting=ExperimentSetting(iop, oop),
+            expectation=exp,
+            stddev=np.sqrt(var),
+            total_counts=count,
+        ))
+    return results
+
+
+def estimate_variance(results: List[ExperimentResult],
+                      qubits: List[int],
                       tomo_estimator: Callable,
                       functional: Callable,
                       target_state='null',
@@ -805,6 +824,12 @@ def estimate_variance(exp_data: TomographyData,
     :param n_resamples: The number of times to resample. Default value is 40.
     :param project_to_physical: default is False.
     """
+    exp_data = shim_pyquil_results_to_TomographyData(
+        program=None,
+        qubits=qubits,
+        results=results
+    )
+
     if functional != dm.purity:
         if target_state == 'null':
             print('Unless purity is used as a functional you must specify a target.')
@@ -836,7 +861,7 @@ def estimate_variance(exp_data: TomographyData,
         # Stanislaw Ulam's method
 
         # estimate the state
-        estimate = tomo_estimator(ulam_data)
+        estimate = tomo_estimator(unshim_TomographyData(ulam_data), qubits)
 
         if project_to_physical:
             rho = project_density_matrix(estimate.estimate.state_point_est)

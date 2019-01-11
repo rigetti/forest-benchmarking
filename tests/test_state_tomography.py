@@ -33,10 +33,6 @@ P11 = np.kron(PROJ_ONE, PROJ_ONE)
 ID_2Q = P00 + P01 + P10 + P11
 ZZ_EFFECTS = [P00, P01, P10, P11]
 
-TOL = .08
-VAR = .005
-U_RAND = rand_ops.haar_rand_unitary(2)
-
 
 def test_generate_1q_state_tomography_experiment():
     qubits = [0]
@@ -220,16 +216,21 @@ def test_variance_bootstrap(qvm):
     qubits = [0, 1]
     state_prep = Program([H(q) for q in qubits])
     state_prep.inst(CZ(0, 1))
-    exp_desc = generate_state_tomography_experiment(state_prep)
-    exp_data = acquire_tomography_data(exp_desc, qvm, var=.1)
-    estimate_mle, status = iterative_mle_state_estimate(exp_data, dilution=0.5)
-    purity = np.trace(
-        np.matmul(estimate_mle.estimate.state_point_est, estimate_mle.estimate.state_point_est))
+    tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
+    results = list(measure_observables(qc=qvm, tomo_experiment=tomo_expt, n_shots=10_000))
+    estimate, status = iterative_mle_state_estimate(results=results, qubits=qubits,
+                                                    dilution=0.5)
+    rho_est = estimate.estimate.state_point_est
+    purity = np.trace(rho_est @ rho_est)
+    purity = np.real_if_close(purity)
+    assert purity.imag == 0.0
 
-    def my_mle_estimator(data):
-        return iterative_mle_state_estimate(data, dilution=0.5, entropy_penalty=0.0, beta=0.0)[0]
+    def my_mle_estimator(_r, _q):
+        return iterative_mle_state_estimate(results=_r, qubits=_q,
+                                            dilution=0.5, entropy_penalty=0.0, beta=0.0)[0]
 
-    boot_purity, boot_var = estimate_variance(exp_data, my_mle_estimator, dm.purity, n_resamples=5,
-                                              project_to_physical=False)
+    boot_purity, boot_var = estimate_variance(results=results, qubits=qubits,
+                                              tomo_estimator=my_mle_estimator, functional=dm.purity,
+                                              n_resamples=5, project_to_physical=False)
 
-    assert np.isclose(np.real_if_close(purity), boot_purity, atol=2 * np.sqrt(boot_var), rtol=.01)
+    np.testing.assert_allclose(purity, boot_purity, atol=2 * np.sqrt(boot_var), rtol=0.01)
