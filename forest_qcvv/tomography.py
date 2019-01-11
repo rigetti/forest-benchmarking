@@ -289,8 +289,9 @@ def construct_projection_operators_on_n_qubits(num_qubits) -> List[np.ndarray]:
     return effects
 
 
-def iterative_mle_state_estimate(results: List[ExperimentResult], qubits: List[int], dilution=.005, entropy_penalty=0.0,
-                                 beta=0.0, tol=1e-9, maxiter=100_000) -> TomographyEstimate:
+def iterative_mle_state_estimate(results: List[ExperimentResult], qubits: List[int], dilution=.005,
+                                 entropy_penalty=0.0, beta=0.0, tol=1e-9, maxiter=100_000) \
+        -> TomographyEstimate:
     """
     Given tomography data, use one of three iterative algorithms to return an estimate of the
     state.

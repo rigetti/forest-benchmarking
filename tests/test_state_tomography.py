@@ -218,8 +218,8 @@ def test_maxent_two_qubit(qvm, wfn):
     # Get data from QVM then estimate state
     tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
     results = list(measure_observables(qc=qvm, tomo_experiment=tomo_expt, n_shots=10_000))
-    estimate, status = iterative_mle_state_estimate(results=results, qubits=qubits, dilution=0.5,
-                                                    entropy_penalty=1.0, tol=.001)
+    estimate, status = iterative_mle_state_estimate(results=results, qubits=qubits,
+                                                    dilution=0.5, entropy_penalty=1.0, tol=1e-5)
     rho_est = estimate.estimate.state_point_est
 
     np.testing.assert_allclose(rho_true, rho_est, atol=0.01)
