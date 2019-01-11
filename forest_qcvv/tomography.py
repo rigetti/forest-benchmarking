@@ -863,10 +863,13 @@ def estimate_variance(results: List[ExperimentResult],
         # estimate the state
         estimate = tomo_estimator(unshim_TomographyData(ulam_data), qubits)
 
-        if project_to_physical:
-            rho = project_density_matrix(estimate.estimate.state_point_est)
+        # Shim! over different return values between linear inv. and mle
+        if isinstance(estimate, np.ndarray):
+            rho = estimate
         else:
             rho = estimate.estimate.state_point_est
+        if project_to_physical:
+            rho = project_density_matrix(rho)
 
         # Calculate functional of the state
         if functional == dm.purity:

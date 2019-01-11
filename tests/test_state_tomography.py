@@ -7,7 +7,7 @@ from pyquil.quil import Program
 import forest_qcvv.random_operators as rand_ops
 from forest_qcvv import distance_measures as dm
 from forest_qcvv.tomography import generate_state_tomography_experiment, _R, \
-    acquire_tomography_data, iterative_mle_state_estimate, project_density_matrix, \
+    iterative_mle_state_estimate, project_density_matrix, \
     estimate_variance, linear_inv_state_estimate
 
 np.random.seed(7)  # seed random number generation for all calls to rand_ops
