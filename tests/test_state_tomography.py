@@ -226,8 +226,6 @@ def test_maxent_two_qubit(qvm, wfn):
 
 
 def test_hedged_single_qubit(qvm, wfn):
-    qvm.qam.random_seed = 1
-    # Single qubit test
     qubits = [0]
 
     # Generate random unitary
@@ -237,16 +235,16 @@ def test_hedged_single_qubit(qvm, wfn):
     # True state
     psi = wfn.wavefunction(state_prep)
     rho_true = np.outer(psi.amplitudes, np.transpose(np.conj(psi.amplitudes)))
-    tomo_progs = generate_state_tomography_experiment(state_prep)
 
     # Get data from QVM then estimate state
-    exp_data = acquire_tomography_data(tomo_progs, qvm, VAR)
+    tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
+    results = list(measure_observables(qc=qvm, tomo_experiment=tomo_expt, n_shots=10_000))
 
-    estimate, status = iterative_mle_state_estimate(exp_data, dilution=0.5, beta=0.5)
+    estimate, status = iterative_mle_state_estimate(results=results, qubits=qubits,
+                                                    dilution=0.5, beta=0.5)
+    rho_est = estimate.estimate.state_point_est
 
-    # Compute the Frobeius norm of the different between the estimated operator and the answer
-    assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) <= TOL
-    assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) >= 0.00
+    np.testing.assert_allclose(rho_true, rho_est, atol=0.01)
 
 
 def test_hedged_two_qubit(qvm, wfn):
