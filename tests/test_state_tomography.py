@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 from pyquil.gates import I, H, CZ
 from pyquil.operator_estimation import measure_observables
 from pyquil.quil import Program
@@ -93,7 +94,8 @@ def test_R_operator_fixed_point_2_qubit():
     np.testing.assert_allclose(actual, 0.0, atol=1e-12)
 
 
-def test_single_qubit_linear_inv(qvm, wfn):
+@pytest.fixture(scope='module')
+def single_q_tomo_fixture(qvm, wfn):
     qubits = [0]
 
     # Generate random unitary
@@ -106,15 +108,22 @@ def test_single_qubit_linear_inv(qvm, wfn):
     psi = wfn.wavefunction(state_prep)
     rho_true = np.outer(psi.amplitudes, psi.amplitudes.T.conj())
 
-    # Get data from QVM then estimate state
+    # Get data from QVM
     tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
     results = list(measure_observables(qc=qvm, tomo_experiment=tomo_expt, n_shots=10_000))
-    rho_est = linear_inv_state_estimate(results, qubits)
 
+    return results, rho_true
+
+
+def test_single_qubit_linear_inv(single_q_tomo_fixture):
+    qubits = [0]
+    results, rho_true = single_q_tomo_fixture
+    rho_est = linear_inv_state_estimate(results, qubits)
     np.testing.assert_allclose(rho_true, rho_est, atol=0.01)
 
 
-def test_two_qubit_linear_inv(qvm, wfn):
+@pytest.fixture(scope='module')
+def two_q_tomo_fixture(qvm, wfn):
     qubits = [0, 1]
 
     # Generate random unitary
@@ -127,147 +136,70 @@ def test_two_qubit_linear_inv(qvm, wfn):
     psi = wfn.wavefunction(state_prep)
     rho_true = np.outer(psi.amplitudes, np.transpose(np.conj(psi.amplitudes)))
 
-    # Get data from QVM then estimate state
+    # Get data from QVM
     tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
     results = list(measure_observables(qc=qvm, tomo_experiment=tomo_expt, n_shots=10_000))
-    rho_est = linear_inv_state_estimate(results, qubits)
 
-    np.testing.assert_allclose(rho_true, rho_est, atol=0.01)
-
-
-def test_single_qubit_mle(qvm, wfn):
-    qubits = [0]
-
-    # Generate random unitary
-    rs = np.random.RandomState(52)
-    u_rand = rand_ops.haar_rand_unitary(2 ** 1, rs=rs)
-    state_prep = Program().defgate("RandUnitary", u_rand)
-    state_prep.inst([("RandUnitary", q) for q in qubits])
-
-    # True state
-    psi = wfn.wavefunction(state_prep)
-    rho_true = np.outer(psi.amplitudes, np.transpose(np.conj(psi.amplitudes)))
-
-    # Get data from QVM then estimate state
-    tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
-    results = list(measure_observables(qc=qvm, tomo_experiment=tomo_expt, n_shots=10_000))
-    estimate, status = iterative_mle_state_estimate(results=results, qubits=qubits, dilution=0.5)
-    rho_est = estimate.estimate.state_point_est
-
-    np.testing.assert_allclose(rho_true, rho_est, atol=0.01)
+    return results, rho_true
 
 
-def test_two_qubit_mle(qvm, wfn):
+def test_two_qubit_linear_inv(two_q_tomo_fixture):
     qubits = [0, 1]
-
-    # Generate random unitary
-    rs = np.random.RandomState(52)
-    u_rand = rand_ops.haar_rand_unitary(2 ** 1, rs=rs)
-    state_prep = Program().defgate("RandUnitary", u_rand)
-    state_prep.inst([("RandUnitary", q) for q in qubits])
-
-    # True state
-    psi = wfn.wavefunction(state_prep)
-    rho_true = np.outer(psi.amplitudes, np.transpose(np.conj(psi.amplitudes)))
-
-    # Get data from QVM then estimate state
-    tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
-    results = list(measure_observables(qc=qvm, tomo_experiment=tomo_expt, n_shots=10_000))
-    estimate, status = iterative_mle_state_estimate(results=results, qubits=qubits, dilution=0.5)
-    rho_est = estimate.estimate.state_point_est
-
+    results, rho_true = two_q_tomo_fixture
+    rho_est = linear_inv_state_estimate(results, qubits)
     np.testing.assert_allclose(rho_true, rho_est, atol=0.01)
 
 
-def test_maxent_single_qubit(qvm, wfn):
+def test_single_qubit_mle(single_q_tomo_fixture):
     qubits = [0]
+    results, rho_true = single_q_tomo_fixture
+    estimate, status = iterative_mle_state_estimate(results=results, qubits=qubits, dilution=0.5)
+    rho_est = estimate.estimate.state_point_est
+    np.testing.assert_allclose(rho_true, rho_est, atol=0.01)
 
-    # Generate random unitary
-    rs = np.random.RandomState(52)
-    u_rand = rand_ops.haar_rand_unitary(2 ** 1, rs=rs)
-    state_prep = Program().defgate("RandUnitary", u_rand)
-    state_prep.inst([("RandUnitary", q) for q in qubits])
 
-    # True state
-    psi = wfn.wavefunction(state_prep)
-    rho_true = np.outer(psi.amplitudes, np.transpose(np.conj(psi.amplitudes)))
+def test_two_qubit_mle(two_q_tomo_fixture):
+    qubits = [0, 1]
+    results, rho_true = two_q_tomo_fixture
+    estimate, status = iterative_mle_state_estimate(results=results, qubits=qubits, dilution=0.5)
+    rho_est = estimate.estimate.state_point_est
+    np.testing.assert_allclose(rho_true, rho_est, atol=0.01)
 
-    # Get data from QVM then estimate state
-    tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
-    results = list(measure_observables(qc=qvm, tomo_experiment=tomo_expt, n_shots=10_000))
+
+def test_maxent_single_qubit(single_q_tomo_fixture):
+    qubits = [0]
+    results, rho_true = single_q_tomo_fixture
     estimate, status = iterative_mle_state_estimate(results=results, qubits=qubits,
                                                     dilution=0.5, entropy_penalty=1.0)
     rho_est = estimate.estimate.state_point_est
-
     np.testing.assert_allclose(rho_true, rho_est, atol=0.01)
 
 
-def test_maxent_two_qubit(qvm, wfn):
+def test_maxent_two_qubit(two_q_tomo_fixture):
     qubits = [0, 1]
-
-    # Generate random unitary
-    rs = np.random.RandomState(52)
-    u_rand = rand_ops.haar_rand_unitary(2 ** 1, rs=rs)
-    state_prep = Program().defgate("RandUnitary", u_rand)
-    state_prep.inst([("RandUnitary", q) for q in qubits])
-
-    # True state
-    psi = wfn.wavefunction(state_prep)
-    rho_true = np.outer(psi.amplitudes, np.transpose(np.conj(psi.amplitudes)))
-
-    # Get data from QVM then estimate state
-    tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
-    results = list(measure_observables(qc=qvm, tomo_experiment=tomo_expt, n_shots=10_000))
+    results, rho_true = two_q_tomo_fixture
     estimate, status = iterative_mle_state_estimate(results=results, qubits=qubits,
                                                     dilution=0.5, entropy_penalty=1.0, tol=1e-5)
     rho_est = estimate.estimate.state_point_est
-
     np.testing.assert_allclose(rho_true, rho_est, atol=0.01)
 
 
-def test_hedged_single_qubit(qvm, wfn):
+def test_hedged_single_qubit(single_q_tomo_fixture):
     qubits = [0]
-
-    # Generate random unitary
-    state_prep = Program().defgate("RandUnitary", U_RAND)
-    state_prep.inst([("RandUnitary", q) for q in qubits])
-
-    # True state
-    psi = wfn.wavefunction(state_prep)
-    rho_true = np.outer(psi.amplitudes, np.transpose(np.conj(psi.amplitudes)))
-
-    # Get data from QVM then estimate state
-    tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
-    results = list(measure_observables(qc=qvm, tomo_experiment=tomo_expt, n_shots=10_000))
-
+    results, rho_true = single_q_tomo_fixture
     estimate, status = iterative_mle_state_estimate(results=results, qubits=qubits,
                                                     dilution=0.5, beta=0.5)
     rho_est = estimate.estimate.state_point_est
-
     np.testing.assert_allclose(rho_true, rho_est, atol=0.01)
 
 
-def test_hedged_two_qubit(qvm, wfn):
-    qvm.qam.random_seed = 1
-    # Two qubit test
+def test_hedged_two_qubit(two_q_tomo_fixture):
     qubits = [0, 1]
-
-    # Generate random unitary
-    state_prep = Program().defgate("RandUnitary", U_RAND)
-    state_prep.inst([("RandUnitary", q) for q in qubits])
-
-    # True state
-    psi = wfn.wavefunction(state_prep)
-    rho_true = np.outer(psi.amplitudes, np.transpose(np.conj(psi.amplitudes)))
-    tomo_progs = generate_state_tomography_experiment(state_prep)
-
-    # Get data from QVM then estimate state
-    exp_data = acquire_tomography_data(tomo_progs, qvm, VAR)
-    estimate, status = iterative_mle_state_estimate(exp_data, dilution=0.5, beta=0.5)
-
-    # Compute the Frobeius norm of the different between the estimated operator and the answer
-    assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) <= TOL
-    assert np.real(np.linalg.norm((rho_true - estimate.estimate.state_point_est), 'fro')) >= 0.00
+    results, rho_true = two_q_tomo_fixture
+    estimate, status = iterative_mle_state_estimate(results=results, qubits=qubits,
+                                                    dilution=0.5, beta=0.5)
+    rho_est = estimate.estimate.state_point_est
+    np.testing.assert_allclose(rho_true, rho_est, atol=0.01)
 
 
 def test_project_density_matrix():
