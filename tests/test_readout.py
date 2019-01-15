@@ -65,12 +65,12 @@ def test_readout_confusion_matrix_consistency(qvm):
     marginal_1q = marginalize_confusion_matrix(cm_3q, qubits, qubit)
 
     atol = .03
-    assert np.allclose(cm_3q_param, cm_3q, atol=atol)
-    assert np.allclose(cm_1q_param, single_q, atol=atol)
-    assert np.allclose(cm_1q, single_q, atol=atol)
-    assert np.allclose(cm_1q_param, marginal_1q_param, atol=atol)
-    assert np.allclose(cm_1q, marginal_1q, atol=atol)
-    assert np.allclose(marginal_1q_param, single_q, atol=atol)
+    np.testing.assert_allclose(cm_3q_param, cm_3q, atol=atol)
+    np.testing.assert_allclose(cm_1q_param, single_q, atol=atol)
+    np.testing.assert_allclose(cm_1q, single_q, atol=atol)
+    np.testing.assert_allclose(cm_1q_param, marginal_1q_param, atol=atol)
+    np.testing.assert_allclose(cm_1q, marginal_1q, atol=atol)
+    np.testing.assert_allclose(marginal_1q_param, single_q, atol=atol)
 
 
 def test_reset_confusion_consistency(qvm):
@@ -85,5 +85,5 @@ def test_reset_confusion_consistency(qvm):
                                                    use_active_reset=False)[qubits]
 
     atol = .1
-    assert np.allclose(active_reset, passive_reset, atol=atol)
-    assert np.allclose(passive_reset[:, 0], np.ones(4).T, atol=atol)
+    np.testing.assert_allclose(active_reset, passive_reset, atol=atol)
+    np.testing.assert_allclose(passive_reset[:, 0], np.ones(4).T, atol=atol)
