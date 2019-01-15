@@ -1,8 +1,9 @@
 import itertools
 from math import pi
 from typing import Tuple, Dict, Sequence
-
+import warnings
 import numpy as np
+
 from pyquil import Program
 from pyquil.api import QuantumComputer
 from pyquil.gates import RX, RZ, RESET, MEASURE
@@ -322,7 +323,10 @@ def estimate_joint_reset_confusion(qc: QuantumComputer, qubits: Sequence[int] = 
             for _ in range(num_trials):
                 # prepare the given bitstring. Again, no measurement yet.
                 prep_executable = qc.compiler.native_quil_to_executable(prep_program)
-                qc.run(prep_executable, memory_map={'target': [bit * pi for bit in bitstring]})
+                with warnings.catch_warnings():
+                    warnings.filterwarnings("ignore", message="You are running a QVM program with "
+                                                            "no MEASURE instructions.")
+                    qc.run(prep_executable, memory_map={'target': [bit * pi for bit in bitstring]})
 
                 # execute program that measures the post-reset state
                 if use_active_reset:
