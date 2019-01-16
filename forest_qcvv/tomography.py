@@ -263,6 +263,8 @@ def linear_inv_state_estimate(results: List[ExperimentResult],
 
 
     :param results: A tomographically complete list of results.
+    :param qubits: All qubits that were tomographized. This specifies the order in
+        which qubits will be kron'ed together.
     :return: A point estimate of the quantum state rho.
     """
     measurement_matrix = np.vstack([
