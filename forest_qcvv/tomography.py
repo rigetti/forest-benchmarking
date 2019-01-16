@@ -1,7 +1,6 @@
 import functools
 import itertools
 from dataclasses import dataclass, replace
-from functools import reduce
 from operator import mul
 from typing import Callable, Tuple, List, Optional, Union, Sequence
 
@@ -781,9 +780,9 @@ def project_density_matrix(rho) -> np.ndarray:
     eigvals_new.reverse()
 
     # Reconstruct the matrix
-    rho_projected = reduce(np.dot, (eigvecs,
-                                    np.diag(eigvals_new),
-                                    np.conj(eigvecs.T)))
+    rho_projected = functools.reduce(np.dot, (eigvecs,
+                                              np.diag(eigvals_new),
+                                              np.conj(eigvecs.T)))
 
     return rho_projected
 
