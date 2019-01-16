@@ -18,7 +18,7 @@ were $T$ denotes a transpose. Clearly an inverse operation, `unvec` can be defin
 
 $ {\rm unvec}\big ( {\rm vec}(A) \big ) = A$.
 
-Similarly we can define a row vectorization to be column stacking
+Similarly we can define a row vectorization to be row stacking
 
 $|A\rangle \rangle := {\rm vec_r}(A) = (a_{11}, a_{12}, \ldots, a_{1m}, a_{21},\ldots, a_{mm})^T.$
 
