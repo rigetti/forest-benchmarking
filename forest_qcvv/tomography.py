@@ -1,21 +1,26 @@
-import numpy as np
-from typing import Callable, Tuple, List, Optional, Union
-from scipy.linalg import logm, pinv, eigh
-from functools import reduce
+import functools
 import itertools
 from dataclasses import dataclass, replace
+from operator import mul
+from typing import Callable, Tuple, List, Optional, Union, Sequence
 
-from pyquil.paulis import PauliTerm, PauliSum
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.colors import LinearSegmentedColormap
 from pyquil import Program
 from pyquil.api import QuantumComputer
+from pyquil.operator_estimation import ExperimentSetting, \
+    TomographyExperiment as PyQuilTomographyExperiment, ExperimentResult, measure_observables
+from pyquil.paulis import sI, sX, sY, sZ, PauliSum, PauliTerm
+from pyquil.unitary_tools import lifted_pauli
+from scipy.linalg import logm, pinv, eigh
 
-from forest_qcvv.utils import *
-from forest_qcvv.superop_conversion import vec, unvec
-import forest_qcvv.operator_estimation as est
 import forest_qcvv.distance_measures as dm
-
-from matplotlib.colors import LinearSegmentedColormap
-import matplotlib.pyplot as plt
+import forest_qcvv.operator_estimation as est
+from forest_qcvv.superop_conversion import vec, unvec
+from forest_qcvv.utils import prepare_prod_sic_state, all_pauli_terms, all_sic_terms, \
+    n_qubit_pauli_basis, transform_pauli_moments_to_bit, transform_bit_moments_to_pauli, \
+    partial_trace
 
 MAXITER = "maxiter"
 OPTIMAL = "optimal"
@@ -40,19 +45,26 @@ class TomographyExperiment:
     on the `in_op`"""
 
 
-def generate_state_tomography_experiment(prog: Program) -> TomographyExperiment:
-    """
-    Generate a "TomographyExperiment" containing all the experiments needed to perform quantum state tomography.
-    Only qubits acted on by a gate in the program will be tomographed; to include a `trivial' qubit, insert an Identity
-    gate into the program that acts on that qubit.
+def _state_tomo_settings(qubits: Sequence[int]):
+    """Yield settings over itertools.product(I, X, Y, Z).
 
-    :param prog: A PyQuil program for preparing the state to be characterized.
-    :return: A "TomographyExperiment"
+    Used as a helper function for generate_state_tomography_experiment
+
+    :param qubits: The qubits to tomographize.
     """
-    qubits = prog.get_qubits()
     n_qubits = len(qubits)
-    out_ops = all_pauli_terms(n_qubits, qubits)
-    return TomographyExperiment(in_ops=None, program=prog, out_ops=out_ops)
+    for o_ops in itertools.product([sI, sX, sY, sZ], repeat=n_qubits):
+        o_op = functools.reduce(mul, (op(q) for op, q in zip(o_ops, qubits)), sI())
+
+        yield ExperimentSetting(
+            in_operator=sI(),
+            out_operator=o_op,
+        )
+
+
+def generate_state_tomography_experiment(program: Program, qubits: List[int]):
+    return PyQuilTomographyExperiment(settings=list(_state_tomo_settings(qubits)),
+                                      program=program, qubits=qubits)
 
 
 def generate_process_tomography_experiment(prog: Program) -> TomographyExperiment:
@@ -98,6 +110,19 @@ class TomographyData:
 
     counts: List[int]
     """number of shots used to calculate the `expectation`"""
+
+
+def shim_pyquil_results_to_TomographyData(program, qubits, results: List[ExperimentResult]):
+    return TomographyData(
+        in_ops=[r.setting.in_operator for r in results[1:]],
+        out_ops=[r.setting.out_operator for r in results[1:]],
+        expectations=[r.expectation for r in results[1:]],
+        variances=[r.stddev ** 2 for r in results[1:]],
+        program=program,
+        number_qubits=len(qubits),
+        dimension=2 ** len(qubits),
+        counts=[r.total_counts for r in results[1:]],
+    )
 
 
 def acquire_tomography_data(experiment: TomographyExperiment, qc: QuantumComputer, var: float = 0.01,
@@ -219,73 +244,36 @@ class TomographyEstimate:
     """State or process estimate from tomography experiment"""
 
 
-def linear_inv_state_estimate(data: TomographyData) -> TomographyEstimate:
+def linear_inv_state_estimate(results: List[ExperimentResult],
+                              qubits: List[int]) -> np.ndarray:
     """
-    Estimate quantum state using linear inversion.
+    Estimate a quantum state using linear inversion.
 
-    For more details see section 3.4 of
+    This is the simplest state tomography post processing. To use this function,
+    collect state tomography data with :py:func:`generate_state_tomography_experiment`
+    and :py:func:`~pyquil.operator_estimation.measure_observables`.
 
-    Initialization and characterization of open quantum systems
-    C. Wood, PhD thesis from University of Waterloo, (2015).
-    http://hdl.handle.net/10012/9557
+    For more details on this post-processing technique,
+    see https://en.wikipedia.org/wiki/Quantum_tomography#Linear_inversion or
+    see section 3.4 of
+
+        Initialization and characterization of open quantum systems
+        C. Wood, PhD thesis from University of Waterloo, (2015).
+        http://hdl.handle.net/10012/9557
 
 
-    :param state_tomography_experiment_data data: namedtuple.
-    :return: A TomographyEstimate whose estimate is a StateTomographyEstimate, with qubits tensored in decreasing order.
+    :param results: A tomographically complete list of results.
+    :param qubits: All qubits that were tomographized. This specifies the order in
+        which qubits will be kron'ed together.
+    :return: A point estimate of the quantum state rho.
     """
-    results = []
-    for pauli_est in data.expectations:
-        # get the real part of each string of pauli operators
-        results.append(pauli_est)
-
-    # insert the identity term and then convert to an np array
-    results.insert(0, 1)
-    results = np.array(results)
-
-    # Compute vectorized density operator using linear inversion.
-    measurement_matrix = construct_pinv_measurement_matrix(n_qubit_pauli_basis(data.number_qubits).ops)
-    ans = measurement_matrix.dot(results)
-    rho_est = np.reshape(ans, (data.dimension, -1))
-
-    estimate = StateTomographyEstimate(
-        state_point_est=rho_est,
-        type='linear_inversion',
-        beta=None,
-        entropy=None,
-        dilution=None,
-        loglike=None
-    )
-
-    est_data = TomographyEstimate(
-        in_ops=data.in_ops,
-        program=data.program,
-        out_ops=data.out_ops,
-        dimension=data.dimension,
-        number_qubits=data.number_qubits,
-        expectations=data.expectations,
-        variances=data.variances,
-        estimate=estimate
-    )
-
-    return est_data
-
-
-def construct_pinv_measurement_matrix(operators) -> np.ndarray:
-    """
-    Given a list of operators represented as matrices, compute the matrix that when applied to the
-    estimated expectation values, returns an estimate of the density matrix.
-
-    :param operators: A list of ndarray-like objects.
-    :return: An ndarray that when applied to a vector of expectation values returns a vectorized
-    estimate of the state.
-    """
-    # TODO: Run tests on speed and accuracy(forwards backwards = Id) for inverse vs solving eqn
-    flat_ops = []
-    for operator in operators:
-        op_expect_vector = np.conj(np.reshape(operator, (1, -1), 'F'))
-        flat_ops.append(op_expect_vector)
-    # TODO: decide if can use pinv consistently from one of np or scipy
-    return pinv(np.vstack(flat_ops))
+    measurement_matrix = np.vstack([
+        vec(lifted_pauli(result.setting.out_operator, qubits=qubits)).T.conj()
+        for result in results
+    ])
+    expectations = np.array([result.expectation for result in results])
+    rho = pinv(measurement_matrix) @ expectations
+    return unvec(rho)
 
 
 def construct_projection_operators_on_n_qubits(num_qubits) -> List[np.ndarray]:
@@ -303,11 +291,12 @@ def construct_projection_operators_on_n_qubits(num_qubits) -> List[np.ndarray]:
     return effects
 
 
-def iterative_mle_state_estimate(data: TomographyData, dilution=.005, entropy_penalty=0.0, beta=0.0, tol=1e-9,
-                                 maxiter=100000) -> TomographyEstimate:
+def iterative_mle_state_estimate(results: List[ExperimentResult], qubits: List[int], dilution=.005,
+                                 entropy_penalty=0.0, beta=0.0, tol=1e-9, maxiter=100_000) \
+        -> TomographyEstimate:
     """
     Given tomography data, use one of three iterative algorithms to return an estimate of the
-     state.
+    state.
     
     "... [The iterative] algorithm is characterized by a very high convergence rate and features a
     simple adaptive procedure that ensures likelihood increase in every iteration and
@@ -341,18 +330,22 @@ def iterative_mle_state_estimate(data: TomographyData, dilution=.005, entropy_pe
 
     :param state_tomography_experiment_data data: namedtuple.
     :param dilution: delta  = 1 / epsilon where epsilon is the dilution parameter used in [DIMLE1].
-    in practice epislon= 1/N
+        in practice epsilon= 1/N
     :param entropy_penalty: the entropy penalty parameter from [DIMLE2].
-    :param beta: The Hedging parameter from Ref.[HMLE].
+    :param beta: The Hedging parameter from [HMLE].
     :param tol: The largest difference in the frobenious norm between update steps that will cause
-     the algorithm to conclude that it has converged.
-    :param maxiter: the maximium number of itterations to perform before aborting the procedure.
+         the algorithm to conclude that it has converged.
+    :param maxiter: The maximum number of iterations to perform before aborting the procedure.
     :return: A TomographyEstimate whose estimate is a StateTomographyEstimate
     """
-
+    data = shim_pyquil_results_to_TomographyData(
+        program=None,
+        qubits=qubits,
+        results=results
+    )
     exp_type = 'iterative_MLE'
     if (entropy_penalty != 0.0) and (beta != 0.0):
-        raise ValueError("One can't senisbly do entropy penalty and hedging. Do one or the other"
+        raise ValueError("One can't sensibly do entropy penalty and hedging. Do one or the other"
                          " but not both.")
     else:
         if entropy_penalty != 0.0:
@@ -361,7 +354,8 @@ def iterative_mle_state_estimate(data: TomographyData, dilution=.005, entropy_pe
             exp_type = 'heged_MLE'
 
     # Identity prop to the size of Hilbert space
-    IdH = np.eye(data.dimension, data.dimension)
+    dim = 2**len(qubits)
+    IdH = np.eye(dim, dim)
 
     freq = []
     for expectation, count in zip(data.expectations, data.counts):
@@ -427,7 +421,7 @@ def iterative_mle_state_estimate(data: TomographyData, dilution=.005, entropy_pe
 
 
 def _R(state, effects, observed_frequencies):
-    """
+    r"""
     This is Eqn 5 in [DIMLE1], i.e.
 
     R(rho) = (1/N) \sum_j (n_j/Pr_j) Pi_j
@@ -448,9 +442,8 @@ def _R(state, effects, observed_frequencies):
     machine_eps = np.finfo(float).tiny
     # have a zero in the numerator, we can fix this is we look a little more carefully.
     predicted_probs = np.array([np.real(np.trace(state.dot(effect))) for effect in effects])
-    update_operator = sum(
-        [effect * observed_frequencies[i] / (predicted_probs[i] + machine_eps)
-         for i, effect in enumerate(effects)])
+    update_operator = sum([effect * observed_frequencies[i] / (predicted_probs[i] + machine_eps)
+                           for i, effect in enumerate(effects)])
     return update_operator
 
 
@@ -789,14 +782,33 @@ def project_density_matrix(rho) -> np.ndarray:
     eigvals_new.reverse()
 
     # Reconstruct the matrix
-    rho_projected = reduce(np.dot, (eigvecs,
-                                    np.diag(eigvals_new),
-                                    np.conj(eigvecs.T)))
+    rho_projected = functools.reduce(np.dot, (eigvecs,
+                                              np.diag(eigvals_new),
+                                              np.conj(eigvecs.T)))
 
     return rho_projected
 
 
-def estimate_variance(exp_data: TomographyData,
+def unshim_TomographyData(data: TomographyData):
+    results = [ExperimentResult(
+        setting=ExperimentSetting(sI(), sI()),
+        expectation=1.0,
+        stddev=0.0,
+        total_counts=data.counts[0]  # hack!
+    )]
+    for iop, oop, exp, var, count in zip(data.in_ops, data.out_ops, data.expectations,
+                                         data.variances, data.counts):
+        results.append(ExperimentResult(
+            setting=ExperimentSetting(iop, oop),
+            expectation=exp,
+            stddev=np.sqrt(var),
+            total_counts=count,
+        ))
+    return results
+
+
+def estimate_variance(results: List[ExperimentResult],
+                      qubits: List[int],
                       tomo_estimator: Callable,
                       functional: Callable,
                       target_state='null',
@@ -814,6 +826,12 @@ def estimate_variance(exp_data: TomographyData,
     :param n_resamples: The number of times to resample. Default value is 40.
     :param project_to_physical: default is False.
     """
+    exp_data = shim_pyquil_results_to_TomographyData(
+        program=None,
+        qubits=qubits,
+        results=results
+    )
+
     if functional != dm.purity:
         if target_state == 'null':
             print('Unless purity is used as a functional you must specify a target.')
@@ -845,12 +863,15 @@ def estimate_variance(exp_data: TomographyData,
         # Stanislaw Ulam's method
 
         # estimate the state
-        estimate = tomo_estimator(ulam_data)
+        estimate = tomo_estimator(unshim_TomographyData(ulam_data), qubits)
 
-        if project_to_physical:
-            rho = project_density_matrix(estimate.estimate.state_point_est)
+        # Shim! over different return values between linear inv. and mle
+        if isinstance(estimate, np.ndarray):
+            rho = estimate
         else:
             rho = estimate.estimate.state_point_est
+        if project_to_physical:
+            rho = project_density_matrix(rho)
 
         # Calculate functional of the state
         if functional == dm.purity:
