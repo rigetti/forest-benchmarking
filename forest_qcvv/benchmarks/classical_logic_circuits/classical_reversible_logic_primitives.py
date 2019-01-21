@@ -94,8 +94,8 @@ def adder(register_a, register_b, carry_ancilla=None, z_ancilla=None):
 
     It is not the most efficent but it is easy to implement.
 
-    This method requires two extra ancilla, one for a carry bit 
-    and one for fully reversable computing.
+    This method requires two extra ancilla, one for a carry bit and one for fully reversible
+    computing.
 
     :param register_a: list of qubit labels for register a
     :param register_b: list of qubit labels for register b
@@ -156,10 +156,8 @@ def get_qubit_labels(num_a):
 
 def prepare_binary_numbers(num_a,num_b,qbit_labels):
     """
-    Takes the input binary numbers and creates a program
-    to prepare that input string on qubits in to quantum 
-    registers that are interleaved in the approprite way for 
-    the ripple carry adder.
+    Takes the input binary numbers and creates a program to prepare that input string on qubits
+    in two quantum registers that are interleaved in the appropriate way for the ripple carry adder.
     
     :param num_a: tuple of strings representing the first binary number.
     :param num_b: tuple of strings representing the second binary number.
@@ -215,8 +213,8 @@ def prepare_binary_numbers(num_a,num_b,qbit_labels):
 
 def construct_all_possible_input_numbers(n):
     """
-    Construct a list of lists that contains all binary strings of length 2n.
-    We will split this into two lists of length n. These represent all possible inputs to the adder.
+    Construct a list of lists that contains all binary strings of length 2n. We will split this
+    into two lists of length n. These represent all possible inputs to the adder.
     
     :param n: integer representing the length of binary numbers to add.
     :return bin_str: a list of lists that contains all binary strings of length 2n
@@ -228,9 +226,8 @@ def construct_all_possible_input_numbers(n):
 
 def construct_bit_flip_error_histogram(wt, n):
     """
-    From experimental data construct the Hamming 
-    weight histogram of answers relative to a the length 
-    of binary numbers being added.
+    From experimental data construct the Hamming weight histogram of answers relative to a the
+    length of binary numbers being added.
     
     :params wt: numpy array 2**(2n) by number_of_trials
     :params n: number of bits being added
