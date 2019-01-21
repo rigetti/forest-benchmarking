@@ -16,6 +16,8 @@ e.g.
         https://doi.org/10.1103/PhysRevA.54.147
         https://arxiv.org/abs/quant-ph/9511018
 """
+import numpy as np
+
 from pyquil.quil import Program
 from pyquil.gates import CNOT, CCNOT, X, I
 
