@@ -127,12 +127,13 @@ def adder(register_a, register_b, carry_ancilla=None, z_ancilla=None):
     return prog
 
 # helper programs
-def check_binary_number_length(num_a,num_b):
+def check_binary_number_length(num_a,num_b,num_of_qubits):
     """
     Validates the input binary strings.
     
     :param num_a: A tuple of strings.
     :param num_b: A tuple of strings.
+    :param num_of_qubits: int
     :returns: nothing.
     """
     # do some checks then create the qubit labels
