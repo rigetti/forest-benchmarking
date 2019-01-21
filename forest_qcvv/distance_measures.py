@@ -4,7 +4,6 @@ import numpy as np
 from scipy.linalg import sqrtm
 from scipy.linalg import fractional_matrix_power
 from scipy.optimize import minimize_scalar
-import cvxpy as cvx
 
 
 # ===================================================================================================
@@ -136,7 +135,7 @@ def diamond_norm(choi0: np.ndarray, choi1: np.ndarray) -> float:
     """
     # Kudos: Based on MatLab code written by Marcus P. da Silva
     # (https://github.com/BBN-Q/matlab-diamond-norm/)
-
+    import cvxpy as cvx
     assert choi0.shape == choi1.shape
     assert choi0.shape[0] == choi1.shape[1]
     dim2 = choi0.shape[0]
