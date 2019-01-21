@@ -219,7 +219,8 @@ def construct_all_possible_input_numbers(n):
     :param n: integer representing the length of binary numbers to add.
     :return bin_str: a list of lists that contains all binary strings of length 2n
     """
-    # count in binary save as a list
+    # count in binary and save as a list
+    bin_str = []
     for bdx in range(0,2**(2*n)):
         bin_str.append([int(x) for x in format(bdx,'0'+str(2*n)+'b')])
     return bin_str
