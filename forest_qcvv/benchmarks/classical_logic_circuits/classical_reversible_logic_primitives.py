@@ -17,7 +17,7 @@ e.g.
         https://arxiv.org/abs/quant-ph/9511018
 """
 from pyquil.quil import Program
-from pyquil.gates import CNOT, CCNOT, X
+from pyquil.gates import CNOT, CCNOT, X, I
 
 
 def majority_gate(a, b, c):
