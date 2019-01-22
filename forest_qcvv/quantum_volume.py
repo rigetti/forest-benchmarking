@@ -1,5 +1,7 @@
-from typing import Union, List, Sequence, Tuple
+from typing import List, Sequence, Tuple
 import warnings
+import logging
+from tqdm import tqdm
 
 import numpy as np
 from pyquil.api import QuantumComputer, WavefunctionSimulator
@@ -73,7 +75,8 @@ def collect_heavy_outputs(wfn_sim: WavefunctionSimulator, program: Program, qubi
 
 def sample_rand_circuits_for_heavy_out(qc: QuantumComputer, wfn_sim: WavefunctionSimulator,
                                        depth: int, qubits: Sequence[int] = None,
-                                       num_circuits: int = 100, num_shots: int = 1000) -> int:
+                                       num_circuits: int = 100, num_shots: int = 1000,
+                                       show_progress_bar: bool = False) -> int:
     """
     This method performs the bulk of the work in the quantum volume measurement; for the given
     depth, num_circuits many random model circuits are generated, the heavy outputs are
@@ -88,10 +91,12 @@ def sample_rand_circuits_for_heavy_out(qc: QuantumComputer, wfn_sim: Wavefunctio
         wfn_simu results.
     :param num_circuits: the number of random model circuits to sample at this depth; should be >100
     :param num_shots: the number of shots to sample from each model circuit
+    :param show_progress_bar: displays a progress bar via tqdm if true.
     :return: the number of heavy outputs sampled among all circuits generated for this depth
     """
     num_heavy = 0
-    for _ in range(num_circuits):
+    # display progress bar using tqdm
+    for _ in tqdm(range(num_circuits), disable=not show_progress_bar):
         # at present, naively select the first depth many available qubits
         qubits = qubits[:depth]
 
@@ -127,7 +132,7 @@ def sample_rand_circuits_for_heavy_out(qc: QuantumComputer, wfn_sim: Wavefunctio
 def measure_quantum_volume(qc: QuantumComputer, qubits: Sequence[int] = None,
                            num_circuits: int = 100, num_shots: int = 1000,
                            depths: np.ndarray = None, achievable_threshold: float = 2/3,
-                           stop_when_fail: bool = True) \
+                           stop_when_fail: bool = True, show_progress_bar: bool = False) \
                             -> List[Tuple[int, float, bool]]:
     """
     Measures the quantum volume of a quantum resource, as described in [QVol].
@@ -156,6 +161,7 @@ def measure_quantum_volume(qc: QuantumComputer, qubits: Sequence[int] = None,
     :param achievable_threshold: threshold at which a depth is considered to be achieved.
         Eq. 6 of [QVol] defines this to be the default of 2/3
     :param stop_when_fail: if true, the measurement will stop after the first un-achievable depth
+    :param show_progress_bar: displays a progress bar for each depth if true.
     :return: a list of all tuples (depth, prob_sample_heavy, is_achievable) indicating the
         estimated probability of sampling a heavy output at each depth and whether that depth
         qualifies as being achievable.
@@ -175,8 +181,9 @@ def measure_quantum_volume(qc: QuantumComputer, qubits: Sequence[int] = None,
 
     results = []
     for depth in depths:
+        logging.info("Starting depth {}".format(depth))
         num_heavy = sample_rand_circuits_for_heavy_out(qc, wfn_sim, depth, qubits, num_circuits,
-                                                       num_shots)
+                                                       num_shots, show_progress_bar)
 
         total_sampled_outputs = num_circuits * num_shots
         prob_sample_heavy = num_heavy/total_sampled_outputs
