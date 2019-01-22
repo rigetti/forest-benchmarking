@@ -1,16 +1,23 @@
+import networkx as nx
 import numpy as np
 import pytest
-from pyquil.gates import I, H, CZ
-from pyquil.operator_estimation import measure_observables
-from pyquil.quil import Program
+from rpcq.messages import PyQuilExecutableResponse
 
-import forest_qcvv.random_operators as rand_ops
 from forest_qcvv import distance_measures as dm
+from forest_qcvv.compilation import basic_compile
+from forest_qcvv.random_operators import haar_rand_unitary
 from forest_qcvv.tomography import generate_state_tomography_experiment, _R, \
-    iterative_mle_state_estimate, project_density_matrix, \
-    estimate_variance, linear_inv_state_estimate
-
-np.random.seed(7)  # seed random number generation for all calls to rand_ops
+    iterative_mle_state_estimate, project_density_matrix, estimate_variance, \
+    linear_inv_state_estimate
+from pyquil.api import QuantumComputer
+from pyquil.api._compiler import _extract_attribute_dictionary_from_program
+from pyquil.api._qac import AbstractCompiler
+from pyquil.device import NxDevice
+from pyquil.gates import I, H, CZ
+from pyquil.numpy_simulator import NumpyWavefunctionSimulator
+from pyquil.operator_estimation import measure_observables
+from pyquil.pyqvm import PyQVM
+from pyquil.quil import Program
 
 # Single qubit defs
 PROJ_ZERO = np.array([[1, 0], [0, 0]])
@@ -22,7 +29,6 @@ PROJ_MINUS = ID - PROJ_PLUS
 Z_EFFECTS = [PROJ_ZERO, PROJ_ONE]
 X_EFFECTS = [PROJ_PLUS, PROJ_MINUS]
 X = PROJ_PLUS - PROJ_MINUS
-Y = 1j * PROJ_PLUS - 1j * PROJ_MINUS
 Z = PROJ_ZERO - PROJ_ONE
 
 # Two qubit defs
@@ -90,23 +96,42 @@ def test_R_operator_fixed_point_2_qubit():
     np.testing.assert_allclose(actual, 0.0, atol=1e-12)
 
 
+def get_test_qc(n_qubits):
+    class BasicQVMCompiler(AbstractCompiler):
+        def quil_to_native_quil(self, program: Program):
+            return basic_compile(program)
+
+        def native_quil_to_executable(self, nq_program: Program):
+            return PyQuilExecutableResponse(
+                program=nq_program.out(),
+                attributes=_extract_attribute_dictionary_from_program(nq_program))
+
+    return QuantumComputer(
+        name='testing-qc',
+        qam=PyQVM(n_qubits=n_qubits, seed=52),
+        device=NxDevice(nx.complete_graph(n_qubits)),
+        compiler=BasicQVMCompiler(),
+    )
+
+
 @pytest.fixture(scope='module')
-def single_q_tomo_fixture(qvm, wfn):
+def single_q_tomo_fixture():
     qubits = [0]
+    qc = get_test_qc(n_qubits=len(qubits))
 
     # Generate random unitary
-    rs = np.random.RandomState(52)
-    u_rand = rand_ops.haar_rand_unitary(2 ** 1, rs=rs)
+    u_rand = haar_rand_unitary(2 ** 1, rs=qc.qam.rs)
     state_prep = Program().defgate("RandUnitary", u_rand)
-    state_prep.inst([("RandUnitary", q) for q in qubits])
+    state_prep.inst([("RandUnitary", qubits[0])])
 
     # True state
-    psi = wfn.wavefunction(state_prep)
-    rho_true = np.outer(psi.amplitudes, psi.amplitudes.T.conj())
+    wfn = NumpyWavefunctionSimulator(n_qubits=1)
+    psi = wfn.do_gate_matrix(u_rand, qubits=[0]).wf.reshape(-1)
+    rho_true = np.outer(psi, psi.T.conj())
 
     # Get data from QVM
     tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
-    results = list(measure_observables(qc=qvm, tomo_experiment=tomo_expt, n_shots=10_000))
+    results = list(measure_observables(qc=qc, tomo_experiment=tomo_expt, n_shots=100_000))
 
     return results, rho_true
 
@@ -115,26 +140,30 @@ def test_single_qubit_linear_inv(single_q_tomo_fixture):
     qubits = [0]
     results, rho_true = single_q_tomo_fixture
     rho_est = linear_inv_state_estimate(results, qubits)
-    np.testing.assert_allclose(rho_true, rho_est, atol=0.01)
+    np.testing.assert_allclose(rho_true, rho_est, atol=1e-2)
 
 
 @pytest.fixture(scope='module')
-def two_q_tomo_fixture(qvm, wfn):
+def two_q_tomo_fixture():
     qubits = [0, 1]
+    qc = get_test_qc(n_qubits=len(qubits))
 
     # Generate random unitary
-    rs = np.random.RandomState(52)
-    u_rand = rand_ops.haar_rand_unitary(2 ** 1, rs=rs)
+    u_rand = haar_rand_unitary(2 ** 1, rs=qc.qam.rs)
     state_prep = Program().defgate("RandUnitary", u_rand)
     state_prep.inst([("RandUnitary", q) for q in qubits])
 
     # True state
-    psi = wfn.wavefunction(state_prep)
-    rho_true = np.outer(psi.amplitudes, np.transpose(np.conj(psi.amplitudes)))
+    wfn = NumpyWavefunctionSimulator(n_qubits=2)
+    psi = wfn \
+        .do_gate_matrix(u_rand, qubits=[0]) \
+        .do_gate_matrix(u_rand, qubits=[1]) \
+        .wf.reshape(-1)
+    rho_true = np.outer(psi, psi.T.conj())
 
     # Get data from QVM
     tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
-    results = list(measure_observables(qc=qvm, tomo_experiment=tomo_expt, n_shots=10_000))
+    results = list(measure_observables(qc=qc, tomo_experiment=tomo_expt, n_shots=100_000))
 
     return results, rho_true
 
@@ -210,14 +239,13 @@ def test_project_density_matrix():
     assert np.allclose(phys, np.diag([0, 0, 1.0 / 5, 7.0 / 20, 9.0 / 20]))
 
 
-def test_variance_bootstrap(qvm):
-    qvm.qam.random_seed = 1
-
+def test_variance_bootstrap():
     qubits = [0, 1]
+    qc = get_test_qc(n_qubits=len(qubits))
     state_prep = Program([H(q) for q in qubits])
-    state_prep.inst(CZ(0, 1))
+    state_prep.inst(CZ(qubits[0], qubits[1]))
     tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
-    results = list(measure_observables(qc=qvm, tomo_experiment=tomo_expt, n_shots=10_000))
+    results = list(measure_observables(qc=qc, tomo_experiment=tomo_expt, n_shots=10_000))
     estimate, status = iterative_mle_state_estimate(results=results, qubits=qubits,
                                                     dilution=0.5)
     rho_est = estimate.estimate.state_point_est
