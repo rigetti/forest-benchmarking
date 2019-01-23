@@ -23,11 +23,11 @@ project = 'Forest-QCVV'
 copyright = '2018, Rigetti Computing'
 author = 'Rigetti Computing'
 
-import forest_qcvv
+import forest_benchmarking
 # The short X.Y version
-version = '.'.join(forest_qcvv.__version__.split('.')[:2])
+version = '.'.join(forest_benchmarking.__version__.split('.')[:2])
 # The full version, including alpha/beta/rc tags
-release = forest_qcvv.__version__
+release = forest_benchmarking.__version__
 
 
 # -- General configuration ---------------------------------------------------

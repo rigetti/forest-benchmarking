@@ -27,8 +27,8 @@ from pyquil.api import QuantumComputer
 from pyquil.paulis import PauliTerm, PauliSum
 from pyquil.quil import Program
 
-import forest_qcvv.operator_estimation as est
-from forest_qcvv.utils import *
+import forest_benchmarking.operator_estimation as est
+from forest_benchmarking.utils import *
 
 def calibrate_readout_imperfections(pauli: PauliTerm, quantum_machine: QuantumComputer, var: float = 0.01):
     """

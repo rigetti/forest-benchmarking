@@ -4,7 +4,7 @@ from pyquil.api import QPUCompiler
 from pyquil.gates import H, MEASURE, CZ, RY
 from pyquil.quil import Program
 from pyquil.quilbase import Pragma
-from forest_qcvv.compilation import basic_compile
+from forest_benchmarking.compilation import basic_compile
 
 
 def create_graph_state(graph: nx.Graph):

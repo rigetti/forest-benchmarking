@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 from pyquil.quil import address_qubits
 
-from forest_qcvv.bell import create_bell_program, bell_state_statistics
+from forest_benchmarking.bell import create_bell_program, bell_state_statistics
 
 
 def test_create_bell_program(wfn):

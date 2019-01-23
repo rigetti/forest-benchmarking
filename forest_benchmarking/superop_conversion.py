@@ -8,7 +8,7 @@ For more information about the conventions used, look at the file in
 Further references include: arXiv:1111.6950, arXiv:quant-ph/0504091, arXiv:quant-ph/0401119
 """
 import numpy as np
-from forest_qcvv.utils import n_qubit_pauli_basis
+from forest_benchmarking.utils import n_qubit_pauli_basis
 
 
 def vec(matrix):

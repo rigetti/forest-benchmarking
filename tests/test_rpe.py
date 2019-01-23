@@ -1,12 +1,12 @@
 import numpy as np
 from numpy import pi
 from pyquil.gates import H, RY, RZ
-from forest_qcvv import rpe
+from forest_benchmarking import rpe
 from pyquil.noise import damping_after_dephasing
 from pandas import Series
 from pyquil.quil import Program
 from pyquil.quilbase import Measurement
-from forest_qcvv.compilation import basic_compile
+from forest_benchmarking.compilation import basic_compile
 
 
 def test_state_prep(wfn):

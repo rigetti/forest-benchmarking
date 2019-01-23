@@ -9,17 +9,17 @@ from pyquil.paulis import sX, sY, sZ, sI, PauliSum, PauliTerm
 from pyquil.quil import Program
 from pyquil.gates import RY, RX, I
 from pyquil.api import QVMConnection
-from forest_qcvv.operator_estimation import (remove_imaginary,
-                                             get_rotation_program,
-                                             get_parity,
-                                             estimate_pauli_sum,
-                                             CommutationError,
-                                             remove_identity,
-                                             estimate_locally_commuting_operator,
-                                             diagonal_basis_commutes,
-                                             get_diagonalizing_basis,
-                                             _max_key_overlap,
-                                             commuting_sets_by_zbasis)
+from forest_benchmarking.operator_estimation import (remove_imaginary,
+                                                     get_rotation_program,
+                                                     get_parity,
+                                                     estimate_pauli_sum,
+                                                     CommutationError,
+                                                     remove_identity,
+                                                     estimate_locally_commuting_operator,
+                                                     diagonal_basis_commutes,
+                                                     get_diagonalizing_basis,
+                                                     _max_key_overlap,
+                                                     commuting_sets_by_zbasis)
 
 
 def test_imaginary_removal():

@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from forest_qcvv.qubit_spectroscopy import fit_to_exponential_decay_curve
+from forest_benchmarking.qubit_spectroscopy import fit_to_exponential_decay_curve
 
 
 @pytest.fixture()
