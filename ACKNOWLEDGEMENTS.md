@@ -1,6 +1,6 @@
 # Acknowledgements
 
-For security and privacy, the git history of proto-forest-qcvv has been removed.
+For security and privacy, the git history of proto-forest-benchmarking has been removed.
 The contributors of the project, roughly in order of their commit count prior to 2019, were:
 
  - Kyle Gulshen
