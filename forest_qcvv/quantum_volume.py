@@ -4,8 +4,8 @@ import logging
 from tqdm import tqdm
 
 import numpy as np
-from pyquil.api import QuantumComputer, WavefunctionSimulator
-from pyquil.gates import I
+from pyquil.api import QuantumComputer
+from pyquil.numpy_simulator import NumpyWavefunctionSimulator
 from pyquil.quil import DefGate, Program
 
 from forest_qcvv.random_operators import haar_rand_unitary
@@ -48,32 +48,37 @@ def _naive_program_generator(permutations: np.ndarray, gates: np.ndarray) -> Pro
     return p
 
 
-def collect_heavy_outputs(wfn_sim: WavefunctionSimulator, program: Program, qubits: Sequence[int])\
-                                                                                    -> List[int]:
+def collect_heavy_outputs(wfn_sim: NumpyWavefunctionSimulator, permutations: np.ndarray,
+                          gates: np.ndarray) -> List[int]:
     """
     Uses the provided wfn_sim to calculate the probability of measuring each bitstring from the
-    output of the program; those 'heavy' bitstrings which are output with greater than median
-    probability among all possible bitstrings on the given qubits are collected and returned.
+    output of the circuit comprised of the given permutations and gates; those 'heavy' bitstrings
+    which are output with greater than median probability among all possible bitstrings on the
+    given qubits are collected and returned.
 
-    :param wfn_sim: a WavefunctionSimulator that can simulate the provided program
-    :param program: a PyQuil program whose heavy outputs are returned
-    :param qubits: the qubits measured in the program. It is assumed that program get_qubits() is a
-        subset of the input sequence of qubits.
-    :return: a list of the heavy outputs, represented as ints
+    :param wfn_sim: a NumpyWavefunctionSimulator that can simulate the provided program
+    :param permutations: array of depth-many arrays of size n_qubits indicating a qubit permutation
+    :param gates: depth by num_gates_per_layer many matrix representations of 2q gates
+    :return: a list of the heavy outputs of the circuit, represented as ints
     """
-    # ensure non-active qubits are reported by adding identities to program
-    all_qubit_program = program.inst([I(int(q)) for q in qubits])
-    wfn = wfn_sim.wavefunction(all_qubit_program)
+    wfn_sim.reset()
+
+    num_qubits = len(permutations[0])
+    for layer_idx, (perm, layer) in enumerate(zip(permutations, gates)):
+        for gate_idx, gate in enumerate(layer):
+            wfn_sim.do_gate_matrix(gate, (perm[gate_idx], perm[gate_idx+1]))
+
+    probabilities = np.abs(wfn_sim.wf.reshape(-1)) ** 2
 
     # get the indices of the sorted probabilities and store the first half, i.e. those which have
-    # greater than median probability. wfn implicitly lists bitstring indices with qubit 0 rightmost
-    sorted_bitstring_indices = np.argsort(wfn.probabilities())
-    heavy_outputs = sorted_bitstring_indices[2 ** (len(qubits) - 1):]
+    # greater than median probability. Qubit 0 is on the left in numpy simulator
+    sorted_bitstring_indices = np.argsort(probabilities)
+    heavy_outputs = sorted_bitstring_indices[2 ** (num_qubits - 1):]
 
     return heavy_outputs
 
 
-def sample_rand_circuits_for_heavy_out(qc: QuantumComputer, wfn_sim: WavefunctionSimulator,
+def sample_rand_circuits_for_heavy_out(qc: QuantumComputer,
                                        depth: int, qubits: Sequence[int] = None,
                                        num_circuits: int = 100, num_shots: int = 1000,
                                        show_progress_bar: bool = False) -> int:
@@ -84,33 +89,35 @@ def sample_rand_circuits_for_heavy_out(qc: QuantumComputer, wfn_sim: Wavefunctio
     the model circuit is run on the qc. The total number of sampled heavy outputs is returned.
 
     :param qc: the quantum resource that will implement the PyQuil program for each model circuit
-    :param wfn_sim: used to simulate the ideal output probabilities for each model circuit
     :param depth: the depth (and width in num of qubits) of the model circuits
-    :param qubits: the qubits in the qc that will be measured for heavy output sampling. The
-        qubit labels should be listed in increasing order so that they are properly compared to the
-        wfn_simu results.
+    :param qubits: the qubits in the qc that will be measured for heavy output sampling. Qubit
+        labels should be listed in proper order so results can be compared to the wfn_sim results.
     :param num_circuits: the number of random model circuits to sample at this depth; should be >100
     :param num_shots: the number of shots to sample from each model circuit
     :param show_progress_bar: displays a progress bar via tqdm if true.
     :return: the number of heavy outputs sampled among all circuits generated for this depth
     """
+    wfn_sim = NumpyWavefunctionSimulator(depth)
+
     num_heavy = 0
     # display progress bar using tqdm
     for _ in tqdm(range(num_circuits), disable=not show_progress_bar):
         # at present, naively select the first depth many available qubits
         qubits = qubits[:depth]
 
+        # generate a simple list representation for each permutation of the depth many qubits
+        permutations = [np.random.permutation(range(depth)) for _ in range(depth)]
+
+        # generate a matrix representation of each 2q gate in the circuit
         num_gates_per_layer = depth // 2
-        permutations = [np.random.permutation(qubits) for _ in range(depth)]
         gate_list = np.array([haar_rand_unitary(4) for _ in range(depth * num_gates_per_layer)])
         gates = np.reshape(gate_list, (depth, num_gates_per_layer, 4, 4))
 
-        # generate a PyQuil program for the model circuit.
+        # generate a PyQuil program for the model circuit
         program = _naive_program_generator(permutations, gates)
 
-        # simulate the PyQuil program on a wfn_sim. At present, this requires that the program only
-        # act on as many qubits as are measured for the heavy outputs.
-        heavy_outputs = collect_heavy_outputs(wfn_sim, program, qubits)
+        # classically simulate model circuit represented by the perms and gates for heavy outputs
+        heavy_outputs = collect_heavy_outputs(wfn_sim, permutations, gates)
 
         ro = program.declare("ro", "BIT", len(qubits))
         for idx, qubit in enumerate(qubits):
@@ -120,9 +127,8 @@ def sample_rand_circuits_for_heavy_out(qc: QuantumComputer, wfn_sim: Wavefunctio
         results = qc.run(executable)
 
         for result in results:
-            # convert result to int for comparison with heavy outputs. Note heavy_outputs
-            # follow wfn indexing with smallest qubit in right-most position, so reverse result.
-            output = _bit_array_to_int(result[::-1])
+            # convert result to int for comparison with heavy outputs.
+            output = _bit_array_to_int(result)
             if output in heavy_outputs:
                 num_heavy += 1
 
@@ -177,12 +183,10 @@ def measure_quantum_volume(qc: QuantumComputer, qubits: Sequence[int] = None,
     if depths is None:
         depths = np.arange(2, len(qubits) + 1)
 
-    wfn_sim = WavefunctionSimulator()
-
     results = []
     for depth in depths:
         logging.info("Starting depth {}".format(depth))
-        num_heavy = sample_rand_circuits_for_heavy_out(qc, wfn_sim, depth, qubits, num_circuits,
+        num_heavy = sample_rand_circuits_for_heavy_out(qc, depth, qubits, num_circuits,
                                                        num_shots, show_progress_bar)
 
         total_sampled_outputs = num_circuits * num_shots
