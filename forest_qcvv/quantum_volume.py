@@ -24,7 +24,8 @@ def _bit_array_to_int(bit_array: Sequence[int]) -> int:
     return output
 
 
-def _naive_program_generator(permutations: np.ndarray, gates: np.ndarray) -> Program:
+def _naive_program_generator(permutations: np.ndarray, gates: np.ndarray, qubits: Sequence[int]) \
+        -> Program:
     """
     Generates a PyQuil program to implement the circuit which is comprised of the given
     permutations and gates.
@@ -44,7 +45,7 @@ def _naive_program_generator(permutations: np.ndarray, gates: np.ndarray) -> Pro
             # add definition to program
             p += g_definition
             # add gate to program, acting on properly permuted qubits
-            p += G(int(perm[gate_idx]), int(perm[gate_idx + 1]))
+            p += G(int(qubits[perm[gate_idx]]), int(qubits[perm[gate_idx+1]]))
     return p
 
 
@@ -114,7 +115,7 @@ def sample_rand_circuits_for_heavy_out(qc: QuantumComputer,
         gates = np.reshape(gate_list, (depth, num_gates_per_layer, 4, 4))
 
         # generate a PyQuil program for the model circuit
-        program = _naive_program_generator(permutations, gates)
+        program = _naive_program_generator(permutations, gates, qubits)
 
         # classically simulate model circuit represented by the perms and gates for heavy outputs
         heavy_outputs = collect_heavy_outputs(wfn_sim, permutations, gates)
