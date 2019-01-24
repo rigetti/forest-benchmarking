@@ -128,6 +128,52 @@ def adder(register_a, register_b, carry_ancilla=None, z_ancilla=None):
     #prog += Pragma("END_PRESERVE_BLOCK")
     return prog
 
+# X basis programs
+def CNOT_X_basis(control, target):
+    """
+    The CNOT in the X basis, i.e.
+
+    CNOTX = |+X+| \otimes I + |-X-| \otimes Z
+
+    where |+> and |-> are the +/- eigenstate of the Pauli X operator.
+
+    :param control: qubit label
+    :param target: qubit label
+    :return: program
+    """
+    prog = Program()
+    prog += H(control)
+    prog += CZ(control, target)
+    prog += H(control)
+    return prog
+
+def CCNOT_X_basis(control1,control2, target):
+    """
+    The CCNOT (Toffoli) in the X basis, i.e.
+
+    CCNOTX = |+X+| * |+X+| * I +
+             |+X+| * |-X-| * I +
+             |-X-| * |+X+| * I +
+             |-X-| * |-X-| * Z
+
+    where |+> and |-> are the +/- eigenstate of the Pauli X operator and * denotes a tensor product.
+
+    :param control1: qubit label
+    :param control2: qubit label
+    :param target: qubit label
+    :return: program
+    """
+    prog = Program()
+    prog += H(control1)
+    prog += H(control2)
+    prog += H(target)
+    prog += CCNOT(a, b, c)
+    prog += H(control1)
+    prog += H(control2)
+    prog += H(target)
+    return prog
+
+
 # helper programs
 def check_binary_number_length(num_a,num_b,num_of_qubits):
     """
