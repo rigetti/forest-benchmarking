@@ -1,6 +1,6 @@
 from pyquil.paulis import PauliTerm
 
-from forest_qcvv.utils import *
+from forest_benchmarking.utils import *
 
 
 def test_trivial_pauli_str_to_pauli_term():

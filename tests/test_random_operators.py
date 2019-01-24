@@ -2,11 +2,11 @@ import pytest
 import numpy.random
 numpy.random.seed(1)  # seed random number generation for all calls to rand_ops
 
-import forest_qcvv.random_operators as rand_ops
+import forest_benchmarking.random_operators as rand_ops
 import numpy as np
 from sympy.combinatorics import Permutation
 from numpy import linalg as la
-import forest_qcvv.distance_measures as dm
+import forest_benchmarking.distance_measures as dm
 
 D2_SWAP = np.array([[1, 0, 0, 0],
                     [0, 0, 1, 0],

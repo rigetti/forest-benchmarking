@@ -1,7 +1,7 @@
-import forest_qcvv.random_operators as rand_ops
+import forest_benchmarking.random_operators as rand_ops
 import numpy.random
 from scipy.linalg import fractional_matrix_power as matpow
-import forest_qcvv.distance_measures as dm
+import forest_benchmarking.distance_measures as dm
 import numpy as np
 
 numpy.random.seed(7)  # seed random number generation for all calls to rand_ops

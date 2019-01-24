@@ -1,6 +1,6 @@
 import networkx as nx
 
-from forest_qcvv.graph_state import create_graph_state, measure_graph_state
+from forest_benchmarking.graph_state import create_graph_state, measure_graph_state
 
 
 def test_create_graph_state():
