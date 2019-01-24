@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from forest_qcvv import qubit_spectroscopy as qs
+from forest_benchmarking import qubit_spectroscopy as qs
 
 
 @pytest.fixture()

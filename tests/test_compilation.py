@@ -8,7 +8,7 @@ import pytest
 from pyquil.gates import *
 from pyquil.quil import Program
 from pyquil.gates import RX, RZ
-from forest_qcvv.compilation import _RY, basic_compile, _CNOT, _H, _X, match_global_phase
+from forest_benchmarking.compilation import _RY, basic_compile, _CNOT, _H, _X, match_global_phase
 
 try:
     from pyquil.unitary_tools import program_unitary

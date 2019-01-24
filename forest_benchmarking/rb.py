@@ -17,7 +17,7 @@ from pyquil.quilbase import Gate
 from pyquil.quil import address_qubits, merge_programs
 from pyquil import Program
 from pyquil.quilatom import QubitPlaceholder
-from forest_qcvv.tomography import generate_state_tomography_experiment, acquire_tomography_data
+from forest_benchmarking.tomography import generate_state_tomography_experiment, acquire_tomography_data
 
 RB_TYPES = ["std-1q", "std-2q", "sim-1q", "sim-2q"]
 

@@ -1,10 +1,10 @@
-from forest_qcvv.tomography import proj_to_cp, proj_to_tni, \
+from forest_benchmarking.tomography import proj_to_cp, proj_to_tni, \
     generate_process_tomography_experiment, acquire_tomography_data, pgdb_process_estimate, \
     proj_to_tp
-from forest_qcvv.tomography import _constraint_project
+from forest_benchmarking.tomography import _constraint_project
 
-from forest_qcvv.superop_conversion import vec, unvec, kraus2choi
-from forest_qcvv.utils import sigma_x, sigma_y, sigma_z, partial_trace
+from forest_benchmarking.superop_conversion import vec, unvec, kraus2choi
+from forest_benchmarking.utils import sigma_x, sigma_y, sigma_z, partial_trace
 from numpy import pi
 import numpy as np
 from scipy.linalg import expm

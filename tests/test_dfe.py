@@ -4,7 +4,7 @@ import numpy as np
 
 from pyquil import Program
 from pyquil.gates import CZ, RX, CNOT, H
-from forest_qcvv.dfe import generate_process_dfe_experiment, acquire_dfe_data, \
+from forest_benchmarking.dfe import generate_process_dfe_experiment, acquire_dfe_data, \
     direct_fidelity_estimate, generate_state_dfe_experiment, ratio_variance
 
 def test_exhaustive_gate_dfe_noiseless_qvm(qvm, benchmarker):

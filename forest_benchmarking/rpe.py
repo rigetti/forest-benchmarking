@@ -7,8 +7,8 @@ from pandas import DataFrame, Series
 from pyquil.gates import I, RX, RY, RZ, X
 from pyquil.quil import Program
 from pyquil.api import QuantumComputer
-from forest_qcvv.compilation import basic_compile
-from forest_qcvv.utils import transform_bit_moments_to_pauli, local_pauli_eig_prep, local_pauli_eig_meas
+from forest_benchmarking.compilation import basic_compile
+from forest_benchmarking.utils import transform_bit_moments_to_pauli, local_pauli_eig_prep, local_pauli_eig_meas
 import warnings
 
 import matplotlib.pyplot as plt

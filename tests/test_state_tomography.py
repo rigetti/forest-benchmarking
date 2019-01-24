@@ -4,9 +4,9 @@ from pyquil.gates import I, H, CZ
 from pyquil.operator_estimation import measure_observables
 from pyquil.quil import Program
 
-import forest_qcvv.random_operators as rand_ops
-from forest_qcvv import distance_measures as dm
-from forest_qcvv.tomography import generate_state_tomography_experiment, _R, \
+import forest_benchmarking.random_operators as rand_ops
+from forest_benchmarking import distance_measures as dm
+from forest_benchmarking.tomography import generate_state_tomography_experiment, _R, \
     iterative_mle_state_estimate, project_density_matrix, \
     estimate_variance, linear_inv_state_estimate
 
