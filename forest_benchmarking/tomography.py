@@ -810,11 +810,10 @@ def _resample_expectations_with_beta(results, prior_counts=1):
     :return: A new list of ``results`` where each ExperimentResult's ``expectation`` field
         contained a resampled expectation value
     """
-    ulam_results = []
+    resampled_results = []
     for result in results:
         # reconstruct the raw counts of observations from the pauli observable mean
-        mean_p = np.real(result.expectation)  # TODO: investigate
-        num_plus = ((mean_p + 1) / 2) * result.total_counts
+        num_plus = ((result.expectation + 1) / 2) * result.total_counts
         num_minus = result.total_counts - num_plus
 
         # We resample this data assuming it was from a beta distribution,
@@ -824,13 +823,13 @@ def _resample_expectations_with_beta(results, prior_counts=1):
 
         # transform bit bias back to pauli expectation value
         resampled_expect = 2 * np.random.beta(alpha, beta) - 1
-        ulam_results += [ExperimentResult(
+        resampled_results += [ExperimentResult(
             setting=result.setting,
             expectation=resampled_expect,
             stddev=result.stddev,
             total_counts=result.total_counts,
         )]
-    return ulam_results
+    return resampled_results
 
 
 def estimate_variance(results: List[ExperimentResult],
@@ -862,8 +861,8 @@ def estimate_variance(results: List[ExperimentResult],
 
     sample_estimate = []
     for _ in range(n_resamples):
-        ulam_results = _resample_expectations_with_beta(results)
-        estimate = tomo_estimator(ulam_results, qubits)
+        resampled_results = _resample_expectations_with_beta(results)
+        estimate = tomo_estimator(resampled_results, qubits)
 
         # TODO: Shim! over different return values between linear inv. and mle
         if isinstance(estimate, np.ndarray):
