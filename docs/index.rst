@@ -1,7 +1,7 @@
-Forest-QCVV
-===========
+Forest-Benchmarking
+===================
 
-Forest-QCVV is a library for performing quantum characterization, verification, and validation
+Forest-Benchmarking is a library for performing quantum characterization, verification, and validation
 (QCVV) of quantum computers.
 
 

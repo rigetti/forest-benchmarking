@@ -9,8 +9,8 @@ from pyquil.paulis import (PauliSum, PauliTerm, commuting_sets, sI,
                            term_with_coeff, is_identity)
 from pyquil.quil import Program
 from pyquil.gates import RX, RY, RZ, MEASURE
-from forest_qcvv.readout import estimate_confusion_matrix
-from forest_qcvv.compilation import basic_compile
+from forest_benchmarking.readout import estimate_confusion_matrix
+from forest_benchmarking.compilation import basic_compile
 
 STANDARD_NUMSHOTS = 10000
 

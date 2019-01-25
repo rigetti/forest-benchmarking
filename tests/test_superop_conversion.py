@@ -1,6 +1,6 @@
 import numpy as np
-from forest_qcvv.utils import *
-from forest_qcvv.superop_conversion import *
+from forest_benchmarking.utils import *
+from forest_benchmarking.superop_conversion import *
 
 # one and zero state as a density matrix
 ONE_STATE = np.asarray([[0, 0], [0, 1]])
