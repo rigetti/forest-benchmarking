@@ -1,11 +1,13 @@
 import numpy as np
 import warnings
-from forest_qcvv.quantum_volume import measure_quantum_volume, extract_quantum_volume_from_results
+from pyquil.api import get_qc
+from forest_benchmarking.quantum_volume import measure_quantum_volume, extract_quantum_volume_from_results
 
 np.random.seed(1)
 
 
-def test_ideal_sim_heavy_probs(qvm):
+def test_ideal_sim_heavy_probs():
+    qvm = get_qc('3q-pyqvm')
     qvm.qam.random_seed = 1
 
     # silence warning from too few circuits, since 100 circuits is too slow
