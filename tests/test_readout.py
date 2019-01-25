@@ -6,7 +6,7 @@ from pyquil.device import gates_in_isa
 from pyquil.gates import I, RX, CNOT, MEASURE
 from pyquil.noise import decoherence_noise_with_asymmetric_ro
 
-from forest_qcvv.readout import get_flipped_program, estimate_confusion_matrix, \
+from forest_benchmarking.readout import get_flipped_program, estimate_confusion_matrix, \
     estimate_joint_confusion_in_set, marginalize_confusion_matrix, estimate_joint_reset_confusion
 
 

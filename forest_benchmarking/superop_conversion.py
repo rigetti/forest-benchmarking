@@ -8,7 +8,7 @@ For more information about the conventions used, look at the file in
 Further references include: arXiv:1111.6950, arXiv:quant-ph/0504091, arXiv:quant-ph/0401119
 """
 import numpy as np
-from forest_qcvv.utils import n_qubit_pauli_basis
+from forest_benchmarking.utils import n_qubit_pauli_basis
 
 
 def vec(matrix):
@@ -40,8 +40,8 @@ def unvec(vector):
     :param vector: A N^2 x 1 numpy array.
     :return: Returns a column vector with  N x N rows.
     """
-    row, col = vector.shape
-    dim = int(np.sqrt(row))
+    n_row = vector.shape[0]
+    dim = int(np.sqrt(n_row))
     matrix = vector.reshape(dim, dim).T
     return matrix
 

@@ -19,15 +19,15 @@
 
 # -- Project information -----------------------------------------------------
 
-project = 'Forest-QCVV'
+project = 'Forest-Benchmarking'
 copyright = '2018, Rigetti Computing'
 author = 'Rigetti Computing'
 
-import forest_qcvv
+import forest_benchmarking
 # The short X.Y version
-version = '.'.join(forest_qcvv.__version__.split('.')[:2])
+version = '.'.join(forest_benchmarking.__version__.split('.')[:2])
 # The full version, including alpha/beta/rc tags
-release = forest_qcvv.__version__
+release = forest_benchmarking.__version__
 
 
 # -- General configuration ---------------------------------------------------
@@ -116,7 +116,7 @@ html_sidebars = {
 # -- Options for HTMLHelp output ---------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'Forest-QCVVdoc'
+htmlhelp_basename = 'Forest-Benchmarkingdoc'
 
 
 # -- Options for LaTeX output ------------------------------------------------
@@ -143,7 +143,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'forest-qcvv.tex', 'Forest-QCVV Documentation',
+    (master_doc, 'forest-benchmarking.tex', 'Forest-Benchmarking Documentation',
      'Rigetti Computing', 'manual'),
 ]
 
@@ -153,7 +153,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'forest-qcvv', 'Forest-QCVV Documentation',
+    (master_doc, 'forest-benchmarking', 'Forest-Benchmarking Documentation',
      [author], 1)
 ]
 
@@ -164,8 +164,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'Forest-QCVV', 'Forest-QCVV Documentation',
-     author, 'Forest-QCVV', 'One line description of project.',
+    (master_doc, 'Forest-Benchmarking', 'Forest-Benchmarking Documentation',
+     author, 'Forest-Benchmarking', 'One line description of project.',
      'Miscellaneous'),
 ]
 

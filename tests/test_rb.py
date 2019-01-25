@@ -3,7 +3,7 @@ from numpy import random, uint8, zeros
 
 from pyquil.gates import X, Y
 from pyquil.quil import Program
-from forest_qcvv.rb import merge_sequences, fit_standard_rb, rb_dataframe, \
+from forest_benchmarking.rb import merge_sequences, fit_standard_rb, rb_dataframe, \
     add_sequences_to_dataframe, run_rb_measurement, survivals_by_qubits, add_survivals, survival_statistics, \
     fit_unitarity, add_unitarity_sequences_to_dataframe, \
     run_unitarity_measurement, add_shifted_purities, shifted_purities_by_qubits, unitarity_to_RB_decay
@@ -219,4 +219,4 @@ def test_unitarity(qvm, benchmarker):
     observed_p = unitarity_to_RB_decay(observed_unitarity, 2**num_qubits)
     tol = abs(observed_p - unitarity_to_RB_decay(observed_unitarity-2*unitarity_error, 2**num_qubits))
     # TODO: properly incorporate unitarity error into tol
-    np.testing.assert_allclose(expected_p, observed_p, atol=tol)
+    np.testing.assert_allclose(expected_p, observed_p, atol=0.1)
