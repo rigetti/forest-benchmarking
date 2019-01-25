@@ -19,7 +19,7 @@ e.g.
 import numpy as np
 
 from pyquil.quil import Program
-from pyquil.gates import CNOT, CCNOT, X, I
+from pyquil.gates import CNOT, CCNOT, X, I, H
 
 
 def majority_gate(a, b, c, CNOTfun = CNOT, CCNOTfun = CCNOT):
@@ -225,7 +225,7 @@ def get_qubit_labels(num_a):
     qbit_labels = list(range(2*len(num_a)+2))
     return qbit_labels
 
-def prepare_binary_numbers(num_a,num_b,qbit_labels):
+def prepare_binary_numbers(num_a,num_b,qbit_labels, CNOTfun = CNOT):
     """
     Takes the input binary numbers and creates a program to prepare that input string on qubits
     in two quantum registers that are interleaved in the appropriate way for the ripple carry adder.
@@ -233,6 +233,7 @@ def prepare_binary_numbers(num_a,num_b,qbit_labels):
     :param num_a: tuple of strings representing the first binary number.
     :param num_b: tuple of strings representing the second binary number.
     :param qbit_labels: list of qubits the adder will run on.
+    :param CNOTfunc: either CNOT or CNOT_X_basis.
     :returns: tuple containing the following objects
             state_prep_prog - program 
             register_a - qubit labels of register a
@@ -245,10 +246,17 @@ def prepare_binary_numbers(num_a,num_b,qbit_labels):
     num_a_idx =len(num_a)-1
     num_b_idx =len(num_a)-1
 
+    # if we are doing logic in the computational (Z) basis, don't modify the program. Else
+    # Hadamard so |0> = H |+>
+    if CNOTfun == CNOT:
+        G = I
+    else:
+        G = H
+
     # this is a hack because Quil wont let you have blank programs
     state_prep_prog = Program().inst(I(0))
     # We actually want to run the gates this prevents the compiler from messing with things
-    #state_prep_prog += Pragma("PRESERVE_BLOCK")
+    # state_prep_prog += Pragma("PRESERVE_BLOCK")
     
     state_prep_prog += I(qbit_labels[0])
     
@@ -260,8 +268,10 @@ def prepare_binary_numbers(num_a,num_b,qbit_labels):
         if qbit_idx%2 == 0:
             if num_a[num_a_idx] ==1:
                 state_prep_prog += X(qbit_idx)
+                state_prep_prog += G(qbit_idx)
             else:
                 state_prep_prog += I(qbit_idx)
+                state_prep_prog += G(qbit_idx)
             register_a += [qbit_idx] 
             num_a_idx -=1
         
@@ -269,13 +279,16 @@ def prepare_binary_numbers(num_a,num_b,qbit_labels):
         if (qbit_idx%2) != 0:
             if num_b[num_b_idx] ==1:
                 state_prep_prog += X(qbit_idx)
+                state_prep_prog += G(qbit_idx)
             else:
                 state_prep_prog += I(qbit_idx)
+                state_prep_prog += G(qbit_idx)
             register_b += [qbit_idx]
             num_b_idx -=1
     
     state_prep_prog += I(qbit_labels[-1])
-    #state_prep_prog += Pragma("END_PRESERVE_BLOCK")
+    state_prep_prog += G(qbit_labels[-1])
+    # state_prep_prog += Pragma("END_PRESERVE_BLOCK")
 
     carry_ancilla = 0
     z_ancilla = qbit_labels[-1]
