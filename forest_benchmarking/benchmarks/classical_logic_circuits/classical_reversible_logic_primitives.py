@@ -94,7 +94,12 @@ def unmajority_add_parallel_gate(a, b, c):
     prog += CNOT(c, b)
     return prog
 
-def adder(register_a, register_b, carry_ancilla=None, z_ancilla=None):
+def adder(register_a,
+          register_b,
+          carry_ancilla=None,
+          z_ancilla=None,
+          CNOTfun = CNOT,
+          CCNOTfun = CCNOT):
     """
     Reversable adding on a quantum computer.
 
@@ -104,13 +109,20 @@ def adder(register_a, register_b, carry_ancilla=None, z_ancilla=None):
     S. Cuccaro, T. Draper, s. Kutin, D. Moulton
     https://arxiv.org/abs/quant-ph/0410184
 
-    It is not the most efficent but it is easy to implement.
+    It is not the most efficient but it is easy to implement.
 
     This method requires two extra ancilla, one for a carry bit and one for fully reversible
     computing.
 
+    The default option is to compute this in the computational (aka Z) basis. By passing in
+    CNOTfun and CCNOTfun as CNOT_X_basis and CCNOT_X_basis the computation happens in the X basis.
+
     :param register_a: list of qubit labels for register a
     :param register_b: list of qubit labels for register b
+    :param carry_ancilla: qubit label, default = None
+    :param z_ancill: qubit label, default = None
+    :param CNOTfunc: either CNOT or CNOT_X_basis
+    :param CCNOTfunc: either CCNOT or CCNOT_X_basis
     :return: pyQuil program of adder
     :rtype: Program
     """
@@ -129,11 +141,11 @@ def adder(register_a, register_b, carry_ancilla=None, z_ancilla=None):
     prog_to_rev = Program()
     carry_ancilla_temp = carry_ancilla
     for (a, b) in zip(register_a, register_b):
-        prog += majority_gate(carry_ancilla_temp, b, a)
-        prog_to_rev += unmajority_add_gate(carry_ancilla_temp, b, a).dagger()
+        prog += majority_gate(carry_ancilla_temp, b, a, CNOTfun, CCNOTfun)
+        prog_to_rev += unmajority_add_gate(carry_ancilla_temp, b, a, CNOTfun, CCNOTfun).dagger()
         carry_ancilla_temp = a
 
-    prog += CNOT(register_a[-1], z_ancilla)
+    prog += CNOTfun(register_a[-1], z_ancilla)
     prog += prog_to_rev.dagger()
     #prog += Pragma("END_PRESERVE_BLOCK")
     return prog
