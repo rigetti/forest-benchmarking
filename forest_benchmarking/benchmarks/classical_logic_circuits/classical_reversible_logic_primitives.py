@@ -16,141 +16,25 @@ e.g.
         https://doi.org/10.1103/PhysRevA.54.147
         https://arxiv.org/abs/quant-ph/9511018
 """
+from typing import Sequence
+
 import numpy as np
-
-from pyquil.quil import Program
 from pyquil.gates import CNOT, CCNOT, X, I, H, CZ
+from pyquil.quil import Program
 
 
-def majority_gate(a, b, c, CNOTfun = CNOT, CCNOTfun = CCNOT):
+def get_qubit_labels(num_a):
     """
-    The majority gate.
+    A naive choice qubits to run the adder.
 
-    Computes (a * b) xor (a * c) xor  (b * c)
-    where * is multiplication mod 2.
-
-    The default option is to compute this in the computational (aka Z) basis. By passing in
-    CNOTfun and CCNOTfun as CNOT_X_basis and CCNOT_X_basis the computation happens in the X basis.
-
-    See https://arxiv.org/abs/quant-ph/0410184 .
-    
-    :param a: qubit label
-    :param b: qubit label
-    :param c: qubit label
-    :param CNOTfunc: either CNOT or CNOT_X_basis
-    :param CCNOTfunc: either CCNOT or CCNOT_X_basis
-    :return: program
+    :param num_a: A tuple of strings.
+    :returns qubit_labels: A list of ints.
     """
-    prog = Program()
-    prog += CNOTfun(c, b)
-    prog += CNOTfun(c, a)
-    prog += CCNOTfun(a, b, c)
-    return prog
+    # this part can be optimized by hand
+    qbit_labels = list(range(2 * len(num_a) + 2))
+    return qbit_labels
 
 
-def unmajority_add_gate(a, b, c, CNOTfun = CNOT, CCNOTfun = CCNOT):
-    """
-    The UnMajority and Add or UMA gate
-
-    See https://arxiv.org/abs/quant-ph/0410184 .
-
-    The default option is to compute this in the computational (aka Z) basis. By passing in
-    CNOTfun and CCNOTfun as CNOT_X_basis and CCNOT_X_basis the computation happens in the X basis.
-
-    :param a: qubit label
-    :param b: qubit label
-    :param c: qubit label
-    :param CNOTfunc: either CNOT or CNOT_X_basis
-    :param CCNOTfunc: either CCNOT or CCNOT_X_basis
-    :return: program
-    """
-    prog = Program()
-    prog += CCNOTfun(a, b, c)
-    prog += CNOTfun(c, a)
-    prog += CNOTfun(a, b)
-    return prog
-
-
-def unmajority_add_parallel_gate(a, b, c):
-    """
-    The UnMajority and Add or UMA gate
-
-    3-CNOT version but admits greater parallelism
-    
-    See https://arxiv.org/abs/quant-ph/0410184 .
-
-    Computes
-    :param a: qubit label
-    :param b: qubit label
-    :param c: qubit label
-    :return: program
-    """
-    prog = Program()
-    prog += X(b)
-    prog += CNOT(a, b)
-    prog += CCNOT(a, b, c)
-    prog += X(b)
-    prog += CNOT(c, a)
-    prog += CNOT(c, b)
-    return prog
-
-def adder(register_a,
-          register_b,
-          carry_ancilla=None,
-          z_ancilla=None,
-          CNOTfun = CNOT,
-          CCNOTfun = CCNOT):
-    """
-    Reversable adding on a quantum computer.
-
-    This implementation is based on:
-
-    "A new quantum ripple-carry addition circuit"
-    S. Cuccaro, T. Draper, s. Kutin, D. Moulton
-    https://arxiv.org/abs/quant-ph/0410184
-
-    It is not the most efficient but it is easy to implement.
-
-    This method requires two extra ancilla, one for a carry bit and one for fully reversible
-    computing.
-
-    The default option is to compute this in the computational (aka Z) basis. By passing in
-    CNOTfun and CCNOTfun as CNOT_X_basis and CCNOT_X_basis the computation happens in the X basis.
-
-    :param register_a: list of qubit labels for register a
-    :param register_b: list of qubit labels for register b
-    :param carry_ancilla: qubit label, default = None
-    :param z_ancill: qubit label, default = None
-    :param CNOTfunc: either CNOT or CNOT_X_basis
-    :param CCNOTfunc: either CCNOT or CCNOT_X_basis
-    :return: pyQuil program of adder
-    :rtype: Program
-    """
-    if len(register_b) != len(register_a):
-        raise ValueError("Registers must be equal length")
-
-    if carry_ancilla is None:
-        carry_ancilla = max(register_a + register_b) + 1
-    if z_ancilla is None:
-        z_ancilla = max(register_a + register_b) + 2
-
-    prog = Program()
-    # program to add the numbers on the old QPU the Pragma was required.
-    # will delete this after it has been tested on the hardware...
-    # prog += Pragma("PRESERVE_BLOCK")
-    prog_to_rev = Program()
-    carry_ancilla_temp = carry_ancilla
-    for (a, b) in zip(register_a, register_b):
-        prog += majority_gate(carry_ancilla_temp, b, a, CNOTfun, CCNOTfun)
-        prog_to_rev += unmajority_add_gate(carry_ancilla_temp, b, a, CNOTfun, CCNOTfun).dagger()
-        carry_ancilla_temp = a
-
-    prog += CNOTfun(register_a[-1], z_ancilla)
-    prog += prog_to_rev.dagger()
-    #prog += Pragma("END_PRESERVE_BLOCK")
-    return prog
-
-# X basis programs
 def CNOT_X_basis(control, target):
     """
     The CNOT in the X basis, i.e.
@@ -169,7 +53,8 @@ def CNOT_X_basis(control, target):
     prog += H(control)
     return prog
 
-def CCNOT_X_basis(control1,control2, target):
+
+def CCNOT_X_basis(control1, control2, target):
     """
     The CCNOT (Toffoli) in the X basis, i.e.
 
@@ -196,118 +81,182 @@ def CCNOT_X_basis(control1,control2, target):
     return prog
 
 
-# helper programs
-def check_binary_number_length(num_a,num_b,num_of_qubits):
+def majority_gate(a: int, b: int, c: int, CNOTfunc: Callable[[int, int], Program] = CNOT,
+                  CCNOTfunc: Callable[[int, int, int], Program] = CCNOT) -> Program:
     """
-    Validates the input binary strings.
+    The majority gate.
+
+    Computes (a * b) xor (a * c) xor  (b * c)
+    where * is multiplication mod 2.
+
+    The default option is to compute this in the computational (aka Z) basis. By passing in
+    CNOTfun and CCNOTfun as CNOT_X_basis and CCNOT_X_basis the computation happens in the X basis.
+
+    See https://arxiv.org/abs/quant-ph/0410184 .
     
-    :param num_a: A tuple of strings.
-    :param num_b: A tuple of strings.
-    :param num_of_qubits: int
-    :returns: nothing.
+    :param a: qubit label
+    :param b: qubit label
+    :param c: qubit label
+    :param CNOTfunc: either CNOT or CNOT_X_basis
+    :param CCNOTfunc: either CCNOT or CCNOT_X_basis
+    :return: program which results in (c xor a) on the c line, (b xor a) on the b line,
+        and the output (majority of the inputs) on the a line.
     """
-    # do some checks then create the qubit labels
-    if len(num_a) != len(num_b):
+    prog = Program()
+    prog += CNOTfunc(a, b)
+    prog += CNOTfunc(a, c)
+    prog += CCNOTfunc(c, b, a)
+    return prog
+
+
+def unmajority_add_gate(a: int, b: int, c: int, CNOTfunc: Callable[[int, int], Program] = CNOT,
+                        CCNOTfunc: Callable[[int, int, int], Program] = CCNOT) -> Program:
+    """
+    The UnMajority and Add or UMA gate
+
+    See https://arxiv.org/abs/quant-ph/0410184 .
+
+    The default option is to compute this in the computational (aka Z) basis. By passing in
+    CNOTfun and CCNOTfun as CNOT_X_basis and CCNOT_X_basis the computation happens in the X basis.
+
+    :param a: qubit label
+    :param b: qubit label
+    :param c: qubit label
+    :param CNOTfunc: either CNOT or CNOT_X_basis
+    :param CCNOTfunc: either CCNOT or CCNOT_X_basis
+    :return: program which when run on the output of majority_gate(a,b,c) returns the input to
+        majority_gate on the c and a lines, and outputs the sum of a+b+c (mod 2) on the b line.
+    """
+    prog = Program()
+    prog += CCNOTfunc(c, b, a)
+    prog += CNOTfunc(a, c)
+    prog += CNOTfunc(c, b)
+    return prog
+
+
+def unmajority_add_parallel_gate(a: int, b: int, c: int,
+                                 CNOTfunc: Callable[[int, int], Program] = CNOT,
+                                 CCNOTfunc: Callable[[int, int, int], Program] = CCNOT) -> Program:
+    """
+    The UnMajority and Add or UMA gate
+
+    3-CNOT version but admits greater parallelism
+    
+    See https://arxiv.org/abs/quant-ph/0410184 .
+
+    Computes
+    :param a: qubit label
+    :param b: qubit label
+    :param c: qubit label
+    :return: program that executes the same logic as unmajority_add_gate but with different gates
+    """
+    prog = Program()
+    prog += X(b)
+    prog += CNOTfunc(a, b)
+    prog += CCNOTfunc(a, b, c)
+    prog += X(b)
+    prog += CNOTfunc(c, a)
+    prog += CNOTfunc(c, b)
+    return prog
+
+
+def prepare_bitstring(bitstring: Sequence[int], register: Sequence[int], in_x_basis: bool = False):
+    """
+    Creates a program to prepare the input bitstring on the qubits given by the corresponding
+    label in the register.
+
+    :param bitstring:
+    :param register: a list of qubits on which to prepare the bitstring. The first
+    :param in_x_basis: if true, prepare the bitstring-representation of the numbers in the x basis.
+    :returns: state_prep_prog - program
+    """
+    state_prep_prog = Program()
+
+    for bit, qubit_label in zip(bitstring, register):
+        if bit == 1:
+            state_prep_prog += X(qubit_label)
+
+        # if we are doing logic in X basis, follow each bit preparation with a Hadamard
+        # H |0> = |+> and H |1> = |-> where + and - label the x basis vectors.
+        if in_x_basis:
+            state_prep_prog += H(qubit_label)
+
+    return state_prep_prog
+
+
+def adder(num_a: Sequence[int], num_b: Sequence[int], register_a: Sequence[int],
+          register_b: Sequence[int], carry_ancilla: int, z_ancilla: int, in_x_basis: bool = False)\
+        -> Program:
+    """
+    Produces a program implementing reversible adding on a quantum computer to compute a + b.
+
+    This implementation is based on [ADD-CKT], which is easy to implement, if not the most
+    efficient. Each regesiter of qubit labels should be provided such that the first qubit in
+    each register is expected to carry the least significant bit of the respective number. This
+    method also requires two extra ancilla, one initialized to 0 that acts as a dummy initial
+    carry bit and another (which also probably ought be initialized to 0) that stores the most
+    significant bit of the addition (should there be a final carry). The most straightforward
+    ordering of the registers and two ancilla for adding n-bit numbers follows the pattern
+        carry_ancilla
+        b_0
+        a_0
+        ...
+        b_j
+        a_j
+        ...
+        b_n
+        a_n
+        z_ancilla
+
+    With this ordering, all gates in the circuit act on sets of three adjacent qubits. The output of
+    the circuit correspondingly falls on the qubits initially labeled by the b bits (and z_ancilla).
+    The default option is to compute the addition in the computational (aka Z) basis. By passing in
+    CNOTfunc and CCNOTfunc as CNOT_X_basis and CCNOT_X_basis (defined above) the computation
+    happens in the X basis.
+
+        [ADD-CKT]
+        "A new quantum ripple-carry addition circuit"
+        S. Cuccaro, T. Draper, s. Kutin, D. Moulton
+        https://arxiv.org/abs/quant-ph/0410184
+
+    :param num_a: the bitstring representation of the number a with least significant bit last
+    :param num_b: the bitstring representation of the number b with least significant bit last
+    :param register_a: list of qubit labels for register a, with least significant bit labeled first
+    :param register_b: list of qubit labels for register b, with least significant bit labeled first
+    :param carry_ancilla: qubit labeling a zero-initialized qubit, ideally adjacent to b_0
+    :param z_ancilla: qubit label, a zero-initialized qubit, ideally adjacent to register_a[-1]
+    :param in_x_basis: if true, prepare the bitstring-representation of the numbers in the x basis
+        and subsequently performs all addition logic in the x basis.
+    :return: pyQuil program that implements the addition a+b, with output falling on the qubits
+        formerly storing the input b.
+    """
+    if len(register_b) != len(register_a):
         raise ValueError("Registers must be equal length")
-    elif len(num_a)==0 or len(num_b)==0:
-        raise ValueError("Registers must be of nonzero length")
-    elif len(num_a)> num_of_qubits:
-        raise ValueError("Number is too big to add on the QVM or QPU")
 
-def get_qubit_labels(num_a):
-    """
-    A naive choice qubits to run the adder.
-    
-    :param num_a: A tuple of strings.
-    :returns qubit_labels: A list of ints.
-    """
-    # this part can be optimized by hand
-    qbit_labels = list(range(2*len(num_a)+2))
-    return qbit_labels
+    prep_a = prepare_bitstring(reversed(num_a), register_a, in_x_basis)
+    prep_b = prepare_bitstring(reversed(num_b), register_b, in_x_basis)
 
-def prepare_binary_numbers(num_a,num_b,qbit_labels, CNOTfun = CNOT):
-    """
-    Takes the input binary numbers and creates a program to prepare that input string on qubits
-    in two quantum registers that are interleaved in the appropriate way for the ripple carry adder.
-    
-    :param num_a: tuple of strings representing the first binary number.
-    :param num_b: tuple of strings representing the second binary number.
-    :param qbit_labels: list of qubits the adder will run on.
-    :param CNOTfunc: either CNOT or CNOT_X_basis.
-    :returns: tuple containing the following objects
-            state_prep_prog - program 
-            register_a - qubit labels of register a
-            register_b - qubit labels of register a
-            carry_ancilla - qubit label of the carry bit
-            z_ancilla - necessary additional ancilla 
-    """
-    register_a = []
-    register_b = []
-    num_a_idx =len(num_a)-1
-    num_b_idx =len(num_a)-1
+    prog = prep_a + prep_b
+    prog_to_rev = Program()
+    current_carry_label = carry_ancilla
+    for (a, b) in zip(register_a, register_b):
+        prog += majority_gate(a, b, current_carry_label, in_x_basis)
+        prog_to_rev += unmajority_add_gate(a, b, current_carry_label, in_x_basis).dagger()
+        current_carry_label = a
 
-    # if we are doing logic in the computational (Z) basis, don't modify the program.
-    # Else Hadamard so we change to the X basis i.e. H |0> = |+> and H |1> = |->.
-    if CNOTfun == CNOT:
-        G = I
+    undo_and_add_prog = prog_to_rev.dagger()
+    if in_x_basis:
+        prog += CNOT_X_basis(register_a[-1], z_ancilla)
+        # need to switch back to computational (z) basis before measuring
+        for qubit in register_b:  # answer lays on the b qubit register
+            undo_and_add_prog.inst(H(qubit))
+        undo_and_add_prog.inst(H(z_ancilla))
     else:
-        G = H
+        prog += CNOT(register_a[-1], z_ancilla)
+    prog += undo_and_add_prog
 
-    # this is a hack because Quil wont let you have blank programs
-    state_prep_prog = Program().inst(I(0))
-    # We actually want to run the gates this prevents the compiler from messing with things
-    # state_prep_prog += Pragma("PRESERVE_BLOCK")
-    
-    state_prep_prog += I(qbit_labels[0])
-    
-    # The numbers in the "a" and "b" register are interleaved in the correct way
-    # for the ripple carry adder.
-    for qbit_idx in qbit_labels[1:-1]:
-        
-        # even qubits are "register a"
-        if qbit_idx%2 == 0:
-            if num_a[num_a_idx] ==1:
-                state_prep_prog += X(qbit_idx)
-                state_prep_prog += G(qbit_idx)
-            else:
-                state_prep_prog += I(qbit_idx)
-                state_prep_prog += G(qbit_idx)
-            register_a += [qbit_idx] 
-            num_a_idx -=1
-        
-        # odd qubits are "register b"
-        if (qbit_idx%2) != 0:
-            if num_b[num_b_idx] ==1:
-                state_prep_prog += X(qbit_idx)
-                state_prep_prog += G(qbit_idx)
-            else:
-                state_prep_prog += I(qbit_idx)
-                state_prep_prog += G(qbit_idx)
-            register_b += [qbit_idx]
-            num_b_idx -=1
-    
-    state_prep_prog += I(qbit_labels[-1])
-    state_prep_prog += G(qbit_labels[-1])
-    # state_prep_prog += Pragma("END_PRESERVE_BLOCK")
+    return prog
 
-    carry_ancilla = 0
-    z_ancilla = qbit_labels[-1]
-    
-    return (state_prep_prog,register_a, register_b, carry_ancilla, z_ancilla)
-
-def construct_all_possible_input_numbers(n):
-    """
-    Construct a list of lists that contains all binary strings of length 2n. We will split this
-    into two lists of length n. These represent all possible inputs to the adder.
-    
-    :param n: integer representing the length of binary numbers to add.
-    :return bin_str: a list of lists that contains all binary strings of length 2n
-    """
-    # count in binary and save as a list
-    bin_str = []
-    for bdx in range(0,2**(2*n)):
-        bin_str.append([int(x) for x in format(bdx,'0'+str(2*n)+'b')])
-    return bin_str
 
 def construct_bit_flip_error_histogram(wt, n):
     """
@@ -319,8 +268,8 @@ def construct_bit_flip_error_histogram(wt, n):
     :returns: numpy histogram with bins corresponding to [0,...,n+3] 
     """
     # determine hamming weight histogram
-    histy = np.zeros([2**(2*n),n+2])
-    for sdx in range(2**(2*n)):
-        hist, bins = np.histogram(wt[sdx,:],list(np.arange(0,n+3)))
+    histy = np.zeros([2 ** (2 * n), n + 2])
+    for sdx in range(2 ** (2 * n)):
+        hist, bins = np.histogram(wt[sdx, :], list(np.arange(0, n + 3)))
         histy[sdx] = hist
     return histy
