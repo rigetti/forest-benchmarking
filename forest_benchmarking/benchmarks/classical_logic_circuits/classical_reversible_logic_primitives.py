@@ -19,7 +19,7 @@ e.g.
 import numpy as np
 
 from pyquil.quil import Program
-from pyquil.gates import CNOT, CCNOT, X, I, H
+from pyquil.gates import CNOT, CCNOT, X, I, H, CZ
 
 
 def majority_gate(a, b, c, CNOTfun = CNOT, CCNOTfun = CCNOT):
@@ -155,7 +155,7 @@ def CNOT_X_basis(control, target):
     """
     The CNOT in the X basis, i.e.
 
-    CNOTX = |+X+| \otimes I + |-X-| \otimes Z
+    CNOTX = |+X+| otimes I + |-X-| otimes Z
 
     where |+> and |-> are the +/- eigenstate of the Pauli X operator.
 
@@ -189,7 +189,7 @@ def CCNOT_X_basis(control1,control2, target):
     prog += H(control1)
     prog += H(control2)
     prog += H(target)
-    prog += CCNOT(a, b, c)
+    prog += CCNOT(control1, control2, target)
     prog += H(control1)
     prog += H(control2)
     prog += H(target)
@@ -246,8 +246,8 @@ def prepare_binary_numbers(num_a,num_b,qbit_labels, CNOTfun = CNOT):
     num_a_idx =len(num_a)-1
     num_b_idx =len(num_a)-1
 
-    # if we are doing logic in the computational (Z) basis, don't modify the program. Else
-    # Hadamard so |0> = H |+>
+    # if we are doing logic in the computational (Z) basis, don't modify the program.
+    # Else Hadamard so we change to the X basis i.e. H |0> = |+> and H |1> = |->.
     if CNOTfun == CNOT:
         G = I
     else:
