@@ -4,8 +4,9 @@ Test over all inputs
 from pyquil.api import QVMConnection
 from pyquil.quil import Program
 from pyquil.gates import X, I, CNOT, CCNOT
-from forest_qcvv.benchmarks.classical_logic_circuits.classical_reversible_logic_primitives import\
-    (unmajority_add_gate, unmajority_add_parallel_gate, majority_gate)
+from forest_benchmarking.benchmarks.classical_logic_circuits\
+    .classical_reversible_logic_primitives import (unmajority_add_gate,
+                                                   unmajority_add_parallel_gate, majority_gate)
 
 qvm = QVMConnection()
 

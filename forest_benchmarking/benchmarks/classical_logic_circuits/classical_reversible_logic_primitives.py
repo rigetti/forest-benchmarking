@@ -22,42 +22,52 @@ from pyquil.quil import Program
 from pyquil.gates import CNOT, CCNOT, X, I
 
 
-def majority_gate(a, b, c):
+def majority_gate(a, b, c, CNOTfun = CNOT, CCNOTfun = CCNOT):
     """
     The majority gate.
 
     Computes (a * b) xor (a * c) xor  (b * c)
-    where * is multiplication mod 2
+    where * is multiplication mod 2.
+
+    The default option is to compute this in the computational (aka Z) basis. By passing in
+    CNOTfun and CCNOTfun as CNOT_X_basis and CCNOT_X_basis the computation happens in the X basis.
 
     See https://arxiv.org/abs/quant-ph/0410184 .
     
     :param a: qubit label
     :param b: qubit label
     :param c: qubit label
+    :param CNOTfunc: either CNOT or CNOT_X_basis
+    :param CCNOTfunc: either CCNOT or CCNOT_X_basis
     :return: program
     """
     prog = Program()
-    prog += CNOT(c, b)
-    prog += CNOT(c, a)
-    prog += CCNOT(a, b, c)
+    prog += CNOTfun(c, b)
+    prog += CNOTfun(c, a)
+    prog += CCNOTfun(a, b, c)
     return prog
 
 
-def unmajority_add_gate(a, b, c):
+def unmajority_add_gate(a, b, c, CNOTfun = CNOT, CCNOTfun = CCNOT):
     """
     The UnMajority and Add or UMA gate
 
     See https://arxiv.org/abs/quant-ph/0410184 .
 
+    The default option is to compute this in the computational (aka Z) basis. By passing in
+    CNOTfun and CCNOTfun as CNOT_X_basis and CCNOT_X_basis the computation happens in the X basis.
+
     :param a: qubit label
     :param b: qubit label
     :param c: qubit label
+    :param CNOTfunc: either CNOT or CNOT_X_basis
+    :param CCNOTfunc: either CCNOT or CCNOT_X_basis
     :return: program
     """
     prog = Program()
-    prog += CCNOT(a, b, c)
-    prog += CNOT(c, a)
-    prog += CNOT(a, b)
+    prog += CCNOTfun(a, b, c)
+    prog += CNOTfun(c, a)
+    prog += CNOTfun(a, b)
     return prog
 
 
