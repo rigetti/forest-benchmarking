@@ -1,67 +1,69 @@
 """
 Test over all inputs
 """
-from pyquil.api import QVMConnection
 from pyquil.quil import Program
-from pyquil.gates import X, I, CNOT, CCNOT, H
-from forest_benchmarking.benchmarks.classical_logic_circuits\
-    .classical_reversible_logic_primitives import (unmajority_add_gate,
-                                                   unmajority_add_parallel_gate,
-                                                   majority_gate,
-                                                   CNOT_X_basis,
-                                                   CCNOT_X_basis)
+from pyquil.gates import X, I, CNOT, CCNOT, H, MEASURE
+from forest_benchmarking.classical_logic.primitives import *
 
-qvm = QVMConnection()
 
-def test_majority_gate():
+def test_majority_gate(qvm):
     """
     Testing the majority gate with a truth table
     """
+    #                    a, b, c    a, b, c
     true_truth_table = {(0, 0, 0): (0, 0, 0),
-                        (0, 0, 1): (1, 1, 0),
+                        (0, 0, 1): (0, 0, 1),
                         (0, 1, 0): (0, 1, 0),
-                        (0, 1, 1): (1, 0, 1),
-                        (1, 0, 0): (1, 0, 0),
-                        (1, 0, 1): (0, 1, 1),
-                        (1, 1, 0): (1, 1, 1),
-                        (1, 1, 1): (0, 0, 1)}
+                        (0, 1, 1): (1, 1, 1),
+                        (1, 0, 0): (0, 1, 1),
+                        (1, 0, 1): (1, 1, 0),
+                        (1, 1, 0): (1, 0, 1),
+                        (1, 1, 1): (1, 0, 0)}
 
     maj_gate_program = majority_gate(0, 1, 2)
     for key, value in true_truth_table.items():
-        state_prep_prog = Program().inst(I(2))
+        state_prep_prog = Program()
         for qbit_idx, bit in enumerate(key):
             if bit == 1:
                 state_prep_prog += X(qbit_idx)
-
-        result = qvm.run_and_measure(state_prep_prog + maj_gate_program,
-                                     list(range(3)), trials=1)
+        prog = state_prep_prog + maj_gate_program
+        ro = prog.declare('ro', 'BIT', 3)
+        for q in range(3):
+            prog += MEASURE(q, ro[q])
+        exe = qvm.compiler.native_quil_to_executable(prog)
+        result = qvm.run(exe)
         assert tuple(result[0]) == true_truth_table[key]
 
-def test_unmajority_add_gate():
+
+def test_unmajority_add_gate(qvm):
     """
     Testing the Unmajority add gate with a truth table
     """
     true_truth_table = {(0, 0, 0): (0, 0, 0),
-                        (0, 0, 1): (1, 1, 1),
+                        (0, 0, 1): (0, 1, 1),
                         (0, 1, 0): (0, 1, 0),
-                        (0, 1, 1): (1, 0, 1),
-                        (1, 0, 0): (1, 1, 0),
-                        (1, 0, 1): (0, 0, 1),
-                        (1, 1, 0): (0, 1, 1),
-                        (1, 1, 1): (1, 0, 0)}
+                        (0, 1, 1): (1, 1, 0),
+                        (1, 0, 0): (1, 1, 1),
+                        (1, 0, 1): (1, 0, 0),
+                        (1, 1, 0): (1, 0, 1),
+                        (1, 1, 1): (0, 0, 1)}
 
     unmaj_add_gate_program = unmajority_add_gate(0, 1, 2)
     for key, value in true_truth_table.items():
-        state_prep_prog = Program().inst(I(2))
+        state_prep_prog = Program()
         for qbit_idx, bit in enumerate(key):
             if bit == 1:
                 state_prep_prog += X(qbit_idx)
-
-        result = qvm.run_and_measure(state_prep_prog + unmaj_add_gate_program,
-                                     list(range(3)), trials=1)
+        prog = state_prep_prog + unmaj_add_gate_program
+        ro = prog.declare('ro', 'BIT', 3)
+        for q in range(3):
+            prog += MEASURE(q, ro[q])
+        exe = qvm.compiler.native_quil_to_executable(prog)
+        result = qvm.run(exe)
         assert tuple(result[0]) == true_truth_table[key]
 
-def test_composition_of_majority_and_unmajority_gates():
+
+def test_composition_of_majority_and_unmajority_gates(qvm):
     """
     Testing the composition of the majority gate with the unmajority add gate with a truth table
     """
@@ -76,16 +78,20 @@ def test_composition_of_majority_and_unmajority_gates():
 
     compose_maj_and_unmaj_gate_program = majority_gate(0, 1, 2) + unmajority_add_gate(0, 1, 2)
     for key, value in true_truth_table.items():
-        state_prep_prog = Program().inst(I(2))
+        state_prep_prog = Program()
         for qbit_idx, bit in enumerate(key):
             if bit == 1:
                 state_prep_prog += X(qbit_idx)
-
-        result = qvm.run_and_measure(state_prep_prog + compose_maj_and_unmaj_gate_program,
-                                     list(range(3)), trials=1)
+        prog = state_prep_prog + compose_maj_and_unmaj_gate_program
+        ro = prog.declare('ro', 'BIT', 3)
+        for q in range(3):
+            prog += MEASURE(q, ro[q])
+        exe = qvm.compiler.native_quil_to_executable(prog)
+        result = qvm.run(exe)
         assert tuple(result[0]) == true_truth_table[key]
 
-def test_CNOT_in_X_basis():
+
+def test_CNOT_in_X_basis(qvm):
     """
     Testing the definition of CNOT in the X basis.
     """
@@ -97,8 +103,8 @@ def test_CNOT_in_X_basis():
 
     CNOTX = CNOT_X_basis(0, 1)
     for key, value in true_truth_table.items():
-        state_prep_prog = Program().inst(I(2))
-        meas_prog = Program().inst(I(2))
+        state_prep_prog = Program()
+        meas_prog = Program()
         for qbit_idx, bit in enumerate(key):
             if bit == 1:
                 state_prep_prog += X(qbit_idx)
@@ -107,11 +113,16 @@ def test_CNOT_in_X_basis():
             # Hadamard to get back to the Z basis before measurement
             meas_prog += H(qbit_idx)
 
-        result = qvm.run_and_measure(state_prep_prog + CNOTX + meas_prog,
-                                     list(range(2)), trials=1)
+        prog = state_prep_prog + CNOTX + meas_prog
+        ro = prog.declare('ro', 'BIT', 3)
+        for q in range(2):
+            prog += MEASURE(q, ro[q])
+        exe = qvm.compiler.native_quil_to_executable(prog)
+        result = qvm.run(exe)
         assert tuple(result[0]) == true_truth_table[key]
 
-def test_CCNOT_in_X_basis():
+
+def test_CCNOT_in_X_basis(qvm):
     """
     Testing the definition of Toffoli / CCNOT in the X basis.
     """
@@ -128,7 +139,7 @@ def test_CCNOT_in_X_basis():
     CCNOTX = CCNOT_X_basis(0, 1, 2)
     for key, value in true_truth_table.items():
         state_prep_prog = Program().inst(I(2))
-        meas_prog = Program().inst(I(2))
+        meas_prog = Program()
         for qbit_idx, bit in enumerate(key):
             if bit == 1:
                 state_prep_prog += X(qbit_idx)
@@ -137,6 +148,10 @@ def test_CCNOT_in_X_basis():
             # Hadamard to get back to the Z basis before measurement
             meas_prog += H(qbit_idx)
 
-        result = qvm.run_and_measure(state_prep_prog + CCNOTX + meas_prog,
-                                     list(range(3)), trials=1)
+        prog=state_prep_prog + CCNOTX + meas_prog
+        ro = prog.declare('ro', 'BIT', 3)
+        for q in range(3):
+            prog += MEASURE(q, ro[q])
+        exe = qvm.compiler.native_quil_to_executable(prog)
+        result = qvm.run(exe)
         assert tuple(result[0]) == true_truth_table[key]

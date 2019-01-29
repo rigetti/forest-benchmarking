@@ -1,12 +1,4 @@
-"""
-Test one bit addition over all inputs
-"""
-from pyquil.quil import Program
-from pyquil.gates import X, I, CNOT, CCNOT, H
-
-from forest_benchmarking.benchmarks.classical_logic_circuits\
-    .classical_reversible_logic_primitives import adder, CNOT_X_basis, CCNOT_X_basis
-
+from forest_benchmarking.classical_logic.ripple_carry_adder import adder
 
 def test_one_bit_addition(qvm):
     """
