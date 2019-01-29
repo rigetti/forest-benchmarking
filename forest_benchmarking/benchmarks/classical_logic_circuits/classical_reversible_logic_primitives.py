@@ -16,17 +16,19 @@ e.g.
         https://doi.org/10.1103/PhysRevA.54.147
         https://arxiv.org/abs/quant-ph/9511018
 """
-from typing import Sequence, Tuple, List
+from typing import Sequence, Tuple
 import networkx as nx
-import warnings
 
 import numpy as np
-from pyquil.gates import CNOT, CCNOT, X, I, H, CZ, MEASURE
+from pyquil.gates import CNOT, CCNOT, X, I, H, CZ, MEASURE, RESET
 from pyquil import Program
 from pyquil.api import QuantumComputer
+from pyquil.unitary_tools import all_bitstrings
+
+from forest_benchmarking.readout import _readout_group_parameterized_bitstring
 
 
-def CNOT_X_basis(control, target):
+def CNOT_X_basis(control, target) -> Program:
     """
     The CNOT in the X basis, i.e.
 
@@ -45,7 +47,7 @@ def CNOT_X_basis(control, target):
     return prog
 
 
-def CCNOT_X_basis(control1, control2, target):
+def CCNOT_X_basis(control1, control2, target) -> Program:
     """
     The CCNOT (Toffoli) in the X basis, i.e.
 
@@ -167,141 +169,56 @@ def unmajority_add_parallel_gate(a: int, b: int, c: int, in_x_basis: bool = Fals
     return prog
 
 
-def _alternate_assign_from_start(start, graph: nx.Graph, num_a, num_b):
+def assign_registers_to_line_or_cycle(start: int, graph: nx.Graph, num_length: int):
+    """
+    From the start node assign registers as they are laid out in the ideal circuit diagram in
+    [CDKM96].
+
+    Assumes that the there are no dead ends in the graph, and any available neighbor can be
+    selected from the start without any further checks.
+
+    :param start: a node in the graph from which to start the assignment
+    :param graph: a graph with an unambiguous assignment from the start node, e.g. a cycle or line
+    :param num_length: the length of the bitstring representation of one summand
+    :return: the necessary registers and ancilla labels for implementing an adder program to add
+        the numbers a and b. The output can be passed directly to adder()
+    """
+    if 2 * num_length + 2 > nx.number_of_nodes(graph):
+        raise ValueError("There are not enough qubits in the graph to support the computation.")
+
+    graph = graph.copy()
+
     register_a = []
     register_b = []
 
-    carry_ancilla = start
-    last_node = carry_ancilla
-    next_node = list(graph.neighbors(last_node))[0]
-    graph.remove_node(last_node)
-    idx = 0
-    while idx < len(num_a) + len(num_b):
-        if (idx % 2) == 0:
-            register_b.append(next_node)
-        else:
-            register_a.append(next_node)
+    # set the node at start, and assign the carry_ancilla to this node.
+    node = start
+    carry_ancilla = node
+    neighbors = list(graph.neighbors(node))
 
-        last_node = next_node
-        next_node = list(graph.neighbors(last_node))[0]
+    idx = 0
+    while idx < 2 * num_length:
+        # remove the last assigned node to ensure it is not reassigned.
+        last_node = node
         graph.remove_node(last_node)
+
+        # crawl to an arbitrary neighbor node if possible. If not, the assignment has failed.
+        if len(neighbors) == 0:
+            raise ValueError("Encountered dead end; assignment failed.")
+        node = neighbors[0]
+        neighbors = list(graph.neighbors(node))
+
+        # alternate between assigning nodes to the b register and a register, starting with b
+        if (idx % 2) == 0:
+            register_b.append(node)
+        else:
+            register_a.append(node)
+
         idx += 1
-    z_ancilla = next_node
+    # assign the z_ancilla to a neighbor of the last assignment to a
+    z_ancilla = next(graph.neighbors(node))
 
     return register_a, register_b, carry_ancilla, z_ancilla
-
-
-def get_qubit_registers_for_adder(qc: QuantumComputer, num_a: Sequence[int], num_b: Sequence[int],
-                                  qubits: Sequence[int] = None) \
-        -> Tuple[List[int], List[int], int, int]:
-    """
-    Searches for a layout among the given qubits for the two n-bit registers and two additional
-    ancilla that matches the simple layout given in figure 4 of [CDKM96]. If such a layout is not
-    found then a heuristic is applied.
-
-    This method ignores any considerations of physical characteristics of the qc aside from the
-    qubit layout. The search is specifically tailored to the topology of current Aspen QPUs. In
-    particular it is assumed that there are no nodes of degree more than 3.
-
-    :param qc: the quantum resource on which an adder program will be executed.
-    :param num_a: the bitstring representation of the number a with least significant bit last
-    :param num_b: the bitstring representation of the number b with least significant bit last
-    :param qubits: the available qubits on which to run the adder program.
-    :returns the necessary registers and ancilla labels for implementing an adder
-        program to add the numbers a and b. The output can be passed directly to adder()
-    """
-    if qubits is None:
-        unavailable = []
-    else:
-        unavailable = [qubit for qubit in qc.qubits() if qubit not in qubits]
-
-    if len(num_a) != len(num_b):
-        raise ValueError("A and B bitstrings must be equal length.")
-
-    graph = qc.qubit_topology()
-    for qubit in unavailable:
-        graph.remove_node(qubit)
-
-    graph = max(nx.connected_component_subgraphs(graph), key=len)
-    if len(num_a) + len(num_b) + 2 > nx.number_of_nodes(graph):
-        raise ValueError("The largest connected component among the available qubits is not large"
-                         "enough to support the adder computation.")
-    deg_one_nodes = []
-    deg_three_nodes = []
-    for node in nx.nodes(graph):
-        degree = graph.degree(node)
-        if degree == 1:
-            deg_one_nodes.append(node)
-        if degree == 3:
-            deg_three_nodes.append(node)
-        if degree > 3:
-            warnings.warn("This method is specifically tailored to Aspen QPU topology."
-                          " An arbitrary assignment will be made.")
-            qubits = list(graph.nodes)
-            return qubits[:len(num_a)], qubits[len(num_a):2*len(num_a)], qubits[-2], qubits[-1]
-
-    num_deg_three_nodes = len(deg_three_nodes)  # break into special cases around this info
-    if num_deg_three_nodes == 0:  # no branches, look for loop or line
-        if len(deg_one_nodes) == 0:  # must be a loop. Pick a node and go around.
-            start_node = list(graph.nodes)[0]
-        else:
-            start_node = deg_one_nodes[0]  # must be a line. Pick an endpoint to start at.
-    else:
-        # cycles = nx.algorithms.cycles.cycle_basis(largest_connected_component)
-        if num_deg_three_nodes == 1:
-            branch_node = deg_three_nodes[0]
-            branches = _explore_branches(graph, branch_node)
-            min_length_branch = (0, 0, 0, 0)
-            for branch in branches:
-                if branch[2] == 3:  # looped back to itself.
-                    # can cut loop and start assignment at the new endpoint.
-                    graph.remove_edge(branch_node, branch[0])
-                    return _alternate_assign_from_start(branch[0], graph, num_a, num_b)
-                length = branch[3]
-                if length < min_length_branch[3]:
-                    min_length_branch = branch
-            # remove the smallest branch and assign starting from a remaining endpoint.
-            graph.remove_edge(branch_node, min_length_branch[0])
-            # get largest connected component
-            graph = max(nx.connected_component_subgraphs(graph), key=len)
-
-            if nx.number_of_nodes(graph) < 2 * len(num_a) + 2:
-                warnings.warn("The method failed to find an appropriate assignment.")
-                qubits = list(graph.nodes)
-                return qubits[:len(num_a)], qubits[len(num_a):2 * len(num_a)], qubits[-2], \
-                       qubits[-1]
-            else:
-                start_node = (set(deg_one_nodes) - {min_length_branch[1]}).pop()
-        else:
-            # give up on special cases.
-            warnings.warn("The method failed to find an appropriate assignment.")
-            qubits = list(graph.nodes)
-            return qubits[:len(num_a)], qubits[len(num_a):2 * len(num_a)], qubits[-2], qubits[-1]
-
-    return _alternate_assign_from_start(start_node, graph, num_a, num_b)
-
-
-def _explore_branches(graph, branch_node):
-    branches = []
-
-    for node in graph.neighbors(branch_node):
-        branch_origin = node
-
-        length = 1
-        last_node = branch_node
-        current_node = node
-        neighbors = set(graph.neighbors(current_node))
-
-        while len(neighbors) == 2:
-            neighbor = neighbors - {last_node}
-            last_node = current_node
-            current_node = neighbor.pop()
-            length += 1
-            neighbors = set(graph.neighbors(current_node))
-
-        branches.append((branch_origin, current_node, len(neighbors), length))
-
-    return branches
 
 
 def prepare_bitstring(bitstring: Sequence[int], register: Sequence[int], in_x_basis: bool = False):
@@ -328,14 +245,14 @@ def prepare_bitstring(bitstring: Sequence[int], register: Sequence[int], in_x_ba
     return state_prep_prog
 
 
-def adder(num_a: Sequence[int], num_b: Sequence[int], register_a: Sequence[int],
-          register_b: Sequence[int], carry_ancilla: int, z_ancilla: int, in_x_basis: bool = False)\
-        -> Program:
+def adder(num_a: Sequence[int], num_b: Sequence[int], register_a: Sequence[int] = None,
+          register_b: Sequence[int] = None, carry_ancilla: int = None, z_ancilla: int = None,
+          in_x_basis: bool = False) -> Program:
     """
     Produces a program implementing reversible adding on a quantum computer to compute a + b.
 
     This implementation is based on [CDKM96], which is easy to implement, if not the most
-    efficient. Each regesiter of qubit labels should be provided such that the first qubit in
+    efficient. Each register of qubit labels should be provided such that the first qubit in
     each register is expected to carry the least significant bit of the respective number. This
     method also requires two extra ancilla, one initialized to 0 that acts as a dummy initial
     carry bit and another (which also probably ought be initialized to 0) that stores the most
@@ -354,9 +271,9 @@ def adder(num_a: Sequence[int], num_b: Sequence[int], register_a: Sequence[int],
 
     With this ordering, all gates in the circuit act on sets of three adjacent qubits. The output of
     the circuit correspondingly falls on the qubits initially labeled by the b bits (and z_ancilla).
-    The default option is to compute the addition in the computational (aka Z) basis. By passing in
-    CNOTfunc and CCNOTfunc as CNOT_X_basis and CCNOT_X_basis (defined above) the computation
-    happens in the X basis.
+    The default option is to compute the addition in the computational (aka Z) basis. By setting
+    in_x_basis true, the gates CNOT_X_basis and CCNOT_X_basis (defined above) will replace CNOT
+    and CCNOT so that the computation happens in the X basis.
 
         [CDKM96]
         "A new quantum ripple-carry addition circuit"
@@ -374,8 +291,17 @@ def adder(num_a: Sequence[int], num_b: Sequence[int], register_a: Sequence[int],
     :return: pyQuil program that implements the addition a+b, with output falling on the qubits
         formerly storing the input b. The output of a measurement will list the lsb as the last bit.
     """
-    if len(register_b) != len(register_a):
-        raise ValueError("Registers must be equal length")
+    if len(num_a) != len(num_b):
+        raise ValueError("Numbers being added must be equal length bitstrings")
+
+    if register_a is None:
+        register_a = [q*2+2 for q in range(len(num_a))]
+    if register_b is None:
+        register_b = [q*2+1 for q in range(len(num_a))]
+    if carry_ancilla is None:
+        carry_ancilla = 0
+    if z_ancilla is None:
+        z_ancilla = 2*len(num_a) + 1
 
     prep_a = prepare_bitstring(num_a[::-1], register_a, in_x_basis)
     prep_b = prepare_bitstring(num_b[::-1], register_b, in_x_basis)
@@ -405,6 +331,76 @@ def adder(num_a: Sequence[int], num_b: Sequence[int], register_a: Sequence[int],
     prog += MEASURE(z_ancilla, ro[0])
 
     return prog
+
+
+def bit_array_to_int(bit_array: Sequence[int]) -> int:
+    """
+    Converts a bit array into an integer where the right-most bit is least significant.
+
+    :param bit_array: an array of bits with right-most bit considered least significant.
+    :return: the integer corresponding to the bitstring.
+    """
+    output = 0
+    for bit in bit_array:
+        output = (output << 1) | bit
+    return output
+
+
+def int_to_bit_array(num: int, n_bits: int) ->  Sequence[int]:
+    """
+    Converts a number into an array of bits where the right-most bit is least significant.
+
+    :param num: the integer corresponding to the bitstring.
+    :param n_bits: the number of bits to report
+    :return:  an array of n_bits bits with right-most bit considered least significant.
+    """
+    return [num >> bit & 1 for bit in range(n_bits - 1, -1, -1)]
+
+
+def get_n_bit_adder_results(qc: QuantumComputer, n_bits: int,
+                            registers: Tuple[Sequence[int], Sequence[int], int, int] = None,
+                            in_x_basis: bool = False, num_shots: int = 10,
+                            use_param_program: bool = True, use_active_reset: bool = True) \
+                            -> Tuple[Sequence[float], Sequence[float]]:
+    """
+
+    :param qc:
+    :param n_bits:
+    :param registers:
+    :param in_x_basis:
+    :param num_shots:
+    :param use_param_program:
+    :param use_active_reset:
+    :return:
+    """
+    all_results = []
+    # loop over all binary strings of length n_bits
+    for bits in all_bitstrings(2 * n_bits):
+        # split the binary number into two numbers
+        # which are the binary numbers the user wants to add.
+        # They are written from (MSB .... LSB) = (a_n, ..., a_1, a_0)
+        num_a = bits[:n_bits]
+        num_b = bits[n_bits:]
+
+        add_prog = Program()
+        if use_active_reset:
+            add_prog += RESET()
+
+        # create the program and compile appropriately
+        if registers is None:
+            add_prog = adder(num_a, num_b, in_x_basis=in_x_basis)
+            add_prog.wrap_in_numshots_loop(num_shots)
+            add_exe = qc.compile(add_prog)
+        else:
+            add_prog = adder(num_a, num_b, *registers, in_x_basis=in_x_basis)
+            add_prog.wrap_in_numshots_loop(num_shots)
+            add_exe = qc.compiler.native_quil_to_executable(add_prog)
+
+        # Run it on the QPU or QVM
+        results = qc.run(add_exe)
+        all_results.append(results)
+
+    return all_results
 
 
 def construct_bit_flip_error_histogram(wt, n):
