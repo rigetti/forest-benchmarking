@@ -18,8 +18,10 @@ e.g.
 """
 from typing import Sequence, Tuple
 import networkx as nx
-
 import numpy as np
+from numpy import pi
+from scipy.spatial.distance import hamming
+
 from pyquil.gates import CNOT, CCNOT, X, I, H, CZ, MEASURE, RESET
 from pyquil import Program
 from pyquil.api import QuantumComputer
@@ -247,7 +249,7 @@ def prepare_bitstring(bitstring: Sequence[int], register: Sequence[int], in_x_ba
 
 def adder(num_a: Sequence[int], num_b: Sequence[int], register_a: Sequence[int] = None,
           register_b: Sequence[int] = None, carry_ancilla: int = None, z_ancilla: int = None,
-          in_x_basis: bool = False) -> Program:
+          in_x_basis: bool = False, use_param_program: bool = False) -> Program:
     """
     Produces a program implementing reversible adding on a quantum computer to compute a + b.
 
@@ -288,6 +290,9 @@ def adder(num_a: Sequence[int], num_b: Sequence[int], register_a: Sequence[int] 
     :param z_ancilla: qubit label, a zero-initialized qubit, ideally adjacent to register_a[-1]
     :param in_x_basis: if true, prepare the bitstring-representation of the numbers in the x basis
         and subsequently performs all addition logic in the x basis.
+    :param use_param_program: if true, the input num_a and num_b should be arrays of the proper
+        length, but their contents will be disregarded. Instead, the program returned will be
+        parameterized and the input bitstrings to add must be specified at run time.
     :return: pyQuil program that implements the addition a+b, with output falling on the qubits
         formerly storing the input b. The output of a measurement will list the lsb as the last bit.
     """
@@ -303,10 +308,21 @@ def adder(num_a: Sequence[int], num_b: Sequence[int], register_a: Sequence[int] 
     if z_ancilla is None:
         z_ancilla = 2*len(num_a) + 1
 
-    prep_a = prepare_bitstring(num_a[::-1], register_a, in_x_basis)
-    prep_b = prepare_bitstring(num_b[::-1], register_b, in_x_basis)
+    prog = Program()
 
-    prog = prep_a + prep_b
+    if use_param_program:
+        # do_measure set to False makes the returned program a parameterized prep program
+        input_register = register_a+register_b
+        prog += _readout_group_parameterized_bitstring(input_register[::-1], do_measure=False)
+        if in_x_basis:
+            prog += [H(qubit) for qubit in input_register]
+    else:
+        prog += prepare_bitstring(num_a[::-1], register_a, in_x_basis)
+        prog += prepare_bitstring(num_b[::-1], register_b, in_x_basis)
+
+    if in_x_basis:
+        prog += [H(carry_ancilla), H(z_ancilla)]
+
     prog_to_rev = Program()
     current_carry_label = carry_ancilla
     for (a, b) in zip(register_a, register_b):
@@ -346,7 +362,7 @@ def bit_array_to_int(bit_array: Sequence[int]) -> int:
     return output
 
 
-def int_to_bit_array(num: int, n_bits: int) ->  Sequence[int]:
+def int_to_bit_array(num: int, n_bits: int) -> Sequence[int]:
     """
     Converts a number into an array of bits where the right-most bit is least significant.
 
@@ -361,18 +377,35 @@ def get_n_bit_adder_results(qc: QuantumComputer, n_bits: int,
                             registers: Tuple[Sequence[int], Sequence[int], int, int] = None,
                             in_x_basis: bool = False, num_shots: int = 10,
                             use_param_program: bool = True, use_active_reset: bool = True) \
-                            -> Tuple[Sequence[float], Sequence[float]]:
+                            -> Sequence[Sequence[Sequence[int]]]:
     """
+    Convenient wrapper for collecting the results of addition for every possible pair of n_bits
+    long summands.
 
-    :param qc:
-    :param n_bits:
-    :param registers:
+    :param qc: the quantum resource on which to run each addition
+    :param n_bits: the number of bits of one of the summands (each summand is the same length)
+    :param registers: optional explicit qubit layout of each of the registers passed to adder()
     :param in_x_basis:
     :param num_shots:
     :param use_param_program:
     :param use_active_reset:
     :return:
     """
+    if registers is None:
+        reg_a, reg_b, carry, z_bit = None, None, None, None
+    else:
+        reg_a, reg_b, carry, z_bit = registers
+
+    reset_prog = Program()
+    if use_active_reset:
+        reset_prog += RESET()
+
+    add_prog = Program()
+    if use_param_program:
+        dummy_num = [0 for _ in range(n_bits)]
+        add_prog = adder(dummy_num, dummy_num, reg_a, reg_b, carry, z_bit, in_x_basis=in_x_basis,
+                         use_param_program=True)
+
     all_results = []
     # loop over all binary strings of length n_bits
     for bits in all_bitstrings(2 * n_bits):
@@ -382,39 +415,93 @@ def get_n_bit_adder_results(qc: QuantumComputer, n_bits: int,
         num_a = bits[:n_bits]
         num_b = bits[n_bits:]
 
-        add_prog = Program()
-        if use_active_reset:
-            add_prog += RESET()
+        if not use_param_program:
+            add_prog = adder(num_a, num_b, reg_a, reg_b, carry, z_bit, in_x_basis=in_x_basis,
+                             use_param_program=False)
 
-        # create the program and compile appropriately
+        prog = reset_prog + add_prog
+        prog.wrap_in_numshots_loop(num_shots)
+
+        # compile appropriately. If registers were specified, assume rewiring is unnecessary.
         if registers is None:
-            add_prog = adder(num_a, num_b, in_x_basis=in_x_basis)
-            add_prog.wrap_in_numshots_loop(num_shots)
-            add_exe = qc.compile(add_prog)
+            exe = qc.compile(prog)
         else:
-            add_prog = adder(num_a, num_b, *registers, in_x_basis=in_x_basis)
-            add_prog.wrap_in_numshots_loop(num_shots)
-            add_exe = qc.compiler.native_quil_to_executable(add_prog)
+            exe = qc.compiler.native_quil_to_executable(prog)
 
         # Run it on the QPU or QVM
-        results = qc.run(add_exe)
+        if use_param_program:
+            results = qc.run(exe, memory_map={'target': [bit * pi for bit in bits]})
+        else:
+            results = qc.run(exe)
         all_results.append(results)
 
     return all_results
 
 
-def construct_bit_flip_error_histogram(wt, n):
+def get_success_probabilities_from_results(results: Sequence[Sequence[Sequence[int]]]) \
+        -> Sequence[float]:
     """
-    From experimental data construct the Hamming weight histogram of answers relative to a the
-    length of binary numbers being added.
-    
-    :params wt: numpy array 2**(2n) by number_of_trials
-    :params n: number of bits being added
-    :returns: numpy histogram with bins corresponding to [0,...,n+3] 
+    Get the probability of a successful addition for each possible pair of two n_bit summands
+    from the results output by get_n_bit_adder_results
+
+    :param results: a list of results output from a call to get_n_bit_adder_results
+    :return: the success probability for the summation of each possible pair of n_bit summands
     """
-    # determine hamming weight histogram
-    histy = np.zeros([2 ** (2 * n), n + 2])
-    for sdx in range(2 ** (2 * n)):
-        hist, bins = np.histogram(wt[sdx, :], list(np.arange(0, n + 3)))
-        histy[sdx] = hist
-    return histy
+    num_shots = len(results[0])
+    n_bits = len(results[0][0]) - 1
+
+    probabilities = []
+    # loop over all binary strings of length n_bits
+    for result, bits in zip(results, all_bitstrings(2 * n_bits)):
+        # Input nums are written from (MSB .... LSB) = (a_n, ..., a_1, a_0)
+        num_a = bit_array_to_int(bits[:n_bits])
+        num_b = bit_array_to_int(bits[n_bits:])
+
+        # add the numbers
+        ans = num_a + num_b
+        ans_bits = int_to_bit_array(ans, n_bits + 1)
+
+        # a success occurs if a shot matches the expected ans bit for bit
+        probability = 0
+        for shot in result:
+            if np.array_equal(ans_bits, shot):
+                probability += 1. / num_shots
+        probabilities.append(probability)
+
+    return probabilities
+
+
+def get_error_hamming_distributions_from_results(results: Sequence[Sequence[Sequence[int]]]) \
+        -> Sequence[Sequence[float]]:
+    """
+    Get the distribution of the hamming weight of the error vector (number of bits flipped
+    between output and expected answer) for each possible pair of two n_bit summands using
+    results output by get_n_bit_adder_results
+
+    :param results: a list of results output from a call to get_n_bit_adder_results
+    :return: the relative frequency of observing each hamming weight, 0 to n_bits+1, for the error
+        that occurred when adding each pair of two n_bit summands
+    """
+    num_shots = len(results[0])
+    n_bits = len(results[0][0]) - 1
+
+    hamming_wt_distrs = []
+    # loop over all binary strings of length n_bits
+    for result, bits in zip(results, all_bitstrings(2 * n_bits)):
+        # Input nums are written from (MSB .... LSB) = (a_n, ..., a_1, a_0)
+        num_a = bit_array_to_int(bits[:n_bits])
+        num_b = bit_array_to_int(bits[n_bits:])
+
+        # add the numbers
+        ans = num_a + num_b
+        ans_bits = int_to_bit_array(ans, n_bits + 1)
+
+        # record the fraction of shots that resulted in an error of the given weight
+        hamming_wt_distr = [0. for _ in range(len(ans_bits) + 1)]
+        for shot in result:
+            # multiply relative hamming distance by the length of the output for the weight
+            wt = len(ans_bits) * hamming(ans_bits, shot)
+            hamming_wt_distr[int(wt)] += 1. / num_shots
+            hamming_wt_distrs.append(hamming_wt_distr)
+
+    return hamming_wt_distrs

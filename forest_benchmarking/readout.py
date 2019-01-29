@@ -81,7 +81,9 @@ def _readout_group_parameterized_bitstring(qubits: Sequence[int], do_measure: bo
     :return: a parameterized program capable of measuring any bitstring on the given qubits
     """
     program = Program()
-    ro = program.declare('ro', memory_type='BIT', memory_size=len(qubits))
+    ro = []
+    if do_measure:
+        ro = program.declare('ro', memory_type='BIT', memory_size=len(qubits))
     target = program.declare('target', memory_type='REAL', memory_size=len(qubits))
     for idx, qubit in enumerate(qubits):
         program += RX(pi / 2, qubit)
