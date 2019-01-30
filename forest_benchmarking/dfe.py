@@ -52,9 +52,9 @@ def calibrate_readout_imperfections(pauli: PauliTerm, quantum_machine: QuantumCo
 
 
 @dataclass
-class DFEexperiment:
+class ProcessDFEexperiment:
     """
-    A description of DFE experiments, i.e. preparation then operations then measurements, but not
+    A description of DFE experiments for processes, i.e. preparation then operations then measurements, but not
     the results of experiments.
     """
 
@@ -67,8 +67,21 @@ class DFEexperiment:
     out_pauli: List[PauliTerm]
     """The expected output Pauli operators after the program acts on the corresponding `in_pauli`"""
 
+@dataclass
+class StateDFEexperiment:
+    """
+    A description of DFE experiments for states, i.e. preparation (assume to be all 0s), operations then measurements, but not
+    the results of experiments.
+    """
 
-def generate_state_dfe_experiment(prog: Program, compiler) -> DFEexperiment:
+    program: Program
+    """The pyquil Program to perform DFE on"""
+
+    out_pauli: List[PauliTerm]
+    """The expected output Pauli operators after the program acts on the corresponding `in_pauli`"""
+
+
+def generate_state_dfe_experiment(prog: Program, compiler) -> StateDFEexperiment:
     """
     Generate a namedtuple containing all the experiments needed to perform direct fidelity estimation
     of a state.
@@ -86,10 +99,10 @@ def generate_state_dfe_experiment(prog: Program, compiler) -> DFEexperiment:
     n_qubits = len(qubits)
     inpaulis = all_pauli_z_terms(n_qubits, qubits)
     outpaulis = [compiler.apply_clifford_to_pauli(prog, pauli) for pauli in inpaulis]
-    return DFEexperiment(in_pauli=inpaulis, program=prog, out_pauli=outpaulis)
+    return StateDFEexperiment(program=prog, out_pauli=outpaulis)
 
 
-def generate_process_dfe_experiment(prog: Program, compiler) -> DFEexperiment:
+def generate_process_dfe_experiment(prog: Program, compiler) -> ProcessDFEexperiment:
     """
     Generate a namedtuple containing all the experiments needed to perform direct fidelity estimation
     of a process.
@@ -110,7 +123,7 @@ def generate_process_dfe_experiment(prog: Program, compiler) -> DFEexperiment:
     n_qubits = len(qubits)
     inpaulis = all_pauli_terms(n_qubits, qubits)
     outpaulis = [compiler.apply_clifford_to_pauli(prog, pauli) for pauli in inpaulis]
-    return DFEexperiment(in_pauli=inpaulis, program=prog, out_pauli=outpaulis)
+    return ProcessDFEexperiment(in_pauli=inpaulis, program=prog, out_pauli=outpaulis)
 
 
 @dataclass
@@ -140,11 +153,85 @@ class DFEdata:
     count: List[int]
     """number of shots used to calculate the `expectation`"""
 
-def acquire_dfe_data(experiment: DFEexperiment, quantum_machine: QuantumComputer, var: float = 0.01) -> Tuple[DFEdata, DFEdata]:
+def acquire_state_dfe_data(experiment: StateDFEexperiment, quantum_machine: QuantumComputer, var: float = 0.01) -> Tuple[DFEdata, DFEdata]:
     """
-    Estimate state/process fidelity by exhaustive direct fidelity estimation.
+    Estimate state fidelity by exhaustive direct fidelity estimation.
 
     This leads to a quadratic reduction in overhead wrt state tomography for fidelity estimation.
+
+    The algorithm is due to:
+
+    [DFE1]  Practical Characterization of Quantum Devices without Tomography
+            Silva et al., PRL 107, 210404 (2011)
+            https://doi.org/10.1103/PhysRevLett.107.210404
+
+    [DFE2]  Direct Fidelity Estimation from Few Pauli Measurements
+            Flammia and Liu, PRL 106, 230501 (2011)
+            https://doi.org/10.1103/PhysRevLett.106.230501
+
+
+    :param experiment: namedtuple with fields 'in_pauli', 'program', and 'out_pauli'.
+    :param quantum_machine: QPUConnection or QVMConnection object to be used
+    :param var: maximum tolerable variance per observable
+    :return: the experiment and calibration data
+    """
+    # get qubit information
+    qubits = experiment.program.get_qubits()
+    n_qubits = len(qubits)
+    dimension = 2 ** len(qubits)
+
+    expectations = []
+    variances = []
+    counts = []
+    cal_exps = []
+    cal_vars = []
+    cal_counts = []
+
+    for op in experiment.out_pauli:
+
+        # at the moment estimate_locally_commuting_operator mutates prog so deepcopy is needed
+        this_prog = copy.deepcopy(experiment.program)
+
+        # measure the output Pauli operator in question i.e. data aqcuisition
+        expectation, variance, count = \
+            est.estimate_locally_commuting_operator(this_prog, PauliSum([op]), var, quantum_machine)
+        expectations += [expectation[0]]
+        variances += [variance[0, 0].real]
+        counts += [count]
+
+        # calibration
+        cal_exp, cal_var, cal_count = calibrate_readout_imperfections(op, quantum_machine, var)
+        cal_exps += [cal_exp]
+        cal_vars += [cal_var]
+        cal_counts += [cal_count]
+
+    exp_data = DFEdata(
+        in_pauli=[],
+        program=experiment.program,
+        out_pauli=[op.pauli_string(qubits) for op in experiment.out_pauli],
+        dimension=dimension,
+        number_qubits=n_qubits,
+        expectation=expectations,
+        variance=variances,
+        count=counts
+    )
+    cal_data = DFEdata(
+        in_pauli=[],
+        program=experiment.program,
+        out_pauli=[op.pauli_string(qubits) for op in experiment.out_pauli],
+        dimension=dimension,
+        number_qubits=n_qubits,
+        expectation=cal_exps,
+        variance=cal_vars,
+        count=cal_counts
+    )
+    return exp_data, cal_data
+
+def acquire_process_dfe_data(experiment: ProcessDFEexperiment, quantum_machine: QuantumComputer, var: float = 0.01) -> Tuple[DFEdata, DFEdata]:
+    """
+    Estimate process fidelity by exhaustive direct fidelity estimation.
+
+    This leads to a quadratic reduction in overhead wrt tomography for fidelity estimation.
 
     The algorithm is due to:
 
@@ -181,6 +268,7 @@ def acquire_dfe_data(experiment: DFEexperiment, quantum_machine: QuantumComputer
 
         # Create preparation program for the corresponding input Pauli and then append the
         # circuit we want to characterize
+        # TODO: need iterate over all + and - Pauli eigenstates, at least in the exaustive case
         tot_prog = prepare_prod_pauli_eigenstate(ip) + this_prog
 
         # measure the output Pauli operator in question i.e. data aqcuisition
