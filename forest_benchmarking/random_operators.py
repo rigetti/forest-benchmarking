@@ -156,10 +156,11 @@ def rand_map_with_BCSZ_dist(D, K):
 
 
 def permute_tensor_factors(D, perm):
-    """
-    Given a Hilbert space dimension $D$ and an list representing 
-    the permutation $perm$ of the tesor product Hilbert spaces, returns 
-    a $D^len(perm)xD^len(perm)$ permutation matrix.
+    r"""
+    Return a permutation matrix of the given dimension.
+
+    Given a Hilbert space dimension $D$ and an list representing the permutation $perm$ of the
+    tensor product Hilbert spaces, returns a $D^len(perm) x D^len(perm)$ permutation matrix.
     
     E.g. 1) Suppose D=2 and perm=[0,1] 
             Returns the identity operator on two qubits
@@ -167,17 +168,15 @@ def permute_tensor_factors(D, perm):
          2) Suppose D=2 and perm=[1,0]
             Returns the SWAP operator on two qubits which
             maps A_1 \otimes A_2 --> A_2 \otimes A_1.
-            
+
+    See: Equations 5.11, 5.12, and 5.13 in https://arxiv.org/pdf/0711.1017.pdf
+
+    This function is used in tests for other functions. However, it can also be useful when
+    thinking about higher moment (N>2) integrals over the Haar measure.
+
     :param D: Hilbert space dimension (scalar).
     :param perm: The rank of a state (list).
-    
-    See: Equations 5.11, 5.12, and 5.13 in https://arxiv.org/pdf/0711.1017.pdf
-    
     """
-    # This function is used in tests for other functions.
-    # However it can also be useful when thinking about higher moment (N>2) integrals over the
-    # Haar measure.
-
     dim_list = [D for i in range(2 * len(perm))]
 
     Id = np.eye(D ** len(perm), D ** len(perm))
