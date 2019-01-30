@@ -8,7 +8,7 @@ The contributors of the project, roughly in order of their commit count prior to
  - Amy Brown
  - Matthew Harrigan
  - Anthony Polloreno
- - Marcus da Silva
+ - Marcus Silva
  - Lauren Capelluto
  - Alexa Staley
  - Joseph Valery
