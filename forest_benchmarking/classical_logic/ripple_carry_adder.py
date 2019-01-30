@@ -29,9 +29,11 @@ from pyquil.unitary_tools import all_bitstrings
 
 from forest_benchmarking.readout import _readout_group_parameterized_bitstring
 from forest_benchmarking.classical_logic.primitives import *
+from forest_benchmarking.compilation import basic_compile
 
 
-def assign_registers_to_line_or_cycle(start: int, graph: nx.Graph, num_length: int):
+def assign_registers_to_line_or_cycle(start: int, graph: nx.Graph, num_length: int) \
+        -> Tuple[Sequence[int], Sequence[int], int, int]:
     """
     From the start node assign registers as they are laid out in the ideal circuit diagram in
     [CDKM96].
@@ -83,6 +85,65 @@ def assign_registers_to_line_or_cycle(start: int, graph: nx.Graph, num_length: i
     return register_a, register_b, carry_ancilla, z_ancilla
 
 
+def get_qubit_registers_for_adder(qc: QuantumComputer, num_length: int,
+                                  qubits: Sequence[int] = None) \
+        -> Tuple[Sequence[int], Sequence[int], int, int]:
+    """
+    Searches for a layout among the given qubits for the two n-bit registers and two additional
+    ancilla that matches the simple layout given in figure 4 of [CDKM96].
+
+    This method ignores any considerations of physical characteristics of the qc aside from the
+    qubit layout. An error is thrown if the appropriate layout is not found.
+
+    :param qc: the quantum resource on which an adder program will be executed.
+    :param num_length: the length of the bitstring representation of one summand
+    :param qubits: the available qubits on which to run the adder program.
+    :returns the necessary registers and ancilla labels for implementing an adder
+        program to add the numbers a and b. The output can be passed directly to adder()
+    """
+    if qubits is None:
+        unavailable = []  # assume this means all qubits in qc are available
+    else:
+        unavailable = [qubit for qubit in qc.qubits() if qubit not in qubits]
+
+    graph = qc.qubit_topology()
+    for qubit in unavailable:
+        graph.remove_node(qubit)
+
+    # network x only provides subgraph isomorphism, but we want a subgraph monomorphism, i.e. we
+    # specifically want to match the edges desired_layout with some subgraph of graph. To
+    # accomplish this, we swap the nodes and edges of graph by making a line graph.
+    line_graph = nx.line_graph(graph)
+
+    # We want a path of n nodes, which has n-1 edges. Since we are matching edges of graph with
+    # nodes of layout we make a layout of n-1 nodes.
+    num_desired_nodes = 2 * num_length + 2
+    desired_layout = nx.path_graph(num_desired_nodes - 1)
+
+    g_matcher = nx.algorithms.isomorphism.GraphMatcher(line_graph, desired_layout)
+
+    try:
+        # pick out a subgraph isomorphic to the desired_layout if one exists
+        # this is an isomorphic mapping from edges in graph (equivalently nodes of line_graph) to
+        # nodes in desired_layout (equivalently edges of a path graph with one more node)
+        edge_iso = next(g_matcher.subgraph_isomorphisms_iter())
+    except IndexError:
+        raise Exception("An appropriate layout for the qubits could not be found among the "
+                        "provided qubits.")
+
+    # pick out the edges of the isomorphism from the original graph
+    subgraph = nx.Graph(graph.edge_subgraph(edge_iso.keys()))
+
+    # pick out an endpoint of our path to start the assignment
+    start_node = -1
+    for node in subgraph.nodes:
+        if subgraph.degree(node) == 1:  # found an endpoint
+            start_node = node
+            break
+
+    return assign_registers_to_line_or_cycle(start_node, subgraph, num_length)
+
+
 def prepare_bitstring(bitstring: Sequence[int], register: Sequence[int], in_x_basis: bool = False):
     """
     Creates a program to prepare the input bitstring on the qubits given by the corresponding
@@ -107,9 +168,9 @@ def prepare_bitstring(bitstring: Sequence[int], register: Sequence[int], in_x_ba
     return state_prep_prog
 
 
-def adder(num_a: Sequence[int], num_b: Sequence[int], register_a: Sequence[int] = None,
-          register_b: Sequence[int] = None, carry_ancilla: int = None, z_ancilla: int = None,
-          in_x_basis: bool = False, use_param_program: bool = False) -> Program:
+def adder(num_a: Sequence[int], num_b: Sequence[int], register_a: Sequence[int],
+          register_b: Sequence[int], carry_ancilla: int, z_ancilla: int, in_x_basis: bool = False,
+          use_param_program: bool = False) -> Program:
     """
     Produces a program implementing reversible adding on a quantum computer to compute a + b.
 
@@ -120,6 +181,7 @@ def adder(num_a: Sequence[int], num_b: Sequence[int], register_a: Sequence[int] 
     carry bit and another (which also probably ought be initialized to 0) that stores the most
     significant bit of the addition (should there be a final carry). The most straightforward
     ordering of the registers and two ancilla for adding n-bit numbers follows the pattern
+
         carry_ancilla
         b_0
         a_0
@@ -131,8 +193,14 @@ def adder(num_a: Sequence[int], num_b: Sequence[int], register_a: Sequence[int] 
         a_n
         z_ancilla
 
-    With this ordering, all gates in the circuit act on sets of three adjacent qubits. The output of
-    the circuit correspondingly falls on the qubits initially labeled by the b bits (and z_ancilla).
+    With this layout, all gates in the circuit act on sets of three adjacent qubits. This
+    method requires that the registers be specified in this manner so that the output pyquil
+    program consists of native gates acting on the physical qubit layout of the desired quantum
+    resource. Such a layout is provided by calling get_qubit_registers_for_adder on the quantum
+    resource.
+
+    The output of the circuit falls on the qubits initially labeled by the b bits (and z_ancilla).
+
     The default option is to compute the addition in the computational (aka Z) basis. By setting
     in_x_basis true, the gates CNOT_X_basis and CCNOT_X_basis (defined above) will replace CNOT
     and CCNOT so that the computation happens in the X basis.
@@ -155,24 +223,17 @@ def adder(num_a: Sequence[int], num_b: Sequence[int], register_a: Sequence[int] 
         parameterized and the input bitstrings to add must be specified at run time.
     :return: pyQuil program that implements the addition a+b, with output falling on the qubits
         formerly storing the input b. The output of a measurement will list the lsb as the last bit.
+        This method is intended to produce a native Quil program that can be run on the desired
+        qc after a call to native_quil_to_executable
     """
     if len(num_a) != len(num_b):
         raise ValueError("Numbers being added must be equal length bitstrings")
-
-    if register_a is None:
-        register_a = [q*2+2 for q in range(len(num_a))]
-    if register_b is None:
-        register_b = [q*2+1 for q in range(len(num_a))]
-    if carry_ancilla is None:
-        carry_ancilla = 0
-    if z_ancilla is None:
-        z_ancilla = 2*len(num_a) + 1
 
     prog = Program()
 
     if use_param_program:
         # do_measure set to False makes the returned program a parameterized prep program
-        input_register = register_a+register_b
+        input_register = register_a + register_b
         prog += _readout_group_parameterized_bitstring(input_register[::-1], do_measure=False)
         if in_x_basis:
             prog += [H(qubit) for qubit in input_register]
@@ -201,12 +262,13 @@ def adder(num_a: Sequence[int], num_b: Sequence[int], register_a: Sequence[int] 
         prog += CNOT(register_a[-1], z_ancilla)
     prog += undo_and_add_prog
 
-    ro = prog.declare('ro', memory_type='BIT', memory_size=len(register_b)+1)
+    ro = prog.declare('ro', memory_type='BIT', memory_size=len(register_b) + 1)
     for idx, qubit in enumerate(register_b):
-        prog += MEASURE(qubit, ro[len(register_b)-idx])
+        prog += MEASURE(qubit, ro[len(register_b) - idx])
     prog += MEASURE(z_ancilla, ro[0])
 
-    return prog
+    # return the program with the gates compiled into native gateset
+    return basic_compile(prog)
 
 
 def bit_array_to_int(bit_array: Sequence[int]) -> int:
@@ -235,9 +297,9 @@ def int_to_bit_array(num: int, n_bits: int) -> Sequence[int]:
 
 def get_n_bit_adder_results(qc: QuantumComputer, n_bits: int,
                             registers: Tuple[Sequence[int], Sequence[int], int, int] = None,
-                            in_x_basis: bool = False, num_shots: int = 10,
-                            use_param_program: bool = True, use_active_reset: bool = True) \
-                            -> Sequence[Sequence[Sequence[int]]]:
+                            qubits: Sequence[int] = None, in_x_basis: bool = False,
+                            num_shots: int = 10, use_param_program: bool = True,
+                            use_active_reset: bool = True) -> Sequence[Sequence[Sequence[int]]]:
     """
     Convenient wrapper for collecting the results of addition for every possible pair of n_bits
     long summands.
@@ -245,16 +307,20 @@ def get_n_bit_adder_results(qc: QuantumComputer, n_bits: int,
     :param qc: the quantum resource on which to run each addition
     :param n_bits: the number of bits of one of the summands (each summand is the same length)
     :param registers: optional explicit qubit layout of each of the registers passed to adder()
-    :param in_x_basis:
-    :param num_shots:
-    :param use_param_program:
-    :param use_active_reset:
-    :return:
+    :param qubits: available subset of qubits of the qc on which to run the circuits.
+    :param in_x_basis: if true, prepare the bitstring-representation of the numbers in the x basis
+        and subsequently performs all addition logic in the x basis.
+    :param num_shots: the number of times to sample the output of each addition
+    :param use_param_program: whether or not to use a parameterized program for state preparation.
+        Doing so should speed up overall execution on a QPU.
+    :param use_active_reset: whether or not to use active reset. Doing so will speed up execution
+        on a QPU.
+    :return: A list of n_shots many outputs for each possible summation of two n_bit long summands,
+        listed in increasing numerical order where the label is the 2n bit number represented by
+        num = a_bits | b_bits for the addition of a + b.
     """
     if registers is None:
-        reg_a, reg_b, carry, z_bit = None, None, None, None
-    else:
-        reg_a, reg_b, carry, z_bit = registers
+        registers = get_qubit_registers_for_adder(qc, n_bits, qubits)
 
     reset_prog = Program()
     if use_active_reset:
@@ -263,7 +329,7 @@ def get_n_bit_adder_results(qc: QuantumComputer, n_bits: int,
     add_prog = Program()
     if use_param_program:
         dummy_num = [0 for _ in range(n_bits)]
-        add_prog = adder(dummy_num, dummy_num, reg_a, reg_b, carry, z_bit, in_x_basis=in_x_basis,
+        add_prog = adder(dummy_num, dummy_num, *registers, in_x_basis=in_x_basis,
                          use_param_program=True)
 
     all_results = []
@@ -276,12 +342,12 @@ def get_n_bit_adder_results(qc: QuantumComputer, n_bits: int,
         num_b = bits[n_bits:]
 
         if not use_param_program:
-            add_prog = adder(num_a, num_b, reg_a, reg_b, carry, z_bit, in_x_basis=in_x_basis,
+            add_prog = adder(num_a, num_b, *registers, in_x_basis=in_x_basis,
                              use_param_program=False)
 
         prog = reset_prog + add_prog
         prog.wrap_in_numshots_loop(num_shots)
-        exe = qc.compile(prog)
+        exe = qc.compiler.native_quil_to_executable(prog)
 
         # Run it on the QPU or QVM
         if use_param_program:

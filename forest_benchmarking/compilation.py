@@ -102,6 +102,40 @@ def _CNOT(q1, q2):
     return p
 
 
+def _T(q1):
+    """
+    A T in terms of RZ(theta)
+    """
+    return Program(RZ(np.pi/4, q1))
+
+def _CCNOT(q1, q2, q3):
+    """
+    A CCNOT in terms of RX(+-pi/2), RZ(theta), and CZ
+
+    .. note:
+        Don't control this gate.
+
+    """
+    p = Program()
+    p.inst(_H(q3))
+    p.inst(_CNOT(q2, q3))
+    p.inst(_T(q3).dagger())
+    p.inst(_CNOT(q1, q3))
+    p.inst(_T(q3))
+    p.inst(_CNOT(q2, q3))
+    p.inst(_T(q3).dagger())
+    p.inst(_CNOT(q1, q3))
+    p.inst(_T(q2))
+    p.inst(_T(q3))
+    p.inst(_CNOT(q1, q2))
+    p.inst(_H(q3))
+    p.inst(_T(q1))
+    p.inst(_T(q2).dagger())
+    p.inst(_CNOT(q1, q2))
+
+    return p
+
+
 def is_magic_angle(angle):
     return (np.isclose(np.abs(angle), pi / 2)
             or np.isclose(np.abs(angle), pi)
@@ -122,6 +156,10 @@ def basic_compile(program):
                 new_prog += _RY(inst.params[0], inst.qubits[0])
             elif inst.name == 'CNOT':
                 new_prog += _CNOT(*inst.qubits)
+            elif inst.name == 'CCNOT':
+                new_prog += _CCNOT(*inst.qubits)
+            elif inst.name == 'T':
+                new_prog += _T(inst.qubits[0])
             elif inst.name == "H":
                 new_prog += _H(inst.qubits[0])
             elif inst.name == "X":
