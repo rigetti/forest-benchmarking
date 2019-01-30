@@ -6,9 +6,9 @@ def CNOT_X_basis(control, target) -> Program:
     """
     The CNOT in the X basis, i.e.
 
-    CNOTX = |+X+| otimes I + |-X-| otimes Z
+    CNOTX = |+X+| * I + |-X-| * Z
 
-    where |+> and |-> are the +/- eigenstate of the Pauli X operator.
+    where |+> and |-> are the +/- eigenstate of the Pauli X operator and * denotes a tensor product.
 
     :param control: qubit label
     :param target: qubit label
