@@ -281,12 +281,7 @@ def get_n_bit_adder_results(qc: QuantumComputer, n_bits: int,
 
         prog = reset_prog + add_prog
         prog.wrap_in_numshots_loop(num_shots)
-
-        # compile appropriately. If registers were specified, assume rewiring is unnecessary.
-        if registers is None:
-            exe = qc.compile(prog)
-        else:
-            exe = qc.compiler.native_quil_to_executable(prog)
+        exe = qc.compile(prog)
 
         # Run it on the QPU or QVM
         if use_param_program:
