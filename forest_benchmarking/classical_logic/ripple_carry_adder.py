@@ -100,7 +100,7 @@ def prepare_bitstring(bitstring: Sequence[int], register: Sequence[int], in_x_ba
             state_prep_prog += X(qubit_label)
 
         # if we are doing logic in X basis, follow each bit preparation with a Hadamard
-        # H |0> = |+> and H |1> = |-> where + and - label the x basis vectors.
+        # H |0> = |+> and H |1> = |-> where + and - label the X basis vectors.
         if in_x_basis:
             state_prep_prog += H(qubit_label)
 
