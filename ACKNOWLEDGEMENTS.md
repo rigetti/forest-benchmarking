@@ -8,7 +8,7 @@ The contributors of the project, roughly in order of their commit count prior to
  - Amy Brown
  - Matthew Harrigan
  - Anthony Polloreno
- - Marcus da Silva
+ - Marcus Silva
  - Lauren Capelluto
  - Alexa Staley
  - Joseph Valery
@@ -19,10 +19,12 @@ The contributors of the project, roughly in order of their commit count prior to
  - Blake Johnson
  - Nikolas Tezak*
  - Nicholas Rubin*
+ - Eric Peterson*
  
 *In addition to commits to this repository, the tomography code was ported from Nik Tezak's 
-implementation in [grove], and operator estimation code was ported from Nick Rubin's 
-implementation in [grove].
+implementation in [grove], operator estimation code was ported from Nick Rubin's 
+implementation in [grove], and Eric Peterson had to change several repositories to enable
+the randomized benchmarking code.
 
 BBN's [QuantumTomography.jl] and [Qutip] were used for design ideas.
 

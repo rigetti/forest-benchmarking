@@ -1,6 +1,6 @@
 # Forest-Benchmarking
 
-A library for quantum characterization, verification, validation, and Benchmarking using Rigetti's
+A library for quantum characterization, verification, validation, and benchmarking using Rigetti's
  SDK -- Forest. 
 
 
