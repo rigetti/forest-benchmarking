@@ -116,12 +116,10 @@ def hilbert_schmidt_ip(A, B):
 
 def smith_fidelity(rho, sigma, power):
     """
-    Computes the Smith fidelity F(rho,sigma) between two quantum states rho and sigma.
+    Computes the Smith fidelity F_S(rho,sigma,power) between two quantum states rho and sigma.
 
-    If the states are pure the expression reduces to F(|psi>,|phi>) = |<psi|phi>|^2.
+    As the power is only defined for values less than 2, F_S > F.
 
-    The fidelity obeys 0 ≤ F(rho,sigma) ≤ 1, where F(rho,sigma)=1 iff rho = sigma and
-    F(rho,sigma)= 0 iff
     :param rho: Is a D x D positive matrix.
     :param sigma: Is a D x D positive matrix.
     :param sigma: Is a positive scalar less than 2.
@@ -131,12 +129,52 @@ def smith_fidelity(rho, sigma, power):
         raise ValueError("Power must be positive")
     if power >= 2:
         raise ValueError("Power must be less than 2")
-    matrix = np.trace(sqrtm(np.matmul(np.matmul(sqrtm(rho), sigma), sqrtm(rho))))
-    return fractional_matrix_power(matrix , power)
+    return np.sqrt(fidelity(rho, sigma)) ** power
+
 
 # ============================================================================
 # Functions for quantum processes
 # ============================================================================
+
+def process_fidelity(pauli_lio0: np.ndarray, pauli_lio1: np.ndarray) -> float:
+    """Returns the fidelity between two channels, E and F, represented as Pauli Liouville matrix.
+
+    The expression is
+
+             F_process(E,F) = ( Tr[E^\dagger F] + d ) / (d^2 + d),
+
+    which is sometimes written as
+
+            F_process(E,F) = ( d F_e + 1 ) / (d + 1)
+
+    where F_e is the entanglement fidelity see https://arxiv.org/abs/quant-ph/9807091 .
+
+    NOTE: F_process is sometimes "gate fidelity" and F_e is sometimes called "process fidelity".
+
+    If E is the ideal process, e.g. a perfect gate, and F is an experimental estimate of the
+    actual process then the corresponding infidelity 1−F_process(E,F) can be seen as a
+    measure of gate error, but it is not a proper metric.
+
+    For more information see:
+
+    A simple formula for the average gate fidelity of a quantum dynamical operation
+    M. Nielsen, Physics Letters A 303, 249 (2002)
+    https://doi.org/10.1016/S0375-9601(02)01272-0
+    https://arxiv.org/abs/quant-ph/0205035
+
+    :param pauli_lio0: A D^2 x D^2 pauli-liouville matrix (where D is the Hilbert space dimension)
+    :param pauli_lio1: A D^2 x D^2 pauli-liouville matrix (where D is the Hilbert space dimension)
+    :return: The process fidelity between pauli_lio0 and pauli_lio1 which is a scalar.
+    """
+    assert pauli_lio0.shape == pauli_lio1.shape
+    assert pauli_lio0.shape[0] == pauli_lio1.shape[1]
+    dim2 = pauli_lio0.shape[0]
+    dim = int(np.sqrt(dim2))
+
+    Fe = np.trace( np.matmul( np.transpose(np.conj(pauli_lio0)), pauli_lio1) ) / ( dim ** 2 )
+
+    return ( dim * Fe + 1) / (dim + 1)
+
 
 def diamond_norm(choi0: np.ndarray, choi1: np.ndarray) -> float:
     """Return the diamond norm between two completely positive
