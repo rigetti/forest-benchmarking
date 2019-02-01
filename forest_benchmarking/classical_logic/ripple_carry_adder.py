@@ -351,7 +351,6 @@ def get_n_bit_adder_results(qc: QuantumComputer, n_bits: int,
         exe = qc.compiler.native_quil_to_executable(nat_quil)
 
 
-
         # Run it on the QPU or QVM
         if use_param_program:
             results = qc.run(exe, memory_map={'target': [bit * pi for bit in bits]})
