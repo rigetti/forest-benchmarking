@@ -114,6 +114,25 @@ def hilbert_schmidt_ip(A, B):
     """
     return np.trace(np.matmul(np.transpose(np.conj(A)), B))
 
+def smith_fidelity(rho, sigma, power):
+    """
+    Computes the Smith fidelity F(rho,sigma) between two quantum states rho and sigma.
+
+    If the states are pure the expression reduces to F(|psi>,|phi>) = |<psi|phi>|^2.
+
+    The fidelity obeys 0 ≤ F(rho,sigma) ≤ 1, where F(rho,sigma)=1 iff rho = sigma and
+    F(rho,sigma)= 0 iff
+    :param rho: Is a D x D positive matrix.
+    :param sigma: Is a D x D positive matrix.
+    :param sigma: Is a positive scalar less than 2.
+    :return: Smith Fidelity which is a scalar.
+    """
+    if power <0:
+        raise ValueError("Power must be positive")
+    if power >= 2:
+        raise ValueError("Power must be less than 2")
+    matrix = np.trace(sqrtm(np.matmul(np.matmul(sqrtm(rho), sigma), sqrtm(rho))))
+    return fractional_matrix_power(matrix , power)
 
 # ============================================================================
 # Functions for quantum processes
