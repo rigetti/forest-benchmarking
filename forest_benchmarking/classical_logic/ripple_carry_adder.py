@@ -298,7 +298,7 @@ def int_to_bit_array(num: int, n_bits: int) -> Sequence[int]:
 def get_n_bit_adder_results(qc: QuantumComputer, n_bits: int,
                             registers: Tuple[Sequence[int], Sequence[int], int, int] = None,
                             qubits: Sequence[int] = None, in_x_basis: bool = False,
-                            num_shots: int = 10, use_param_program: bool = True,
+                            num_shots: int = 100, use_param_program: bool = True,
                             use_active_reset: bool = True) -> Sequence[Sequence[Sequence[int]]]:
     """
     Convenient wrapper for collecting the results of addition for every possible pair of n_bits
