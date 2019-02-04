@@ -12,8 +12,9 @@ import pyrethrum.operator_estimation as est
 from forest_benchmarking.utils import prepare_prod_pauli_eigenstate
 from pyquil import Program
 from pyquil.api import QuantumComputer, get_benchmarker
-from pyquil.operator_estimation import ExperimentSetting, TomographyExperiment
-from pyquil.paulis import PauliTerm, PauliSum, sI, sX, sY, sZ, is_identity
+from pyquil.operator_estimation import ExperimentSetting, TomographyExperiment, vacuum, \
+    TensorProductState, plusX, minusX, plusY, minusY, plusZ, minusZ, is_vacuum
+from pyquil.paulis import PauliTerm, PauliSum, sI, sX, sY, sZ
 
 bm = get_benchmarker()
 
@@ -40,7 +41,24 @@ def calibrate_readout_imperfections(pauli: PauliTerm, quantum_machine: QuantumCo
     return expectation[0], variance[0, 0].real, count
 
 
-def _exhaustive_dfe(program: Program, qubits: Sequence[int], in_paulis):
+def _state_to_pauli(state: TensorProductState) -> PauliTerm:
+    term = sI()
+    for oneq_st in state.states:
+        if oneq_st.label == 'X':
+            term *= sX(oneq_st.qubit)
+        elif oneq_st.label == 'Y':
+            term *= sY(oneq_st.qubit)
+        elif oneq_st.label == 'Z':
+            term *= sZ(oneq_st.qubit)
+        else:
+            raise ValueError(f"Can't convert state {state} to a PauliTerm")
+
+        if oneq_st.index == 1:
+            term *= -1
+    return term
+
+
+def _exhaustive_dfe(program: Program, qubits: Sequence[int], in_states):
     """Yield experiments over itertools.product(in_paulis).
 
     Used as a helper function for exhaustive_xxx_dfe routines.
@@ -52,12 +70,14 @@ def _exhaustive_dfe(program: Program, qubits: Sequence[int], in_paulis):
         to generate an exhaustive list of DFE experiments.
     """
     n_qubits = len(qubits)
-    for i_ops in itertools.product(in_paulis, repeat=n_qubits):
-        i_op = functools.reduce(mul, (op(q) for op, q in zip(i_ops, qubits)), sI())
+    for i_states in itertools.product(in_states, repeat=n_qubits):
+        i_st = functools.reduce(mul, (op(q) for op, q in zip(i_states, qubits)), vacuum())
+        if is_vacuum(i_st):
+            continue
 
         yield ExperimentSetting(
-            in_operator=i_op,
-            out_operator=bm.apply_clifford_to_pauli(program, i_op),
+            in_state=i_st,
+            out_operator=bm.apply_clifford_to_pauli(program, _state_to_pauli(i_st)),
         )
 
 
@@ -84,7 +104,8 @@ def exhaustive_process_dfe(program, qubits):
         used in ``program``.
     """
     return TomographyExperiment(list(
-        _exhaustive_dfe(program=program, qubits=qubits, in_paulis=[sI, sX, sY, sZ])),
+        _exhaustive_dfe(program=program, qubits=qubits, in_states=[
+            vacuum, plusX, minusX, plusY, minusY, plusZ, minusZ])),
         program=program, qubits=qubits)
 
 
@@ -111,32 +132,32 @@ def exhaustive_state_dfe(program, qubits):
         used in ``program``.
     """
     return TomographyExperiment(list(
-        _exhaustive_dfe(program=program, qubits=qubits, in_paulis=[sI, sZ])),
+        _exhaustive_dfe(program=program, qubits=qubits, in_states=[vacuum, plusZ, minusZ])),
         program=program, qubits=qubits)
 
 
-def _monte_carlo_dfe(program: Program, qubits: Sequence[int], in_paulis, n_terms: int):
-    all_op_inds = np.random.randint(len(in_paulis), size=(n_terms, len(qubits)))
-    for op_inds in all_op_inds:
-        i_op = functools.reduce(mul, (in_paulis[pi](qubits[i]) for i, pi in enumerate(op_inds)),
-                                sI())
-
-        while is_identity(i_op):
+def _monte_carlo_dfe(program: Program, qubits: Sequence[int], in_states, n_terms: int):
+    all_st_inds = np.random.randint(len(in_states), size=(n_terms, len(qubits)))
+    for st_inds in all_st_inds:
+        i_st = functools.reduce(mul, (in_states[si](qubits[i])
+                                      for i, si in enumerate(st_inds)), vacuum())
+        while is_vacuum(i_st):
             # pick a new one
-            second_try_op_inds = np.random.randint(len(in_paulis), size=len(qubits))
-            i_op = functools.reduce(mul, (in_paulis[pi](qubits[i])
-                                          for i, pi in enumerate(second_try_op_inds)), sI())
+            second_try_st_inds = np.random.randint(len(in_states), size=len(qubits))
+            i_st = functools.reduce(mul, (in_states[si](qubits[i])
+                                          for i, si in enumerate(second_try_st_inds)), vacuum())
 
         yield ExperimentSetting(
-            in_operator=i_op,
-            out_operator=bm.apply_clifford_to_pauli(program, i_op),
+            in_state=i_st,
+            out_operator=bm.apply_clifford_to_pauli(program, _state_to_pauli(i_st)),
         )
 
 
-def monte_carlo_process_dfe(program: Program, qubits: List[int], n_terms=1000):
+def monte_carlo_process_dfe(program: Program, qubits: List[int], n_terms=200):
     return TomographyExperiment(list(
         _monte_carlo_dfe(program=program, qubits=qubits,
-                         in_paulis=[sI, sX, sY, sZ], n_terms=n_terms)),
+                         in_states=[vacuum, plusX, minusX, plusY, minusY, plusZ, minusZ],
+                         n_terms=n_terms)),
         program=program, qubits=qubits)
 
 
