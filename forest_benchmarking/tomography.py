@@ -19,7 +19,7 @@ from pyquil import Program
 from pyquil.api import QuantumComputer
 from pyquil.operator_estimation import ExperimentSetting, \
     TomographyExperiment as PyQuilTomographyExperiment, ExperimentResult, SIC0, SIC1, SIC2, SIC3, \
-    plusX, minusX, plusY, minusY, plusZ, minusZ, vacuum
+    plusX, minusX, plusY, minusY, plusZ, minusZ, TensorProductState
 from pyquil.paulis import sI, sX, sY, sZ, PauliSum, PauliTerm, is_identity
 from pyquil.unitary_tools import lifted_pauli, lifted_state_operator
 
@@ -76,7 +76,8 @@ def _sic_process_tomo_settings(qubits: Sequence[int]):
     :param qubits: The qubits to tomographize.
     """
     for in_sics in itertools.product([SIC0, SIC1, SIC2, SIC3], repeat=len(qubits)):
-        i_state = functools.reduce(mul, (state(q) for state, q in zip(in_sics, qubits)), vacuum())
+        i_state = functools.reduce(mul, (state(q) for state, q in zip(in_sics, qubits)),
+                                   TensorProductState())
         for o_ops in itertools.product([sI, sX, sY, sZ], repeat=len(qubits)):
             o_op = functools.reduce(mul, (op(q) for op, q in zip(o_ops, qubits)), sI())
 
@@ -98,7 +99,8 @@ def _pauli_process_tomo_settings(qubits):
     """
     for states in itertools.product([plusX, minusX, plusY, minusY, plusZ, minusZ],
                                     repeat=len(qubits)):
-        i_state = functools.reduce(mul, (state(q) for state, q in zip(states, qubits)), vacuum())
+        i_state = functools.reduce(mul, (state(q) for state, q in zip(states, qubits)),
+                                   TensorProductState())
         for o_ops in itertools.product([sI, sX, sY, sZ], repeat=len(qubits)):
             o_op = functools.reduce(mul, (op(q) for op, q in zip(o_ops, qubits)), sI())
 
