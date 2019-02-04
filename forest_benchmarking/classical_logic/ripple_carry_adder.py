@@ -24,6 +24,7 @@ from scipy.spatial.distance import hamming
 
 from pyquil.gates import CNOT, CCNOT, X, I, H, CZ, MEASURE, RESET
 from pyquil import Program
+from pyquil.quil import Pragma
 from pyquil.api import QuantumComputer
 from pyquil.unitary_tools import all_bitstrings
 
@@ -193,11 +194,11 @@ def adder(num_a: Sequence[int], num_b: Sequence[int], register_a: Sequence[int],
         a_n
         z_ancilla
 
-    With this layout, all gates in the circuit act on sets of three adjacent qubits. This
-    method requires that the registers be specified in this manner so that the output pyquil
-    program consists of native gates acting on the physical qubit layout of the desired quantum
-    resource. Such a layout is provided by calling get_qubit_registers_for_adder on the quantum
-    resource.
+    With this layout, all gates in the circuit act on sets of three adjacent qubits. Such a
+    layout is provided by calling get_qubit_registers_for_adder on the quantum resource. Note
+    that even with this layout some of the gates used to implement the circuit may not be native.
+    In particular there are CCNOT gates which must be decomposed and CNOT(q1, q3) gates acting on
+    potentially non-adjacenct qubits (the layout only ensures q2 is adjacent to both q1 and q3).
 
     The output of the circuit falls on the qubits initially labeled by the b bits (and z_ancilla).
 
@@ -223,14 +224,12 @@ def adder(num_a: Sequence[int], num_b: Sequence[int], register_a: Sequence[int],
         parameterized and the input bitstrings to add must be specified at run time.
     :return: pyQuil program that implements the addition a+b, with output falling on the qubits
         formerly storing the input b. The output of a measurement will list the lsb as the last bit.
-        This method is intended to produce a native Quil program that can be run on the desired
-        qc after a call to native_quil_to_executable
     """
     if len(num_a) != len(num_b):
         raise ValueError("Numbers being added must be equal length bitstrings")
 
-    prog = Program()
-
+    # First, generate a set preparation program in the desired basis.
+    prog = Program(Pragma('PRESERVE_BLOCK'))
     if use_param_program:
         # do_measure set to False makes the returned program a parameterized prep program
         input_register = register_a + register_b
@@ -243,6 +242,9 @@ def adder(num_a: Sequence[int], num_b: Sequence[int], register_a: Sequence[int],
 
     if in_x_basis:
         prog += [H(carry_ancilla), H(z_ancilla)]
+
+    # preparation complete; end the preserve block
+    prog += Pragma("END_PRESERVE_BLOCK")
 
     prog_to_rev = Program()
     current_carry_label = carry_ancilla
@@ -267,8 +269,7 @@ def adder(num_a: Sequence[int], num_b: Sequence[int], register_a: Sequence[int],
         prog += MEASURE(qubit, ro[len(register_b) - idx])
     prog += MEASURE(z_ancilla, ro[0])
 
-    # return the program with the gates compiled into native gateset
-    return basic_compile(prog)
+    return prog
 
 
 def bit_array_to_int(bit_array: Sequence[int]) -> int:
@@ -350,7 +351,6 @@ def get_n_bit_adder_results(qc: QuantumComputer, n_bits: int,
         nat_quil = qc.compiler.quil_to_native_quil(prog)
         exe = qc.compiler.native_quil_to_executable(nat_quil)
 
-
         # Run it on the QPU or QVM
         if use_param_program:
             results = qc.run(exe, memory_map={'target': [bit * pi for bit in bits]})
@@ -425,6 +425,7 @@ def get_error_hamming_distributions_from_results(results: Sequence[Sequence[Sequ
             # multiply relative hamming distance by the length of the output for the weight
             wt = len(ans_bits) * hamming(ans_bits, shot)
             hamming_wt_distr[int(wt)] += 1. / num_shots
-            hamming_wt_distrs.append(hamming_wt_distr)
+
+        hamming_wt_distrs.append(hamming_wt_distr)
 
     return hamming_wt_distrs

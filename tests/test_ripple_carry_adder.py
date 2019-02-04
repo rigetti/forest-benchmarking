@@ -1,5 +1,6 @@
 from forest_benchmarking.classical_logic.ripple_carry_adder import adder
 
+
 def test_one_bit_addition(qvm):
     """
     Testing the ripple carry adder with one bit addition in the computational  (Z) basis.

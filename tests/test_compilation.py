@@ -8,8 +8,7 @@ import pytest
 
 from pyquil.gates import *
 from pyquil.quil import Program
-from pyquil.gates import RX, RZ
-from forest_benchmarking.compilation import _RY, basic_compile, _CNOT, _CCNOT, _T, _H, _X, \
+from forest_benchmarking.compilation import _RY, basic_compile, _CNOT, _CCNOT, _T, _H, _X, _SWAP, \
     match_global_phase
 
 try:
@@ -76,6 +75,17 @@ def test_CNOT():
 
 
 @pytest.mark.skipif(not unitary_tools, reason='Requires unitary_tools')
+def test_SWAP():
+    u1 = program_unitary(Program(SWAP(0, 1)), n_qubits=2)
+    u2 = program_unitary(_SWAP(0, 1), n_qubits=2)
+    assert_all_close_up_to_global_phase(u1, u2, atol=1e-12)
+
+    u1 = program_unitary(Program(SWAP(1, 0)), n_qubits=2)
+    u2 = program_unitary(_SWAP(1, 0), n_qubits=2)
+    assert_all_close_up_to_global_phase(u1, u2, atol=1e-12)
+
+
+@pytest.mark.skipif(not unitary_tools, reason='Requires unitary_tools')
 def test_CCNOT():
     for perm in itertools.permutations([0, 1, 2]):
         u1 = program_unitary(Program(CCNOT(*perm)), n_qubits=3)
@@ -97,12 +107,12 @@ QUANTUM_GATES = {'I': I,
                  'RZ': RZ,
                  'CZ': CZ,
                  'CNOT': CNOT,
-                 'CCNOT': CCNOT,
+                 # 'CCNOT': CCNOT,
                  # 'CPHASE00': CPHASE00,
                  # 'CPHASE01': CPHASE01,
                  # 'CPHASE10': CPHASE10,
                  # 'CPHASE': CPHASE,
-                 # 'SWAP': SWAP,
+                 'SWAP': SWAP,
                  # 'CSWAP': CSWAP,
                  # 'ISWAP': ISWAP,
                  # 'PSWAP': PSWAP
