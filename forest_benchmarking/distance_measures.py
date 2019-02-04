@@ -114,15 +114,19 @@ def hilbert_schmidt_ip(A, B):
     """
     return np.trace(np.matmul(np.transpose(np.conj(A)), B))
 
+
 def smith_fidelity(rho, sigma, power):
     """
     Computes the Smith fidelity F_S(rho,sigma,power) between two quantum states rho and sigma.
-
-    As the power is only defined for values less than 2, F_S > F.
+    
+    The Smith fidelity is  defined as F_S = sqrt(F)^power, where F is  standard fidelity 
+    F = fidelity(rho, sigma). As the power is only defined for values less than 2, F_S > F.
+    At present there is no known operational interpretation of the Smith fidelity for an arbitrary 
+    power.
 
     :param rho: Is a D x D positive matrix.
     :param sigma: Is a D x D positive matrix.
-    :param sigma: Is a positive scalar less than 2.
+    :param power: Is a positive scalar less than 2.
     :return: Smith Fidelity which is a scalar.
     """
     if power <0:
@@ -137,7 +141,7 @@ def smith_fidelity(rho, sigma, power):
 # ============================================================================
 
 def process_fidelity(pauli_lio0: np.ndarray, pauli_lio1: np.ndarray) -> float:
-    """Returns the fidelity between two channels, E and F, represented as Pauli Liouville matrix.
+    r"""Returns the fidelity between two channels, E and F, represented as Pauli Liouville matrix.
 
     The expression is
 
