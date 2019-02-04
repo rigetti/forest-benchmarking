@@ -48,6 +48,14 @@ def test_fidelity():
     sigma = np.matmul(psi_theta, psi_theta.transpose())
     assert np.allclose(dm.fidelity(rho, sigma), 0.0)
 
+def test_smith_fidelity():
+    psi = np.zeros((2, 1))
+    psi[0] = 1
+    rho_pure = np.matmul(psi,np.conjugate(psi.T))
+    rho_max_mixed = np.eye(2) / 2
+    FS = dm.smith_fidelity(rho_max_mixed,rho_pure,0.001)
+    assert np.isclose(FS, 0.9996534864594093, rtol=0.01)
+
 
 # =================================================================================================
 # Test:  Trace distance
@@ -149,6 +157,9 @@ def test_HS_obeys_linearity():
     assert np.allclose(LHS, RHS)
 
 
+# =================================================================================================
+# Test:  distance measured for Processes
+# =================================================================================================
 def test_diamon_norm():
     # Test cases borrowed from qutip,
     # https://github.com/qutip/qutip/blob/master/qutip/tests/test_metrics.py
@@ -214,3 +225,15 @@ def test_diamon_norm():
     choi1 = _gate_to_choi(matpow(_Y, 0.5))
     dnorm = dm.diamond_norm(choi0, choi1)
     assert np.isclose(dnorm, np.sqrt(2), rtol=0.01)
+
+def test_process_fidelity():
+    # test single qubit fidelity of identical gates
+    from forest_benchmarking.superop_conversion import kraus2pauli_liouville
+    _X = np.asarray([[0, 1], [1, 0]])
+    X_pauli_rep = kraus2pauli_liouville([_X])
+    assert np.isclose( dm.process_fidelity(X_pauli_rep, X_pauli_rep), 1, rtol=0.01)
+
+    # test two qubit fidelity of identical gates
+    _CNOT = np.array([[1,0,0,0],[0,1,0,0],[0,0,0,1],[0,0,1,0]])
+    CNOT_pauli_rep = kraus2pauli_liouville([_CNOT])
+    assert np.isclose( dm.process_fidelity(CNOT_pauli_rep, CNOT_pauli_rep), 1, rtol=0.01)
