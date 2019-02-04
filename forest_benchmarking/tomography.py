@@ -17,7 +17,7 @@ from forest_benchmarking.utils import prepare_prod_sic_state, all_pauli_terms, a
 from pyquil import Program
 from pyquil.api import QuantumComputer
 from pyquil.operator_estimation import ExperimentSetting, \
-    TomographyExperiment as PyQuilTomographyExperiment, ExperimentResult, vacuum
+    TomographyExperiment as PyQuilTomographyExperiment, ExperimentResult, zeros_state
 from pyquil.paulis import sI, sX, sY, sZ, PauliSum, PauliTerm
 from pyquil.unitary_tools import lifted_pauli
 
@@ -56,7 +56,7 @@ def _state_tomo_settings(qubits: Sequence[int]):
         o_op = functools.reduce(mul, (op(q) for op, q in zip(o_ops, qubits)), sI())
 
         yield ExperimentSetting(
-            in_state=vacuum(),
+            in_state=zeros_state(qubits),
             out_operator=o_op,
         )
 
