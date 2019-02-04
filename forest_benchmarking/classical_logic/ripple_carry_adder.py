@@ -30,7 +30,6 @@ from pyquil.unitary_tools import all_bitstrings
 
 from forest_benchmarking.readout import _readout_group_parameterized_bitstring
 from forest_benchmarking.classical_logic.primitives import *
-from forest_benchmarking.compilation import basic_compile
 
 
 def assign_registers_to_line_or_cycle(start: int, graph: nx.Graph, num_length: int) \
