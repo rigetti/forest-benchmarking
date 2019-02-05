@@ -1,27 +1,17 @@
 from typing import List, Sequence, Tuple, Callable
 import warnings
 import logging
+log = logging.getLogger(__name__)
 from tqdm import tqdm
-
 import numpy as np
+from statistics import median
+
 from pyquil.api import QuantumComputer
 from pyquil.numpy_simulator import NumpyWavefunctionSimulator
 from pyquil.quil import DefGate, Program
 
 from forest_benchmarking.random_operators import haar_rand_unitary
-
-
-def _bit_array_to_int(bit_array: Sequence[int]) -> int:
-    """
-    Converts a bit array into an integer where the right-most bit is least significant.
-
-    :param bit_array: an array of bits with right-most bit considered least significant.
-    :return: the integer corresponding to the bitstring.
-    """
-    output = 0
-    for bit in bit_array:
-        output = (output << 1) | bit
-    return output
+from forest_benchmarking.utils import bit_array_to_int
 
 
 def _naive_program_generator(qc: QuantumComputer, qubits: Sequence[int], permutations: np.ndarray,
@@ -37,13 +27,13 @@ def _naive_program_generator(qc: QuantumComputer, qubits: Sequence[int], permuta
     :param gates: a depth by depth//2 array of matrices representing the 2q gates at each layer.
         The first row of matrices is the earliest-time layer of 2q gates applied.
     :return: a PyQuil program in native_quil instructions that implements the circuit represented by
-        the input permutations and gates. The list of qubits specifies the qubits from which to
-        read the output of the program. The qubits are listed in appropriate order for comparison
-        with simulated heavy hitters from collect_heavy_outputs.
+        the input permutations and gates. Note that the qubits are measured in the proper order
+        such that the results may be directly compared to the simulated heavy hitters from
+        collect_heavy_outputs.
     """
     num_measure_qubits = len(permutations[0])
-    # at present, naively select the minimum number of qubits with smallest labels to run on
-    qubits = sorted(qubits)[:num_measure_qubits]
+    # at present, naively select the minimum number of qubits to run on
+    qubits = qubits[:num_measure_qubits]
 
     # create a simple program that uses the compiler to directly generate 2q gates from the matrices
     prog = Program()
@@ -70,10 +60,11 @@ def _naive_program_generator(qc: QuantumComputer, qubits: Sequence[int], permuta
 def collect_heavy_outputs(wfn_sim: NumpyWavefunctionSimulator, permutations: np.ndarray,
                           gates: np.ndarray) -> List[int]:
     """
-    Uses the provided wfn_sim to calculate the probability of measuring each bitstring from the
-    output of the circuit comprised of the given permutations and gates; those 'heavy' bitstrings
-    which are output with greater than median probability among all possible bitstrings on the
-    given qubits are collected and returned.
+    Collects and returns those 'heavy' bitstrings which are output with greater than median
+    probability among all possible bitstrings on the given qubits.
+
+    The method uses the provided wfn_sim to calculate the probability of measuring each bitstring
+    from the output of the circuit comprised of the given permutations and gates.
 
     :param wfn_sim: a NumpyWavefunctionSimulator that can simulate the provided program
     :param permutations: array of depth-many arrays of size n_qubits indicating a qubit permutation
@@ -83,17 +74,17 @@ def collect_heavy_outputs(wfn_sim: NumpyWavefunctionSimulator, permutations: np.
     """
     wfn_sim.reset()
 
-    num_qubits = len(permutations[0])
     for layer_idx, (perm, layer) in enumerate(zip(permutations, gates)):
         for gate_idx, gate in enumerate(layer):
             wfn_sim.do_gate_matrix(gate, (perm[gate_idx], perm[gate_idx+1]))
 
+    # Note that probabilities are ordered lexicographically with qubit 0 leftmost.
     probabilities = np.abs(wfn_sim.wf.reshape(-1)) ** 2
 
-    # get the indices of the sorted probabilities and store the first half, i.e. those which have
-    # greater than median probability. Qubit 0 is on the left in numpy simulator
-    sorted_bitstring_indices = np.argsort(probabilities)
-    heavy_outputs = sorted_bitstring_indices[2 ** (num_qubits - 1):]
+    median_prob = median(probabilities)
+
+    # store the integer indices, which implicitly represent the bitstring outcome.
+    heavy_outputs = [idx for idx, prob in enumerate(probabilities) if prob > median_prob]
 
     return heavy_outputs
 
@@ -106,9 +97,10 @@ def sample_rand_circuits_for_heavy_out(qc: QuantumComputer,
                                        num_circuits: int = 100, num_shots: int = 1000,
                                        show_progress_bar: bool = False) -> int:
     """
-    This method performs the bulk of the work in the quantum volume measurement; for the given
-    depth, num_circuits many random model circuits are generated, the heavy outputs are
-    determined from the ideal output distribution of each circuit, and a native quil
+    This method performs the bulk of the work in the quantum volume measurement.
+
+    For the given depth, num_circuits many random model circuits are generated, the heavy outputs
+    are determined from the ideal output distribution of each circuit, and a native quil
     implementation of the model circuit output by the program generator is run on the qc. The total
     number of sampled heavy outputs is returned.
 
@@ -133,8 +125,8 @@ def sample_rand_circuits_for_heavy_out(qc: QuantumComputer,
 
         # generate a matrix representation of each 2q gate in the circuit
         num_gates_per_layer = depth // 2
-        gate_list = np.array([haar_rand_unitary(4) for _ in range(depth * num_gates_per_layer)])
-        gates = np.reshape(gate_list, (depth, num_gates_per_layer, 4, 4))
+        gates = np.asarray([[haar_rand_unitary(4) for _ in range(num_gates_per_layer)]
+                            for _ in range(depth)])
 
         # generate a PyQuil program in native quil that implements the model circuit
         # The program should measure the output qubits in the order that is consistent with the
@@ -152,7 +144,7 @@ def sample_rand_circuits_for_heavy_out(qc: QuantumComputer,
         # determine if each result bitstring is a heavy output, as determined from simulation
         for result in results:
             # convert result to int for comparison with heavy outputs.
-            output = _bit_array_to_int(result)
+            output = bit_array_to_int(result)
             if output in heavy_outputs:
                 num_heavy += 1
 
@@ -199,8 +191,10 @@ def measure_quantum_volume(qc: QuantumComputer, qubits: Sequence[int] = None,
     :param num_circuits: number of unique random circuits that will be sampled.
     :param num_shots: number of shots for each circuit sampled.
     :param depths: the circuit depths to scan over. Defaults to all depths from 2 to len(qubits)
-    :param achievable_threshold: threshold at which a depth is considered to be achieved.
-        Eq. 6 of [QVol] defines this to be the default of 2/3
+    :param achievable_threshold: threshold at which a depth is considered 'achieved'. Eq. 6 of
+        [QVol] defines this to be the default of 2/3. To be considered achievable, the estimated
+        probability of sampling a heavy output at the given depth must be large enough such that
+        the one-sided confidence interval of this estimate is greater than the given threshold.
     :param stop_when_fail: if true, the measurement will stop after the first un-achievable depth
     :param show_progress_bar: displays a progress bar for each depth if true.
     :return: a list of all tuples (depth, prob_sample_heavy, is_achievable) indicating the
@@ -213,14 +207,14 @@ def measure_quantum_volume(qc: QuantumComputer, qubits: Sequence[int] = None,
                       "to be valid.")
     if qubits is None:
         qubits = qc.qubits()
-    qubits = sorted(qubits)
 
     if depths is None:
         depths = np.arange(2, len(qubits) + 1)
 
     results = []
     for depth in depths:
-        logging.info("Starting depth {}".format(depth))
+        log.info("Starting depth {}".format(depth))
+
         # Use the program generator to implement random model circuits for this depth and compare
         # the outputs to the ideal simulations; get the count of the total number of heavy outputs
         num_heavy = sample_rand_circuits_for_heavy_out(qc, qubits, depth, program_generator,
@@ -234,6 +228,8 @@ def measure_quantum_volume(qc: QuantumComputer, qubits: Sequence[int] = None,
         one_sided_confidence_interval = prob_sample_heavy - \
             2 * np.sqrt(num_heavy * (num_shots - num_heavy / num_circuits)) / total_sampled_outputs
 
+        # prob of sampling heavy output must be large enough such that the one-sided confidence
+        # interval is larger than the threshold
         is_achievable = one_sided_confidence_interval > achievable_threshold
 
         results.append((depth, prob_sample_heavy, is_achievable))

@@ -1,6 +1,7 @@
 import itertools
 from collections import OrderedDict
 from random import random, seed
+from typing import Sequence
 
 import numpy as np
 from numpy import pi
@@ -8,6 +9,19 @@ from numpy import pi
 from pyquil.gates import I, RX, RY, RZ
 from pyquil.paulis import PauliTerm
 from pyquil.quil import Program
+
+
+def bit_array_to_int(bit_array: Sequence[int]) -> int:
+    """
+    Converts a bit array into an integer where the right-most bit is least significant.
+
+    :param bit_array: an array of bits with right-most bit considered least significant.
+    :return: the integer corresponding to the bitstring.
+    """
+    output = 0
+    for bit in bit_array:
+        output = (output << 1) | bit
+    return output
 
 
 def pack_shot_data(shot_data):
