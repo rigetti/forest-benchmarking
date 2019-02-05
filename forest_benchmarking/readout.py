@@ -1,8 +1,8 @@
 import itertools
 from math import pi
 from typing import Tuple, Dict, Sequence
-import warnings
 import numpy as np
+from tqdm import tqdm
 
 from pyquil import Program
 from pyquil.api import QuantumComputer
@@ -118,7 +118,8 @@ def _readout_group_bitstring(qubits: Sequence[int], bitstring: Sequence[int]) ->
 
 def estimate_joint_confusion_in_set(qc: QuantumComputer, qubits: Sequence[int] = None,
                                     num_shots: int = 1000, joint_group_size: int = 1,
-                                    use_param_program: bool = True, use_active_reset=False) \
+                                    use_param_program: bool = True, use_active_reset=False,
+                                    show_progress_bar: bool = False) \
                                     -> Dict[Tuple[int, ...], np.ndarray]:
     """
     Measures the joint readout confusion matrix for all groups of size group_size among the qubits.
@@ -161,6 +162,7 @@ def estimate_joint_confusion_in_set(qc: QuantumComputer, qubits: Sequence[int] =
         potential speed up, but may complicate interpretation of the estimated confusion
         matrices. The method estimate_joint_active_reset_confusion separately characterizes
         active reset.
+    :param show_progress_bar: displays a progress bar via tqdm if true.
     :return: a dictionary whose keys are all possible joint_group_sized tuples that can be
         formed from the qubits. Each value is an estimated 2^group_size square confusion matrix
         for the corresponding tuple of qubits. Each key is listed in order of increasing qubit
@@ -173,44 +175,54 @@ def estimate_joint_confusion_in_set(qc: QuantumComputer, qubits: Sequence[int] =
 
     qubits = sorted(qubits)
 
-    groups = itertools.combinations(qubits, joint_group_size)
+    groups = list(itertools.combinations(qubits, joint_group_size))
     confusion_matrices = {}
-    for group in groups:
 
-        # initialize program to optionally actively reset. Active reset will provide a speed up
-        # but may make the estimate harder to interpret due to errors in the reset.
-        program_start = Program()
-        if use_active_reset:
-            program_start += RESET()
+    total_num_rounds = len(groups) * 2**joint_group_size
+    with tqdm(total=total_num_rounds, disable=not show_progress_bar) as pbar:
+        for group in groups:
 
-        # generate one parameterized program now, or later create a program for each bitstring
-        param_program = Program()  # not used if use_param_program is false
-        if use_param_program:
-            # generate parameterized program for this group and append to start
-            param_program = program_start + _readout_group_parameterized_bitstring(group)
+            # initialize program to optionally actively reset. Active reset will provide a speed up
+            # but may make the estimate harder to interpret due to errors in the reset.
+            program_start = Program()
+            if use_active_reset:
+                program_start += RESET()
 
-        matrix = np.zeros((2 ** joint_group_size, 2 ** joint_group_size))
-        for row, bitstring in enumerate(itertools.product([0, 1], repeat=joint_group_size)):
+            executable = None  # will be re-assigned to either compiled param or non-param program
+
+            # generate one parameterized program now, or later create a program for each bitstring
             if use_param_program:
+                # generate parameterized program for this group and append to start
+                param_program = program_start + _readout_group_parameterized_bitstring(group)
                 param_program.wrap_in_numshots_loop(shots=num_shots)
                 executable = qc.compiler.native_quil_to_executable(param_program)
-                # specify bitstring in parameterization at run-time
-                results = qc.run(executable, memory_map={'target': [bit * pi for bit in bitstring]})
-            else:
-                # generate program that measures given bitstring on this group and append to start
-                bitstring_program = program_start + _readout_group_bitstring(group, bitstring)
-                bitstring_program.wrap_in_numshots_loop(shots=num_shots)
-                executable = qc.compiler.native_quil_to_executable(bitstring_program)
-                results = qc.run(executable)
 
-            # update confusion matrix
-            for result in results:
-                base = np.array([2 ** i for i in reversed(range(joint_group_size))])
-                observed = np.sum(base * result)
-                matrix[row, observed] += 1 / num_shots
+            matrix = np.zeros((2 ** joint_group_size, 2 ** joint_group_size))
+            for row, bitstring in enumerate(itertools.product([0, 1], repeat=joint_group_size)):
 
-        # store completed confusion matrix in dictionary
-        confusion_matrices[group] = matrix
+                if use_param_program:
+                    # specify bitstring in parameterization at run-time
+                    results = qc.run(executable,
+                                     memory_map={'target': [bit * pi for bit in bitstring]})
+                else:
+                    # generate program that measures given bitstring on group, and append to start
+                    bitstring_program = program_start + _readout_group_bitstring(group, bitstring)
+                    bitstring_program.wrap_in_numshots_loop(shots=num_shots)
+                    executable = qc.compiler.native_quil_to_executable(bitstring_program)
+                    results = qc.run(executable)
+
+                # update confusion matrix
+                for result in results:
+                    base = np.array([2 ** i for i in reversed(range(joint_group_size))])
+                    observed = np.sum(base * result)
+                    matrix[row, observed] += 1 / num_shots
+
+                # update the progress bar
+                pbar.update(1)
+
+            # store completed confusion matrix in dictionary
+            confusion_matrices[group] = matrix
+
     return confusion_matrices
 
 
@@ -269,14 +281,14 @@ def marginalize_confusion_matrix(confusion_matrix: np.ndarray, all_qubits: Seque
 
 def estimate_joint_reset_confusion(qc: QuantumComputer, qubits: Sequence[int] = None,
                                    num_trials: int = 10, joint_group_size: int = 1,
-                                   use_active_reset: bool = True) \
+                                   use_active_reset: bool = True, show_progress_bar: bool = False) \
                                     -> Dict[Tuple[int, ...], np.ndarray]:
     """
     Measures a reset 'confusion matrix' for all groups of size joint_group_size among the qubits.
 
     Specifically, for each possible joint_group_sized group among the qubits we perform a
     measurement for each bitstring on that group. The measurement proceeds as follows:
-        -Prepare the bitstring state on the qubits
+        -Repeatedly try to prepare the bitstring state on the qubits until success.
         -If use_active_reset is true (default) actively reset qubits to ground state; otherwise,
             wait the preset amount of time for qubits to decay to ground state.
         -Measure the state after the chosen reset method.
@@ -298,6 +310,7 @@ def estimate_joint_reset_confusion(qc: QuantumComputer, qubits: Sequence[int] = 
     :param use_active_reset: dictates whether to actively reset qubits or else wait the
         pre-allotted amount of time for the qubits to decay to the ground state. Using active
         reset will allow for faster data collection.
+    :param show_progress_bar: displays a progress bar via tqdm if true.
     :return: a dictionary whose keys are all possible joint_group_sized tuples that can be
         formed from the qubits. Each value is an estimated 2^group_size square matrix
         for the corresponding tuple of qubits. Each key is listed in order of increasing qubit
@@ -312,41 +325,53 @@ def estimate_joint_reset_confusion(qc: QuantumComputer, qubits: Sequence[int] = 
 
     qubits = sorted(qubits)
 
-    groups = itertools.combinations(qubits, joint_group_size)
+    groups = list(itertools.combinations(qubits, joint_group_size))
     confusion_matrices = {}
-    for group in groups:
-        # program prepares a bit string (specified by parameterization) but does not measure
-        prep_program = _readout_group_parameterized_bitstring(group, do_measure=False)
 
-        matrix = np.zeros((2 ** joint_group_size, 2 ** joint_group_size))
-        for row, bitstring in enumerate(itertools.product([0, 1], repeat=joint_group_size)):
-            for _ in range(num_trials):
-                # prepare the given bitstring. Again, no measurement yet.
-                prep_executable = qc.compiler.native_quil_to_executable(prep_program)
-                with warnings.catch_warnings():
-                    warnings.filterwarnings("ignore", message="You are running a QVM program with "
-                                                            "no MEASURE instructions.")
-                    qc.run(prep_executable, memory_map={'target': [bit * pi for bit in bitstring]})
+    total_num_rounds = len(groups) * 2**joint_group_size
+    with tqdm(total=total_num_rounds, disable=not show_progress_bar) as pbar:
+        for group in groups:
+            # program prepares a bit string (specified by parameterization) and immediately measures
+            prep_program = _readout_group_parameterized_bitstring(group)
+            prep_executable = qc.compiler.native_quil_to_executable(prep_program)
 
-                # execute program that measures the post-reset state
-                if use_active_reset:
-                    # program runs immediately after prep program and actively resets qubits
-                    reset_measure_program = Program(RESET())
-                else:
-                    # this program automatically waits pre-allotted time for qubits to decay
-                    reset_measure_program = Program()
-                ro = reset_measure_program.declare('ro', memory_type='BIT', memory_size=len(qubits))
-                for idx, qubit in enumerate(group):
-                    reset_measure_program += MEASURE(qubit, ro[idx])
-                executable = qc.compiler.native_quil_to_executable(reset_measure_program)
-                results = qc.run(executable)
+            matrix = np.zeros((2 ** joint_group_size, 2 ** joint_group_size))
+            for row, bitstring in enumerate(itertools.product([0, 1], repeat=joint_group_size)):
+                for _ in range(num_trials):
 
-                # update confusion matrix
-                for result in results:
-                    base = np.array([2 ** i for i in reversed(range(joint_group_size))])
-                    observed = np.sum(base * result)
-                    matrix[row, observed] += 1 / num_trials
+                    # try preparation at most 10 times.
+                    for _ in range(10):
+                        # prepare the given bitstring and measure
+                        result = qc.run(prep_executable,
+                                        memory_map={'target': [bit * pi for bit in bitstring]})
 
-        # store completed confusion matrix in dictionary
-        confusion_matrices[group] = matrix
+                        # if the preparation is successful, move on to reset.
+                        if np.array_equal(result[0], bitstring):
+                            break
+
+                    # execute program that measures the post-reset state
+                    if use_active_reset:
+                        # program runs immediately after prep program and actively resets qubits
+                        reset_measure_program = Program(RESET())
+                    else:
+                        # this program automatically waits pre-allotted time for qubits to decay
+                        reset_measure_program = Program()
+                    ro = reset_measure_program.declare('ro', memory_type='BIT', memory_size=len(qubits))
+                    for idx, qubit in enumerate(group):
+                        reset_measure_program += MEASURE(qubit, ro[idx])
+                    executable = qc.compiler.native_quil_to_executable(reset_measure_program)
+                    results = qc.run(executable)
+
+                    # update confusion matrix
+                    for result in results:
+                        base = np.array([2 ** i for i in reversed(range(joint_group_size))])
+                        observed = np.sum(base * result)
+                        matrix[row, observed] += 1 / num_trials
+
+                # update the progress bar
+                pbar.update(1)
+
+            # store completed confusion matrix in dictionary
+            confusion_matrices[group] = matrix
+
     return confusion_matrices
