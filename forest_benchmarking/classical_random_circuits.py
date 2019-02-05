@@ -2,6 +2,7 @@ from typing import List
 import itertools
 import numpy as np
 from scipy.spatial.distance import hamming
+from scipy.special import comb
 import networkx as nx
 import random
 
@@ -162,3 +163,26 @@ def get_error_hamming_distributions_from_list(wt_list, n_bits):
     for wdx in range(n_bits):
         hamming_wt_distr[int(wdx)] = wt_list.count(wdx)/num_shots
     return hamming_wt_distr
+
+
+def hamming_dist_rand(num_bits: int, pad: int = 0):
+    '''Return a list representing the Hamming distribution of
+    a particular bit string, of length num_bits, to randomly drawn bits.
+
+    :param num_bits: number of bits in string
+    :param pad: number of zero elements to pad
+    returns: list of hamming weights with zero padding
+    '''
+    N = 2 ** num_bits
+    pr = [comb(num_bits, ndx)/(2**num_bits) for ndx in range(0, num_bits + 1)]
+    padding = [0 for pdx in range(0, pad)]
+    return flatten_list([pr, padding])
+
+
+def flatten_list(xlist):
+    '''Flattens a list of lists.
+
+    :param xlist: list of lists
+    :returns: a flattend list
+    '''
+    return [item for sublist in xlist for item in sublist]
