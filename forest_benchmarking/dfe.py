@@ -192,9 +192,7 @@ class DFEdata:
     count: List[int]
     """number of shots used to calculate the `expectation`"""
 
-
-def acquire_dfe_data(experiment, quantum_machine: QuantumComputer, var: float = 0.01) -> Tuple[
-    DFEdata, DFEdata]:
+def acquire_dfe_data(experiment, quantum_machine: QuantumComputer, var: float = 0.01) -> Tuple[DFEdata, DFEdata]:
     """
     Estimate state/process fidelity by exhaustive direct fidelity estimation.
 
@@ -305,7 +303,6 @@ class DFEestimate:
     fid_std_err_est: float
     """Standard deviation of the fidelity point estimate, after considering the calibration."""
 
-
 def direct_fidelity_estimate(data: DFEdata, cal: DFEdata, type: str) -> DFEestimate:
     """
     Estimate state or process fidelity by exhaustive direct fidelity estimation.
@@ -317,7 +314,7 @@ def direct_fidelity_estimate(data: DFEdata, cal: DFEdata, type: str) -> DFEestim
     pauli_est = data.expectation / np.abs(cal.expectation)
     var_est = ratio_variance(data.expectation, data.variance, cal.expectation, cal.variance)
 
-    temp_data = {'dimension': data.dimension, 'expectation': pauli_est, 'variance': var_est}
+    temp_data = { 'dimension': data.dimension, 'expectation': pauli_est, 'variance': var_est }
 
     if type == 'state':
         fid = aggregate_state_dfe(temp_data)
@@ -332,13 +329,12 @@ def direct_fidelity_estimate(data: DFEdata, cal: DFEdata, type: str) -> DFEestim
         out_pauli=data.out_pauli,
         dimension=data.dimension,
         number_qubits=data.number_qubits,
-        pauli_point_est=pauli_est,
+        pauli_point_est=pauli_est ,
         pauli_var_est=var_est,
         fid_point_est=fid['expectation'],
         fid_var_est=fid['variance'],
         fid_std_err_est=np.sqrt(fid['variance'])
     )
-
 
 def aggregate_process_dfe(data: dict):
     if isinstance(data['dimension'], int):
@@ -360,8 +356,7 @@ def aggregate_state_dfe(data: dict):
     }
 
 
-def ratio_variance(a: np.ndarray, var_a: np.ndarray, b: np.ndarray,
-                   var_b: np.ndarray) -> np.ndarray:
+def ratio_variance(a: np.ndarray, var_a: np.ndarray, b: np.ndarray, var_b: np.ndarray) -> np.ndarray:
     """
     Given random variables 'A' and 'B', compute the variance on the ratio Y = A/B. Denote the
     mean of the random variables as a = E[A] and b = E[B] while the variances are var_a = Var[A]
@@ -385,4 +380,4 @@ def ratio_variance(a: np.ndarray, var_a: np.ndarray, b: np.ndarray,
     TODO: add in covariance correction?
 
     """
-    return (np.asarray(a) / np.asarray(b)) ** 2 * (var_a / np.asarray(a) ** 2 + var_b / np.asarray(b) ** 2)
+    return (np.asarray(a)/np.asarray(b))**2 * (var_a/np.asarray(a)**2 + var_b/np.asarray(b)**2)

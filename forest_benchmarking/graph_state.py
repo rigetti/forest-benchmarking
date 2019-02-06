@@ -28,7 +28,7 @@ def create_graph_state(graph: nx.Graph, use_pragmas=True):
     for q in graph.nodes:
         program += H(q)
 
-    if use_pragmas > 0:
+    if use_pragmas:
         program += Pragma('COMMUTING_BLOCKS')
     for a, b in graph.edges:
         if use_pragmas:
