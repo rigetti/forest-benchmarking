@@ -2,13 +2,17 @@ from typing import List
 import itertools
 import numpy as np
 from scipy.spatial.distance import hamming
+import scipy.interpolate
 from scipy.special import comb
 import networkx as nx
 import random
+import pandas as pd
+
 
 from pyquil.gates import CNOT, CCNOT, X, Z, I, H, CZ, MEASURE, RESET
 from pyquil.quilbase import Pragma
 from pyquil.quil import Program
+from pyquil.api import QuantumComputer
 
 from forest_benchmarking.compilation import CNOT_X_basis
 
@@ -22,9 +26,8 @@ def generate_connected_subgraphs(G: nx.Graph, n_vert: int):
     :params G: networkx Graph
     :returns: list of subgraphs with n_vert connected vertices
     '''
-    target = nx.complete_graph(n_vert)
     subgraph_list = []
-    for sub_nodes in itertools.combinations(G.nodes(), len(target.nodes())):
+    for sub_nodes in itertools.combinations(G.nodes(), n_vert):
         subg = G.subgraph(sub_nodes)
         if nx.is_connected(subg):
             subgraph_list.append(subg)
@@ -70,6 +73,7 @@ def random_two_bit_gates(graph: nx.Graph, in_x_basis: bool = False):
         cnot_gate = CNOT
 
     program = Program()
+    # do the two coloring?
     program += Pragma('COMMUTING_BLOCKS')
     for a, b in graph.edges:
         if random.random()>0.5:
@@ -109,16 +113,19 @@ def generate_random_classial_circuit_with_depth(graph: nx.Graph,
         # Install identity on all qubits so that we can find all the qubits from prog.get_qubits().
         # Otherwise if the circuit happens to be identity on a particular qubit you will get
         # not get that qubit from get_qubits. Worse, if the entire program is identity you will
-        # get the empty set. Do not delete this!!
+        # get the empty set. Do not delete this!
         prep_gate = I
 
     prog += [prep_gate(qubit) for qubit in list(graph.nodes)]
 
     for ddx in range(1, depth + 1):
+        # preserve block ensures the compiler doesn't compile the circuit away
+        prog += Pragma('PRESERVE_BLOCK')
         # random one qubit gates
         prog += random_single_bit_gates(graph, in_x_basis)
         # random two qubit gates
         prog += random_two_bit_gates(graph, in_x_basis)
+        prog += Pragma('END_PRESERVE_BLOCK')
 
     # if in X basis change back to Z basis for measurement
     if in_x_basis:
@@ -186,3 +193,149 @@ def flatten_list(xlist):
     :returns: a flattend list
     '''
     return [item for sublist in xlist for item in sublist]
+
+def get_random_classical_circuit_results(qc_perfect: QuantumComputer,
+                                         qc_noisy: QuantumComputer,
+                                         circuit_depth: int,
+                                         circuit_width: int,
+                                         num_rand_subgraphs: int = 10,
+                                         num_shots_per_circuit: int = 100,
+                                         in_x_basis: bool = False,
+                                         use_active_reset: bool = False):
+    '''
+    Convenient wrapper for collecting the results of running classical random circuits on a
+    particular lattice.
+
+    It will run a series of random circuits with widths from [1, ...,circuit_width] and depths
+    from [1, ..., circuit_depth].
+
+    :param qc_perfect: the "perfect" quantum resource (QVM) to determine the true outcome.
+    :param qc_noisy: the noisy quantum resource (QPU or QVM) to
+    :param circuit_depth: maximum depth of quantum circuit
+    :param circuit_width: maximum width of quantum circuit
+    :param num_rand_subgraphs: number of random circuits of circuit_width to be sampled
+    :param num_shots_per_circuit: number of shots per random circuit
+    :param in_x_basis: performs the random circuit in the x basis
+    :param use_active_reset: whether or not to use active reset. Doing so will speed up execution
+        on a QPU.
+    :return: the data as a list of dicts with keys 'depth', 'width', and 'hamming_dist'.
+    '''
+    if qc_perfect.name == qc_noisy.name:
+        raise ValueError("The noisy and perfect device can't be the same device.")
+
+    # get the networkx graph of the lattice
+    G = qc_perfect.qubit_topology()
+
+    if circuit_width > len(G.nodes):
+        raise ValueError("You must have circuit widths less than or equal to the number of qubits on a lattice.")
+
+    # add active reset
+    reset_prog = Program()
+    if use_active_reset:
+        reset_prog += RESET()
+
+    data = []
+    # loop over different graph sizes
+    for depth, subgraph_size in itertools.product(range(1, circuit_depth+1),
+                                                  range(1, circuit_width+1)):
+
+        list_of_graphs = generate_connected_subgraphs(G, subgraph_size)
+        wt = []
+        for kdx in range(1, num_rand_subgraphs+1):
+            # randomly choose a lattice from list
+            lattice = random.choice(list_of_graphs)
+            prog = generate_random_classial_circuit_with_depth(lattice, depth, in_x_basis)
+
+            # perfect
+            perfect_bitstring = qc_perfect.run_and_measure(prog, trials=1)
+            perfect_bitstring_array = np.vstack(perfect_bitstring[q] for q in prog.get_qubits()).T
+
+            # run on hardware or noisy QVM
+            # only need to pre append active reset on something that may run on the hardware
+            actual_bitstring = qc_noisy.run_and_measure(reset_prog+prog, trials=num_shots_per_circuit)
+            actual_bitstring_array = np.vstack(actual_bitstring[q] for q in prog.get_qubits()).T
+            wt.append(get_error_hamming_distance_from_results(perfect_bitstring_array, actual_bitstring_array))
+
+        # for each graph size flatten the results
+        wt_flat = flatten_list(wt)
+        hamming_wt_distr = get_error_hamming_distributions_from_list(wt_flat, subgraph_size
+                                                                    )
+        # list of dicts. The keys are (depth, width, hamming_dist)
+        data.append({'depth': depth, 'width': subgraph_size, 'hamming_dist': hamming_wt_distr})
+    return data
+
+
+# helper functions to manipulate the dataframes
+def get_hamming_dist(df: pd.DataFrame, depth_val: int, width_val: int):
+    '''
+    Get  Hamming distance from a dataframe for a particular depth and width.
+
+    :param df: dataframe generated from data from 'get_random_classical_circuit_results'
+    :param depth_val: depth of quantum circuit
+    :param width_val: width of quantum circuit
+    :return: smaller dataframe
+    '''
+    idx = df.depth== depth_val
+    jdx = df.width== width_val
+    return df[idx&jdx].reset_index(drop=True)
+
+def get_hamming_dists_fn_width(df: pd.DataFrame, depth_val: int):
+    '''
+    Get  Hamming distance from a dataframe for a particular depth.
+
+    :param df: dataframe generated from data from 'get_random_classical_circuit_results'
+    :param depth_val: depth of quantum circuit
+    :return: smaller dataframe
+    '''
+    idx = df.depth== depth_val
+    return df[idx].reset_index(drop=True)
+
+def get_hamming_dists_fn_depth(df: pd.DataFrame, width_val: int):
+    '''
+    Get  Hamming distance from a dataframe for a particular width.
+
+    :param df: dataframe generated from data from 'get_random_classical_circuit_results'
+    :param width_val: width of quantum circuit
+    :return: smaller dataframe
+    '''
+    jdx = df.width== width_val
+    return df[jdx].reset_index(drop=True)
+
+def basement_function(number: float):
+    '''
+    Once you are in the basement you can't go lower.
+                                /
+                                | 0,    if number <= 0
+    basement_function(number) = |
+                                | floor(number), if number > 0
+                                \
+    :param number: the basement function is applied to this number.
+    :returns: basement of the number
+    '''
+    if number <= 0.0:
+        basement_of_number = 0.0
+    else:
+        basement_of_number = np.floor(number)
+    return basement_of_number
+
+def interpolate_2d_landscape(points, values, resolution=200, interp_method='nearest'):
+    """
+    Convenience function for interpolating a list of points and corresponding list of values
+    onto a 2D meshgrid suitable for plotting.
+
+    See :py:func:`plot_2d_landscape`.
+
+    :param points: A numpy array where the first column is x values and the second column
+        is y values
+    :param values: The value at each point (z)
+    :param resolution: The number of points per side in the interpolated meshgrid
+    :param interp_method: The scheme used for interpolation. "cubic" or "linear" will give
+        you a prettier picture but "nearest" will prevent you from overconfidence.
+    :return: meshgrid arrays (xx, yy, zz) suitable for plotting.
+    """
+    xx, yy = np.meshgrid(
+        np.linspace(np.min(points[:, 0]), np.max(points[:, 0]), resolution),
+        np.linspace(np.min(points[:, 1]), np.max(points[:, 1]), resolution),
+    )
+    zz = scipy.interpolate.griddata(points, values, (xx, yy), method=interp_method)
+    return xx, yy, zz
