@@ -16,11 +16,12 @@ from pyquil.api import QuantumComputer
 from pyquil.api._compiler import _extract_attribute_dictionary_from_program
 from pyquil.api._qac import AbstractCompiler
 from pyquil.device import NxDevice
-from pyquil.operator_estimation import measure_observables
+from pyquil.gates import CNOT, I, RZ
+from pyquil.numpy_simulator import NumpyWavefunctionSimulator
+from pyquil.operator_estimation import measure_observables, ExperimentResult, TomographyExperiment, \
+    _one_q_state_prep
 from pyquil.pyqvm import PyQVM
-
-REVERSE_CNOT_KRAUS = np.array([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 0, 1], [0, 0, 1, 0]])
-CNOT_KRAUS = np.array([[1, 0, 0, 0], [0, 0, 0, 1], [0, 0, 1, 0], [0, 1, 0, 0]])
+from pyquil.unitary_tools import program_unitary
 
 
 def test_proj_to_cp():
@@ -93,25 +94,56 @@ def get_test_qc(n_qubits):
     )
 
 
-@pytest.fixture(scope='module', params=['pauli', 'sic'])
-def single_q_tomo_fixture(request):
+def wfn_measure_observables(n_qubits, tomo_expt: TomographyExperiment):
+    wfn = NumpyWavefunctionSimulator(n_qubits)
+    for settings in tomo_expt:
+        for setting in settings:
+            prog = Program()
+            for oneq_state in setting.in_state.states:
+                prog += _one_q_state_prep(oneq_state)
+            prog += tomo_expt.program
+
+            yield ExperimentResult(
+                setting=setting,
+                expectation=wfn.reset().do_program(prog).expectation(setting.out_operator),
+                stddev=0.,
+                total_counts=1,  # don't set to zero unless you want nans
+            )
+
+
+@pytest.fixture(params=['pauli', 'sic'])
+def basis(request):
+    return request.param
+
+
+@pytest.fixture(params=['sampling', 'wfn'])
+def measurement_func(request):
+    if request.param == 'wfn':
+        return lambda expt: list(wfn_measure_observables(n_qubits=2, tomo_expt=expt))
+    elif request.param == 'sampling':
+        return lambda expt: list(measure_observables(qc=get_test_qc(n_qubits=2),
+                                                     tomo_experiment=expt, n_shots=100_000))
+    else:
+        raise ValueError()
+
+
+@pytest.fixture()
+def single_q_tomo_fixture(basis, measurement_func):
     qubits = [0]
-    qc = get_test_qc(n_qubits=1)
 
     # Generate random unitary
-    u_rand = haar_rand_unitary(2 ** 1, rs=qc.qam.rs)
+    u_rand = haar_rand_unitary(2 ** 1, rs=np.random.RandomState(52))
     process = Program().defgate("RandUnitary", u_rand)
     process.inst([("RandUnitary", q) for q in qubits])
 
-    # process = Program()
-    # process += RZ(np.pi, 0)
-    # u_rand = np.array([[1,0],[0,-1]])
+    process = Program()
+    process += RZ(np.pi, 0)
+    u_rand = np.array([[1, 0], [0, -1]])
 
     # Get data from QVM
-    tomo_expt = generate_process_tomography_experiment(process, qubits, in_basis=request.param)
-    results = list(measure_observables(qc=qc, tomo_experiment=tomo_expt, n_shots=1_000_000))
+    tomo_expt = generate_process_tomography_experiment(process, qubits, in_basis=basis)
+    results = measurement_func(tomo_expt)
 
-    # TODO?: might not need process, qubits when analysis methods refactored to not take TomographyData
     return qubits, results, u_rand
 
 
@@ -126,24 +158,32 @@ def test_single_q_pgdb(single_q_tomo_fixture):
 def test_single_q_linear_inversion(single_q_tomo_fixture):
     qubits, results, u_rand = single_q_tomo_fixture
 
-    process_choi_est = linear_inv_process_estimate(results, qubits)
+    process_choi_est = linear_inv_process_estimate(results, qubits[::-1])
     process_choi_true = kraus2choi(u_rand)
+
+    print(np.real_if_close(np.round(process_choi_est, 2)))
+    print(np.real_if_close(np.round(process_choi_true, 2)))
+
     np.testing.assert_allclose(process_choi_true, process_choi_est, atol=1e-2)
 
 
-@pytest.fixture(scope='module')
-def two_q_tomo_fixture():
+@pytest.fixture()
+def two_q_tomo_fixture(basis, measurement_func):
     qubits = [0, 1]
-    qc = get_test_qc(n_qubits=2)
 
     # Generate random unitary
-    u_rand = haar_rand_unitary(2 ** len(qubits), rs=qc.qam.rs)
+    u_rand = haar_rand_unitary(2 ** len(qubits), rs=np.random.RandomState(52))
     process = Program().defgate("RandUnitary", u_rand)
     process += ("RandUnitary", qubits[0], qubits[1])
 
-    # Get data from QVM
-    tomo_expt = generate_process_tomography_experiment(process, qubits, in_basis='sic')
-    results = list(measure_observables(qc=qc, tomo_experiment=tomo_expt, n_shots=100_000))
+    # testing
+    process = Program()
+    process += I(0)
+    process += I(1)
+    u_rand = program_unitary(process, 2)
+
+    tomo_expt = generate_process_tomography_experiment(process, qubits, in_basis=basis)
+    results = measurement_func(tomo_expt)
 
     return qubits, results, u_rand
 
@@ -153,4 +193,9 @@ def test_two_q_pgdb(two_q_tomo_fixture):
 
     process_choi_est = pgdb_process_estimate(results, qubits=qubits)
     process_choi_true = kraus2choi(u_rand)
+
+    print()
+    print(np.real_if_close(np.round(process_choi_est, 1)))
+    print(np.real_if_close(np.round(process_choi_true, 1)))
+
     np.testing.assert_allclose(process_choi_true, process_choi_est, atol=0.05)

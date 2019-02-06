@@ -330,6 +330,7 @@ def linear_inv_state_estimate(results: List[ExperimentResult],
     rho = pinv(measurement_matrix) @ expectations
     return unvec(rho)
 
+
 def linear_inv_process_estimate(results: List[ExperimentResult],
                               qubits: List[int]) -> np.ndarray:
     """
