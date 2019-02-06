@@ -12,14 +12,14 @@ from scipy.linalg import logm, pinv, eigh
 import forest_benchmarking.distance_measures as dm
 import forest_benchmarking.operator_estimation as est
 from forest_benchmarking.superop_conversion import vec, unvec
-from forest_benchmarking.utils import prepare_prod_sic_state, all_pauli_terms, all_sic_terms, \
-    n_qubit_pauli_basis, transform_pauli_moments_to_bit, partial_trace
+from forest_benchmarking.utils import prepare_prod_sic_state, n_qubit_pauli_basis, partial_trace
 from pyquil import Program
 from pyquil.api import QuantumComputer
 from pyquil.operator_estimation import ExperimentSetting, \
-    TomographyExperiment as PyQuilTomographyExperiment, ExperimentResult, zeros_state
-from pyquil.paulis import sI, sX, sY, sZ, PauliSum, PauliTerm
-from pyquil.unitary_tools import lifted_pauli
+    TomographyExperiment as PyQuilTomographyExperiment, ExperimentResult, SIC0, SIC1, SIC2, SIC3, \
+    plusX, minusX, plusY, minusY, plusZ, minusZ, TensorProductState, zeros_state
+from pyquil.paulis import sI, sX, sY, sZ, PauliSum, PauliTerm, is_identity
+from pyquil.unitary_tools import lifted_pauli, lifted_state_operator
 
 MAXITER = "maxiter"
 OPTIMAL = "optimal"
@@ -77,20 +77,74 @@ def generate_state_tomography_experiment(program: Program, qubits: List[int]):
                                       program=program, qubits=qubits)
 
 
-def generate_process_tomography_experiment(prog: Program) -> TomographyExperiment:
-    """
-    Generate a "TomographyExperiment" containing all the experiments needed to perform quantum process tomography.
-    Only qubits acted on by a gate in the program will be tomographed; to include a `trivial' qubit, insert an Identity
-    gate into the program that acts on that qubit.
+def _sic_process_tomo_settings(qubits: Sequence[int]):
+    """Yield settings over SIC basis cross I,X,Y,Z operators
 
-    :param prog: A PyQuil program for the process being tomographed.
-    :return: A "TomographyExperiment"
+    Used as a helper function for generate_process_tomography_experiment
+
+    :param qubits: The qubits to tomographize.
     """
-    qubits = prog.get_qubits()
-    n_qubits = len(qubits)
-    out_ops = all_pauli_terms(n_qubits, qubits)
-    in_ops = all_sic_terms(n_qubits, qubits)
-    return TomographyExperiment(in_ops=in_ops, program=prog, out_ops=out_ops)
+    for in_sics in itertools.product([SIC0, SIC1, SIC2, SIC3], repeat=len(qubits)):
+        i_state = functools.reduce(mul, (state(q) for state, q in zip(in_sics, qubits)),
+                                   TensorProductState())
+        for o_ops in itertools.product([sI, sX, sY, sZ], repeat=len(qubits)):
+            o_op = functools.reduce(mul, (op(q) for op, q in zip(o_ops, qubits)), sI())
+
+            if is_identity(o_op):
+                continue
+
+            yield ExperimentSetting(
+                in_state=i_state,
+                out_operator=o_op,
+            )
+
+
+def _pauli_process_tomo_settings(qubits):
+    """Yield settings over +-XYZ basis cross I,X,Y,Z operators
+
+    Used as a helper function for generate_process_tomography_experiment
+
+    :param qubits: The qubits to tomographize.
+    """
+    for states in itertools.product([plusX, minusX, plusY, minusY, plusZ, minusZ],
+                                    repeat=len(qubits)):
+        i_state = functools.reduce(mul, (state(q) for state, q in zip(states, qubits)),
+                                   TensorProductState())
+        for o_ops in itertools.product([sI, sX, sY, sZ], repeat=len(qubits)):
+            o_op = functools.reduce(mul, (op(q) for op, q in zip(o_ops, qubits)), sI())
+
+            if is_identity(o_op):
+                continue
+
+            yield ExperimentSetting(
+                in_state=i_state,
+                out_operator=o_op,
+            )
+
+
+def generate_process_tomography_experiment(program: Program, qubits: List[int], in_basis='sic'):
+    """
+    Generate a (pyQuil) TomographyExperiment containing the experiment settings required to
+    characterize a quantum process.
+
+    To collect data, try::
+
+        from pyquil.operator_estimation import measure_observables
+        results = list(measure_observables(qc=qc, tomo_experiment=experiment, n_shots=100_000))
+
+    :param program: The program describing the process to tomographize.
+    :param qubits: The qubits to tomographize.
+    :param in_basis: A string identifying the input basis. Either "sic" or "pauli". SIC requires
+        a smaller number of experiment settings to be run.
+    """
+    if in_basis == 'sic':
+        func = _sic_process_tomo_settings
+    elif in_basis == 'pauli':
+        func = _pauli_process_tomo_settings
+    else:
+        raise ValueError(f"Unknown basis {in_basis}")
+
+    return PyQuilTomographyExperiment(settings=list(func(qubits)), program=program, qubits=qubits)
 
 
 @dataclass
@@ -580,102 +634,71 @@ def _constraint_project(choi_mat, trace_preserving=True):
     return unvec(new_state)
 
 
-PLUS_Z = np.array([[1, 0]]).T
-PLUS_X = np.array([[1, 1]]).T / np.sqrt(2)
-PLUS_Y = np.array([[1, 1j]]).T / np.sqrt(2)
-states = [PLUS_X, PLUS_Y, PLUS_Z]
-labels = ['X', 'Y', 'Z']
-PAULI_STATE_DICT = dict(zip(labels, [np.kron(state, state.conj().T) for state in states]))
-PAULI_STATE_DICT['I'] = np.eye(2)
-
-SIC_0 = PLUS_Z
-SIC_1 = np.array([[1, np.sqrt(2)]]).T / np.sqrt(3)
-SIC_2 = np.array([[1, np.exp(-np.pi * 2j / 3) * np.sqrt(2)]]).T / np.sqrt(3)
-SIC_3 = np.array([[1, np.exp(np.pi * 2j / 3) * np.sqrt(2)]]).T / np.sqrt(3)
-SIC_states = [SIC_0, SIC_1, SIC_2, SIC_3]
-labels = ['SIC' + str(i) for i in range(4)]
-SIC_STATE_DICT = dict(zip(labels, [np.kron(state, state.conj().T) for state in SIC_states]))
-
-
-def _extract_from_data(data: TomographyData):
+def _extract_from_results(results: List[ExperimentResult], qubits: List[int]):
     """
-    Construct the matrix A such that the probabilities p_ij of outcomes n_ij given an estimate E can be cast in the
-    vectorized form
+    Construct the matrix A such that the probabilities p_ij of outcomes n_ij given an estimate E
+    can be cast in a vectorized form.
+
+    Specifically::
+
         p = vec(p_ij) = A x vec(E)
-    This yields convenient vectorized calculations of the cost and its gradient, in terms of A, n, and E. See above.
 
-    :param data:
-    :return:
+    This yields convenient vectorized calculations of the cost and its gradient, in terms of A, n,
+    and E.
     """
-    dimension = data.dimension
-    out_op_strings = [op.pauli_string(sorted(data.program.get_qubits())[::-1]) for op in data.out_ops]
-    num_qubits = data.number_qubits
-    num_meas_projectors = 2 * (dimension ** 2 - 1)
+    A = []
+    n = []
+    grand_total_shots = 0
 
-    # unpack expectations into matrix whose rows are indexed by d^2 state preparations and whose columns are indexed by
-    # 2(d^2-1) POVM elements corresponding to projector Pj onto plus eigenspace of the jth pauli and the element I - Pj
-    nij = np.zeros([dimension ** 2, 2 * (dimension ** 2 - 1)])
+    for result in results:
+        in_state_matrix = lifted_state_operator(result.setting.in_state, qubits=qubits)
+        operator = lifted_pauli(result.setting.out_operator, qubits=qubits)
+        proj_plus = (np.eye(2 ** len(qubits)) + operator) / 2
+        proj_minus = (np.eye(2 ** len(qubits)) - operator) / 2
 
-    A = np.zeros((num_meas_projectors * dimension ** 2, dimension ** 4), dtype=complex)
-    for i, in_op in enumerate(data.in_ops):
+        # Constructing A per eq. (22)
+        # TODO: figure out if we can avoid re-splitting into Pi+ and Pi- counts
+        A += [
+            # vec() turns into a column vector; transpose to a row vector; index into the
+            # 1 row to avoid an extra tensor dimension when we call np.asarray(A).
+            vec(np.kron(in_state_matrix, proj_plus.T)).T[0],
+            vec(np.kron(in_state_matrix, proj_minus.T)).T[0],
+        ]
 
-        input_states = [SIC_STATE_DICT[in_op[idx].split('_')[0]] for idx in range(num_qubits)]
-        input_state = 1.
-        for state in input_states:
-            input_state = np.kron(input_state, state)
+        expected_plus_ones = (1 + result.expectation) / 2
+        n += [
+            result.total_counts * expected_plus_ones,
+            result.total_counts * (1 - expected_plus_ones)
+        ]
+        grand_total_shots += result.total_counts
 
-        for j, op_string in enumerate(out_op_strings):
-            linear_idx = num_meas_projectors * i + j
-
-            projectors = [PAULI_STATE_DICT[op_string[idx]] for idx in range(num_qubits)]
-            operator = np.zeros((dimension, dimension), dtype=complex)
-            sign_patterns = [seq for seq in itertools.product([0, 1], repeat=num_qubits) if not sum(seq) % 2]
-            for sign_pattern in sign_patterns:
-                single_projector = 1.
-                for proj, sign in zip(projectors, sign_pattern):  # sign = 1 represents negative 1q eigenvalue
-                    single_projector = np.kron(single_projector, (2 * sign - 1) * (sign * np.eye(2) - proj))
-                operator += single_projector
-
-            A[linear_idx] = vec(np.kron(input_state, operator.T)).T
-            A[linear_idx + num_meas_projectors // 2] = vec(
-                np.kron(input_state, (np.eye(dimension, dimension) - operator).T)).T
-
-            # construct n_ij matrix
-            count = data.counts[linear_idx - i * num_meas_projectors // 2]  # one experiment for pair of projectors
-            expectation = data.expectations[linear_idx - i * num_meas_projectors // 2]
-            num_plus = int(count * transform_pauli_moments_to_bit(expectation, 0)[0])
-
-            # store results for the measurement of projector Pj
-            nij[i][j] = num_plus
-            # store the results for I - Pj
-            nij[i][j + num_meas_projectors // 2] = count - num_plus
-
-    total_shots = nij.sum(axis=(0, 1))
-    assert total_shots == np.sum(data.counts)
-    n = vec(nij.T / total_shots)  # normalize n
-    # Transpose of nij follows the column stacking convention.
-
-    # normalize A
-    return A / (dimension ** 2), n
+    n_qubits = len(qubits)
+    dimension = 2 ** n_qubits
+    A = np.asarray(A) / dimension ** 2
+    n = np.asarray(n)[:, np.newaxis] / grand_total_shots
+    return A, n
 
 
-def pgdb_process_estimate(data: TomographyData, trace_preserving=True) -> TomographyEstimate:
+def pgdb_process_estimate(results: List[ExperimentResult], qubits: List[int],
+                          trace_preserving=True) -> np.ndarray:
     """
-    Provide an estimate of the process via Projected Gradient Descent with Backtracking, as presented in
+    Provide an estimate of the process via Projected Gradient Descent with Backtracking.
 
         [PGD] Maximum-likelihood quantum process tomography via projected gradient descent
         Knee, Bolduc, Leach, and Gauger. (2018)
         arXiv:1803.10062
 
-    :param data: A process tomography experiment populated with data
-    :param trace_preserving: Default project the estimate to a trace-preserving process. False for trace non-increasing
-    :return: an estimate of the process in the Choi matrix representation. Qubits tensored in decreasing order.
+    :param results: A tomographically complete list of ExperimentResults
+    :param qubits: A list of qubits giving the tensor order of the resulting Choi matrix.
+    :param trace_preserving: Whether to project the estimate to a trace-preserving process. If
+        set to False, we ensure trace non-increasing.
+    :return: an estimate of the process in the Choi matrix representation.
     """
     # construct the matrix A and vector n from the data for vectorized calculations of
     # the cost function and its gradient
-    A, n = _extract_from_data(data)
+    A, n = _extract_from_results(results, qubits[::-1])
 
-    dim = data.dimension
+    dim = 2 ** len(qubits)
     est = np.eye(dim ** 2, dim ** 2, dtype=complex) / dim  # initial estimate
     old_cost = _cost(A, n, est)  # initial cost, which we want to decrease
     mu = 3 / (2 * dim ** 2)  # inverse learning rate
@@ -704,51 +727,47 @@ def pgdb_process_estimate(data: TomographyData, trace_preserving=True) -> Tomogr
         # store current cost
         old_cost = new_cost
 
-    estimate = ProcessTomographyEstimate(
-        process_choi_est=est,
-        type='pgdb',
-    )
 
-    est_data = TomographyEstimate(
-        in_ops=data.in_ops,
-        program=data.program,
-        out_ops=data.out_ops,
-        dimension=data.dimension,
-        number_qubits=data.number_qubits,
-        expectations=data.expectations,
-        variances=data.variances,
-        estimate=estimate
-    )
-
-    return est_data
+    return est
 
 
-def _cost(A, n, estimate):
+def _cost(A, n, estimate, eps=1e-6):
     """
-    Computes the cost (negative log likelihood) of estimated process using vectorized version of equation 4 of [PGD].
+    Computes the cost (negative log likelihood) of the estimated process using the vectorized
+    version of equation 4 of [PGD].
+
     See the appendix of [PGD].
 
-    :param A: a matrix constructed from the input states and POVM elements that aids in calculating the probabilities p
-    :param n: vectorized form of the data n_ij
-    :param estimate: the matrix Choi representation of an estimated process
+    :param A: a matrix constructed from the input states and POVM elements (eq. 22) that aids
+        in calculating the model probabilities p.
+    :param n: vectorized form of the observed counts n_ij
+    :param estimate: the current model Choi representation of an estimated process for which we
+        report the cost.
     :return: Cost of the estimate given the data, n
     """
-    p = A.dot(vec(estimate))  # vectorized form of the probabilities of outcomes, p_ij
-    log_p = np.array([[np.log(entry) if entry != 0 else 0 for entry in p.T[0]]]).T  # avoid log(0)
-    return - n.T.dot(log_p)
+    p = A @ vec(estimate)  # vectorized form of the probabilities of outcomes, p_ij
+    # see appendix on "stalling"
+    p = np.clip(p, a_min=eps, a_max=None)
+    return - n.T @ np.log(p)
 
 
-def _grad_cost(A, n, estimate):
+def _grad_cost(A, n, estimate, eps=1e-6):
     """
-    Computes the gradient of the above cost, leveraging the vectorized calculation given in appendix of [PGD]
-    :param A: a matrix constructed from the input states and POVM elements that aids in calculating the probabilities p
-    :param n: vectorized form of the data n_ij
-    :param estimate: he matrix Choi representation of an estimated process
+    Computes the gradient of the cost, leveraging the vectorized calculation given in the
+    appendix of [PGD]
+
+    :param A: a matrix constructed from the input states and POVM elements (eq. 22) that aids
+        in calculating the model probabilities p.
+    :param n: vectorized form of the observed counts n_ij
+    :param estimate: the current model Choi representation of an estimated process for which we
+        compute the gradient.
     :return: Gradient of the cost of the estimate given the data, n
     """
-    p = A.dot(vec(estimate))
+    p = A @ vec(estimate)
+    # see appendix on "stalling"
+    p = np.clip(p, a_min=eps, a_max=None)
     eta = n / p
-    return unvec(-A.conj().T.dot(eta))
+    return unvec(-A.conj().T @ eta)
 
 
 def project_density_matrix(rho) -> np.ndarray:
