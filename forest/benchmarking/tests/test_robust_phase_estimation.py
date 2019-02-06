@@ -7,12 +7,11 @@ from pyquil.noise import damping_after_dephasing
 from pyquil.quil import Program
 from pyquil.quilbase import Measurement
 
-from forest.benchmarking import robust_phase_estimation
+from forest.benchmarking import robust_phase_estimation as rpe
 
 
 def test_state_prep(wfn):
-    p = Program()
-    robust_phase_estimation.prepare_state(p, 0)
+    p = rpe.prepare_state_about_axis(0, (0, 0))
     assert wfn.wavefunction(p).pretty_print() == wfn.wavefunction(Program(H(0))).pretty_print()
 
 
@@ -21,10 +20,12 @@ def test_generate_single_depth(qvm):
     expected_outcomes = [0., .5, 1.0, .5]
     for depth in [0, 1, 2, 3, 4]:
         for exp_type in ['X', 'Y']:
-            exp = robust_phase_estimation.generate_single_depth_experiment(RZ(np.pi / 2, 0), depth, exp_type)
+            exp = rpe.generate_single_depth_rpe_experiment(RZ(np.pi / 2, 0), (0, 0), depth,
+                                                           exp_type, 0)
             idx = ((depth - 1) if exp_type == 'Y' else depth) % 4
             expected = expected_outcomes[idx]
-            executable = qvm.compiler.native_quil_to_executable(basic_compile(exp.wrap_in_numshots_loop(5000)))
+            prog = basic_compile(exp.wrap_in_numshots_loop(5000))
+            executable = qvm.compiler.native_quil_to_executable(prog)
             result = np.average(qvm.run(executable))
             assert np.allclose(expected, result, atol=.005)
 
@@ -32,11 +33,11 @@ def test_generate_single_depth(qvm):
 def test_noiseless_RPE(qvm):
     qvm.qam.random_seed = 5
     angle = pi / 4 - .5  # pick arbitrary angle
-    experiments = robust_phase_estimation.generate_rpe_experiments(RZ(angle, 0), 7)
-    experiments = robust_phase_estimation.acquire_rpe_data(experiments, qvm, multiplicative_factor=10.)
-    xs, ys, x_stds, y_stds = robust_phase_estimation.find_expectation_values(experiments)
-    result = robust_phase_estimation.robust_phase_estimate(xs, ys, x_stds, y_stds)
-    assert np.abs(angle - result) < 2 * np.sqrt(robust_phase_estimation.get_variance_upper_bound(experiments))
+    experiments = rpe.generate_rpe_experiments(RZ(angle, 0), (0, 0), 7)
+    experiments = rpe.acquire_rpe_data(experiments, qvm, multiplicative_factor=10.)
+    xs, ys, x_stds, y_stds = rpe.find_expectation_values(experiments)
+    result = rpe.robust_phase_estimate(xs, ys, x_stds, y_stds)
+    assert np.abs(angle - result) < 2 * np.sqrt(rpe.get_variance_upper_bound(experiments))
 
 
 def test_noisy_RPE(qvm):
@@ -66,9 +67,10 @@ def test_noisy_RPE(qvm):
     # scan over each angle and check that RPE correctly predicts the angle to within .1 radians
     for angle in angles:
         RH = Program(RY(-pi / 4, 0)).inst(RZ(angle, 0)).inst(RY(pi / 4, 0))
-        experiments = robust_phase_estimation.generate_rpe_experiments(RH, num_depths, axis=(pi / 4, 0))
+        experiments = rpe.generate_rpe_experiments(RH, (pi / 4, 0), num_depths)
         add_noise_to_experiments(experiments, 25 * 10 ** (-6.), 20 * 10 ** (-6.), .92, .87)
-        experiments = robust_phase_estimation.acquire_rpe_data(experiments, qvm, multiplicative_factor=5., additive_error=add_error)
-        xs, ys, x_stds, y_stds = robust_phase_estimation.find_expectation_values(experiments)
-        phase_estimate = robust_phase_estimation.robust_phase_estimate(xs, ys, x_stds, y_stds)
+        experiments = rpe.acquire_rpe_data(experiments, qvm, multiplicative_factor=5.,
+                                           additive_error=add_error)
+        xs, ys, x_stds, y_stds = rpe.find_expectation_values(experiments)
+        phase_estimate = rpe.robust_phase_estimate(xs, ys, x_stds, y_stds)
         assert np.allclose(phase_estimate, angle, atol=tolerance)

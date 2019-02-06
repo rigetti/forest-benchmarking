@@ -132,16 +132,14 @@ def all_pauli_z_terms(qubit_count: int, qubit_labels=None):
     return list_of_terms
 
 
-def local_pauli_eig_prep(prog, op, idx):
+def local_pauli_eig_prep(op, idx):
     """
     Generate gate sequence to prepare a the +1 eigenstate of a Pauli operator, assuming
-    we are starting from the ground state ( the +1 eigenstate of Z^{\\otimes n}), and append it to
-    the PyQuil program given. This mutates prog.
+    we are starting from the ground state ( the +1 eigenstate of Z^{\\otimes n})
 
-    :param Program prog: The program to which state preparation will be attached.
     :param str op: A string representation of the Pauli operator whose eigenstate we'd like to prepare.
     :param int idx: The index of the qubit that the preparation is acting on
-    :return: The mutated Program.
+    :return: The preparation Program.
     """
     if op == 'X':
         gate = RY(pi / 2, idx)
@@ -151,7 +149,7 @@ def local_pauli_eig_prep(prog, op, idx):
         gate = I(idx)
     else:
         raise ValueError('Unknown gate operation')
-    prog.inst(gate)
+    prog = Program(gate)
     return prog
 
 
@@ -172,7 +170,7 @@ def local_pauli_eigs_prep(op, idx):
         gates = [I(idx), RX(pi, idx)]
     else:
         raise ValueError('Unknown gate operation')
-    return gates
+    return [Program(gate) for gate in gates]
 
 
 def random_local_pauli_eig_prep(prog, op, idx, random_seed=None):
@@ -221,7 +219,7 @@ def random_local_pauli_eig_prep(prog, op, idx, random_seed=None):
     return descr
 
 
-def local_pauli_eig_meas(prog, op, idx):
+def local_pauli_eig_meas(op, idx):
     """
     Generate gate sequence to measure in the eigenbasis of a Pauli operator, assuming
     we are only able to measure in the Z eigenbasis.
@@ -234,8 +232,8 @@ def local_pauli_eig_meas(prog, op, idx):
         gate = I(idx)
     else:
         raise ValueError('Unknown gate operation')
-    prog.inst(gate)
-    return
+    prog = Program(gate)
+    return prog
 
 
 def prepare_prod_pauli_eigenstate(pauli_term: PauliTerm):
@@ -246,14 +244,15 @@ def prepare_prod_pauli_eigenstate(pauli_term: PauliTerm):
     opset = pauli_term.operations_as_set()
     prog = Program()
     for (idx, op) in opset:
-        local_pauli_eig_prep(prog, op, idx)
+        prog += local_pauli_eig_prep(op, idx)
     return prog
 
 
-def measure_prod_pauli_eigenstate(prog: Program, pauli_term: PauliTerm):
+def measure_prod_pauli_eigenstate(pauli_term: PauliTerm):
     opset = pauli_term.operations_as_set()
+    prog = Program()
     for (idx, op) in opset:
-        local_pauli_eig_meas(prog, op, idx)
+        prog += local_pauli_eig_meas(op, idx)
     return prog
 
 
