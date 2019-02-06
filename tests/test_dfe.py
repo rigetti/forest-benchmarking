@@ -23,7 +23,7 @@ def test_exhaustive_dfe_run():
     for setting in texpt:
         setting = setting[0]
         prog = Program()
-        for oneq_state in setting.in_state:
+        for oneq_state in setting.in_state.states:
             prog += _one_q_state_prep(oneq_state)
         prog += process
 
@@ -40,7 +40,7 @@ def test_monte_carlo_dfe():
     for setting in texpt:
         setting = setting[0]
         prog = Program()
-        for oneq_state in setting.in_state:
+        for oneq_state in setting.in_state.states:
             prog += _one_q_state_prep(oneq_state)
         prog += process
 
