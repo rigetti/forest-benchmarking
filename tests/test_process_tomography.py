@@ -21,6 +21,7 @@ from pyquil.operator_estimation import measure_observables, ExperimentResult, To
     _one_q_state_prep
 from pyquil.pyqvm import PyQVM
 from pyquil.unitary_tools import program_unitary
+from pyquil import gate_matrices as mat
 
 
 def test_proj_to_cp():
@@ -94,6 +95,8 @@ def get_test_qc(n_qubits):
 
 
 def wfn_measure_observables(n_qubits, tomo_expt: TomographyExperiment):
+    if len(tomo_expt.program.defined_gates) > 0:
+        raise pytest.skip("Can't do wfn on defined gates yet")
     wfn = NumpyWavefunctionSimulator(n_qubits)
     for settings in tomo_expt:
         for setting in settings:
@@ -154,35 +157,30 @@ def test_single_q_pgdb(single_q_tomo_fixture):
     np.testing.assert_allclose(process_choi_true, process_choi_est, atol=1e-2)
 
 
+@pytest.fixture(params=['CNOT', 'haar'])
+def two_q_process(request):
+    if request.param == 'CNOT':
+        return Program(CNOT(0, 1)), mat.CNOT
+    elif request.param == 'haar':
+        u_rand = haar_rand_unitary(2 ** 2, rs=np.random.RandomState(52))
+        process = Program().defgate("RandUnitary", u_rand)
+        process += ("RandUnitary", 0, 1)
+        return process, u_rand
+    else:
+        raise ValueError()
+
+
 @pytest.fixture()
-def two_q_tomo_fixture(basis, measurement_func):
+def two_q_tomo_fixture(basis, two_q_process, measurement_func):
     qubits = [0, 1]
-
-    # Generate random unitary
-    u_rand = haar_rand_unitary(2 ** len(qubits), rs=np.random.RandomState(52))
-    process = Program().defgate("RandUnitary", u_rand)
-    process += ("RandUnitary", qubits[0], qubits[1])
-
-    # testing
-    process = Program()
-    process += I(0)
-    process += I(1)
-    u_rand = program_unitary(process, 2)
-
+    process, u_rand = two_q_process
     tomo_expt = generate_process_tomography_experiment(process, qubits, in_basis=basis)
     results = measurement_func(tomo_expt)
-
     return qubits, results, u_rand
 
 
 def test_two_q_pgdb(two_q_tomo_fixture):
     qubits, results, u_rand = two_q_tomo_fixture
-
     process_choi_est = pgdb_process_estimate(results, qubits=qubits)
     process_choi_true = kraus2choi(u_rand)
-
-    print()
-    print(np.real_if_close(np.round(process_choi_est, 1)))
-    print(np.real_if_close(np.round(process_choi_true, 1)))
-
     np.testing.assert_allclose(process_choi_true, process_choi_est, atol=0.05)
