@@ -6,10 +6,9 @@ from rpcq.messages import PyQuilExecutableResponse
 from forest_benchmarking.compilation import basic_compile
 from forest_benchmarking.random_operators import haar_rand_unitary
 from forest_benchmarking.superop_conversion import vec, unvec, kraus2choi
-from forest_benchmarking.tomography import _constraint_project, linear_inv_process_estimate
 from forest_benchmarking.tomography import proj_to_cp, proj_to_tni, \
     generate_process_tomography_experiment, pgdb_process_estimate, \
-    proj_to_tp
+    proj_to_tp, _constraint_project
 from forest_benchmarking.utils import sigma_x, partial_trace
 from pyquil import Program
 from pyquil.api import QuantumComputer
@@ -152,18 +151,6 @@ def test_single_q_pgdb(single_q_tomo_fixture):
 
     process_choi_est = pgdb_process_estimate(results, qubits=qubits)
     process_choi_true = kraus2choi(u_rand)
-    np.testing.assert_allclose(process_choi_true, process_choi_est, atol=1e-2)
-
-
-def test_single_q_linear_inversion(single_q_tomo_fixture):
-    qubits, results, u_rand = single_q_tomo_fixture
-
-    process_choi_est = linear_inv_process_estimate(results, qubits[::-1])
-    process_choi_true = kraus2choi(u_rand)
-
-    print(np.real_if_close(np.round(process_choi_est, 2)))
-    print(np.real_if_close(np.round(process_choi_true, 2)))
-
     np.testing.assert_allclose(process_choi_true, process_choi_est, atol=1e-2)
 
 

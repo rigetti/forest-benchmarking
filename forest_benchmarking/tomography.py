@@ -331,31 +331,6 @@ def linear_inv_state_estimate(results: List[ExperimentResult],
     return unvec(rho)
 
 
-def linear_inv_process_estimate(results: List[ExperimentResult],
-                              qubits: List[int]) -> np.ndarray:
-    """
-    Estimate a quantum process using linear inversion.
-
-    This is the simplest process tomography post processing and is not applicable in any
-    real-world case. To use this function,
-    collect state tomography data with :py:func:`generate_process_tomography_experiment`
-    and :py:func:`~pyquil.operator_estimation.measure_observables`.
-
-    :param results: A tomographically complete list of results.
-    :param qubits: All qubits that were tomographized. This specifies the order in
-        which qubits will be kron'ed together.
-    :return: A point estimate of the quantum state rho.
-    """
-    measurement_matrix = np.vstack([
-        vec(np.kron(lifted_state_operator(result.setting.in_state, qubits=qubits),
-                    lifted_pauli(result.setting.out_operator, qubits=qubits).T)).T
-        for result in results
-    ])
-    expectations = np.array([result.expectation for result in results])
-    rho = pinv(measurement_matrix) @ expectations
-    return unvec(rho)
-
-
 def construct_projection_operators_on_n_qubits(num_qubits) -> List[np.ndarray]:
     """
     """
