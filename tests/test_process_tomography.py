@@ -7,21 +7,15 @@ from forest_benchmarking.compilation import basic_compile
 from forest_benchmarking.random_operators import haar_rand_unitary
 from forest_benchmarking.superop_conversion import vec, unvec, kraus2choi
 from forest_benchmarking.tomography import proj_to_cp, proj_to_tni, \
-    generate_process_tomography_experiment, pgdb_process_estimate, \
-    proj_to_tp, _constraint_project
+    generate_process_tomography_experiment, pgdb_process_estimate, proj_to_tp, _constraint_project
 from forest_benchmarking.utils import sigma_x, partial_trace
 from pyquil import Program
-from pyquil.api import QuantumComputer
-from pyquil.api._compiler import _extract_attribute_dictionary_from_program
-from pyquil.api._qac import AbstractCompiler
-from pyquil.device import NxDevice
-from pyquil.gates import CNOT, I, RZ, X
+from pyquil import gate_matrices as mat
+from pyquil.gates import CNOT, X
 from pyquil.numpy_simulator import NumpyWavefunctionSimulator
 from pyquil.operator_estimation import measure_observables, ExperimentResult, TomographyExperiment, \
     _one_q_state_prep
 from pyquil.pyqvm import PyQVM
-from pyquil.unitary_tools import program_unitary
-from pyquil import gate_matrices as mat
 
 
 def test_proj_to_cp():
@@ -77,6 +71,11 @@ def test_proj_to_tni():
 
 
 def get_test_qc(n_qubits):
+    from pyquil.api import QuantumComputer
+    from pyquil.api._compiler import _extract_attribute_dictionary_from_program
+    from pyquil.api._qac import AbstractCompiler
+    from pyquil.device import NxDevice
+
     class BasicQVMCompiler(AbstractCompiler):
         def quil_to_native_quil(self, program: Program):
             return basic_compile(program)
