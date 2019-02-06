@@ -12,9 +12,7 @@ from scipy.linalg import logm, pinv, eigh
 import forest_benchmarking.distance_measures as dm
 import forest_benchmarking.operator_estimation as est
 from forest_benchmarking.superop_conversion import vec, unvec
-from forest_benchmarking.utils import prepare_prod_sic_state, all_pauli_terms, all_sic_terms, \
-    n_qubit_pauli_basis, transform_pauli_moments_to_bit, partial_trace, \
-    transform_bit_moments_to_pauli
+from forest_benchmarking.utils import prepare_prod_sic_state, n_qubit_pauli_basis, partial_trace
 from pyquil import Program
 from pyquil.api import QuantumComputer
 from pyquil.operator_estimation import ExperimentSetting, \
