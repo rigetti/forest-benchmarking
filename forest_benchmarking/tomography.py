@@ -1,6 +1,6 @@
 import functools
 import itertools
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from operator import mul
 from typing import Callable, Tuple, List, Optional, Union, Sequence
 
@@ -19,7 +19,7 @@ from pyquil import Program
 from pyquil.api import QuantumComputer
 from pyquil.operator_estimation import ExperimentSetting, \
     TomographyExperiment as PyQuilTomographyExperiment, ExperimentResult, SIC0, SIC1, SIC2, SIC3, \
-    plusX, minusX, plusY, minusY, plusZ, minusZ, TensorProductState
+    plusX, minusX, plusY, minusY, plusZ, minusZ, TensorProductState, zeros_state
 from pyquil.paulis import sI, sX, sY, sZ, PauliSum, PauliTerm, is_identity
 from pyquil.unitary_tools import lifted_pauli, lifted_state_operator
 
@@ -58,12 +58,23 @@ def _state_tomo_settings(qubits: Sequence[int]):
         o_op = functools.reduce(mul, (op(q) for op, q in zip(o_ops, qubits)), sI())
 
         yield ExperimentSetting(
-            in_operator=sI(),
+            in_state=zeros_state(qubits),
             out_operator=o_op,
         )
 
 
 def generate_state_tomography_experiment(program: Program, qubits: List[int]):
+    """Generate a (pyQuil) TomographyExperiment containing the experimental settings required
+    to characterize a quantum state.
+
+    To collect data, try::
+
+        from pyquil.operator_estimation import measure_observables
+        results = list(measure_observables(qc=qc, tomo_experiment=experiment, n_shots=100_000))
+
+    :param program: The program to prepare a state to tomographize
+    :param qubits: The qubits to tomographize
+    """
     return PyQuilTomographyExperiment(settings=list(_state_tomo_settings(qubits)),
                                       program=program, qubits=qubits)
 
@@ -809,87 +820,77 @@ def project_density_matrix(rho) -> np.ndarray:
     return rho_projected
 
 
-def unshim_TomographyData(data: TomographyData):
-    results = [ExperimentResult(
-        setting=ExperimentSetting(sI(), sI()),
-        expectation=1.0,
-        stddev=0.0,
-        total_counts=data.counts[0]  # hack!
-    )]
-    for iop, oop, exp, var, count in zip(data.in_ops, data.out_ops, data.expectations,
-                                         data.variances, data.counts):
-        results.append(ExperimentResult(
-            setting=ExperimentSetting(iop, oop),
-            expectation=exp,
-            stddev=np.sqrt(var),
-            total_counts=count,
-        ))
-    return results
+def _resample_expectations_with_beta(results, prior_counts=1):
+    """Resample expectation values by constructing a beta distribution and sampling from it.
+
+    Used by :py:func:`estimate_variance`.
+
+    :param results: A list of ExperimentResults
+    :param prior_counts: Number of "counts" to add to alpha and beta for the beta distribution
+        from which we sample.
+    :return: A new list of ``results`` where each ExperimentResult's ``expectation`` field
+        contained a resampled expectation value
+    """
+    resampled_results = []
+    for result in results:
+        # reconstruct the raw counts of observations from the pauli observable mean
+        num_plus = ((result.expectation + 1) / 2) * result.total_counts
+        num_minus = result.total_counts - num_plus
+
+        # We resample this data assuming it was from a beta distribution,
+        # with additive smoothing
+        alpha = num_plus + prior_counts
+        beta = num_minus + prior_counts
+
+        # transform bit bias back to pauli expectation value
+        resampled_expect = 2 * np.random.beta(alpha, beta) - 1
+        resampled_results += [ExperimentResult(
+            setting=result.setting,
+            expectation=resampled_expect,
+            stddev=result.stddev,
+            total_counts=result.total_counts,
+        )]
+    return resampled_results
 
 
 def estimate_variance(results: List[ExperimentResult],
                       qubits: List[int],
                       tomo_estimator: Callable,
                       functional: Callable,
-                      target_state='null',
+                      target_state=None,
                       n_resamples: int = 40,
                       project_to_physical: bool = False) -> Tuple[float, float]:
     """
-    Use a simple bootstrap-like method to return an errorbar on some
-    functional of the quantum state.
+    Use a simple bootstrap-like method to return an errorbar on some functional of the
+    quantum state.
 
-    :param exp_data: A namedtuple, called 'state_tomography_experiment_data'.
-    :param tomo_estimator: takes in state_tomography_experiment_data and yields corresponding state_tomograpy_estimate
-        e.g. linear_inv_state_estimate
-    :param functional: Which functional to find varriance. e.g. dm.purity
-    :param target_state: A density matrix of the state with respect to which the distance functional is measured.
-    :param n_resamples: The number of times to resample. Default value is 40.
-    :param project_to_physical: default is False.
+    :param results: Measured results from a state tomography experiment
+    :param qubits: Qubits that were tomographized.
+    :param tomo_estimator: takes in ``results, qubits`` and returns a corresponding
+        estimate of the state rho, e.g. ``linear_inv_state_estimate``
+    :param functional: Which functional to find variance, e.g. ``dm.purity``.
+    :param target_state: A density matrix of the state with respect to which the distance
+        functional is measured. Not applicable if functional is ``dm.purity``.
+    :param n_resamples: The number of times to resample.
+    :param project_to_physical: Whether to project the estimated state to a physical one
+        with :py:func:`project_density_matrix`.
     """
-    exp_data = shim_pyquil_results_to_TomographyData(
-        program=None,
-        qubits=qubits,
-        results=results
-    )
-
     if functional != dm.purity:
-        if target_state == 'null':
-            print('Unless purity is used as a functional you must specify a target.')
+        if target_state is None:
+            raise ValueError("You're not using the `purity` functional. "
+                             "Please specify a target state.")
 
     sample_estimate = []
-    pauli_expect = exp_data.expectations
+    for _ in range(n_resamples):
+        resampled_results = _resample_expectations_with_beta(results)
+        estimate = tomo_estimator(resampled_results, qubits)
 
-    counts = exp_data.counts
-    for ndx in range(0, n_resamples):
-        results = []
-        for idx in range(0, len(pauli_expect)):
-            count = counts[idx]
-
-            # reconstruct the raw counts of observations from the pauli observable mean
-            mean_p = np.real(pauli_expect[idx])
-            num_plus = transform_pauli_moments_to_bit(mean_p, 0)[0] * count
-            num_minus = count - num_plus
-
-            # We resample this data assuming it was from a beta distribution, with additive smoothing
-            alpha = num_plus + 1
-            beta = num_minus + 1
-
-            # transform bit bias back to pauli expectation value
-            resample, _ = transform_bit_moments_to_pauli(np.random.beta(alpha, beta), 0)
-            results.append(resample)
-
-        # update tomography experiment data with resampled results
-        ulam_data = replace(exp_data, expectations=results)
-        # Stanislaw Ulam's method
-
-        # estimate the state
-        estimate = tomo_estimator(unshim_TomographyData(ulam_data), qubits)
-
-        # Shim! over different return values between linear inv. and mle
+        # TODO: Shim! over different return values between linear inv. and mle
         if isinstance(estimate, np.ndarray):
             rho = estimate
         else:
             rho = estimate.estimate.state_point_est
+
         if project_to_physical:
             rho = project_density_matrix(rho)
 
