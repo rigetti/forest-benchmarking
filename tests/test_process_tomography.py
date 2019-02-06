@@ -15,7 +15,7 @@ from pyquil.api import QuantumComputer
 from pyquil.api._compiler import _extract_attribute_dictionary_from_program
 from pyquil.api._qac import AbstractCompiler
 from pyquil.device import NxDevice
-from pyquil.gates import CNOT, I, RZ
+from pyquil.gates import CNOT, I, RZ, X
 from pyquil.numpy_simulator import NumpyWavefunctionSimulator
 from pyquil.operator_estimation import measure_observables, ExperimentResult, TomographyExperiment, \
     _one_q_state_prep
@@ -129,20 +129,21 @@ def measurement_func(request):
         raise ValueError()
 
 
+@pytest.fixture(params=['X', 'haar'])
+def single_q_process(request):
+    if request.param == 'X':
+        return Program(X(0)), mat.X
+    elif request.param == 'haar':
+        u_rand = haar_rand_unitary(2 ** 1, rs=np.random.RandomState(52))
+        process = Program().defgate("RandUnitary", u_rand)
+        process += ("RandUnitary", 0)
+        return process, u_rand
+
+
 @pytest.fixture()
-def single_q_tomo_fixture(basis, measurement_func):
+def single_q_tomo_fixture(basis, single_q_process, measurement_func):
     qubits = [0]
-
-    # Generate random unitary
-    u_rand = haar_rand_unitary(2 ** 1, rs=np.random.RandomState(52))
-    process = Program().defgate("RandUnitary", u_rand)
-    process.inst([("RandUnitary", q) for q in qubits])
-
-    process = Program()
-    process += RZ(np.pi, 0)
-    u_rand = np.array([[1, 0], [0, -1]])
-
-    # Get data from QVM
+    process, u_rand = single_q_process
     tomo_expt = generate_process_tomography_experiment(process, qubits, in_basis=basis)
     results = measurement_func(tomo_expt)
 
