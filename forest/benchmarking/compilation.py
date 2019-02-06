@@ -101,6 +101,7 @@ def _CNOT(q1, q2):
     p.inst(_H(q2))
     return p
 
+
 def CNOT_X_basis(control, target) -> Program:
     """
     The CNOT in the X basis, i.e.

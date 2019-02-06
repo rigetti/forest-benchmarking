@@ -8,14 +8,10 @@ import networkx as nx
 import random
 import pandas as pd
 
-
 from pyquil.gates import CNOT, CCNOT, X, Z, I, H, CZ, MEASURE, RESET
 from pyquil.quilbase import Pragma
 from pyquil.quil import Program
 from pyquil.api import QuantumComputer
-
-from forest_benchmarking.compilation import CNOT_X_basis
-
 
 def generate_connected_subgraphs(G: nx.Graph, n_vert: int):
     '''
@@ -74,13 +70,9 @@ def random_two_bit_gates(graph: nx.Graph, in_x_basis: bool = False):
 
     program = Program()
     # do the two coloring?
-    program += Pragma('COMMUTING_BLOCKS')
     for a, b in graph.edges:
         if random.random()>0.5:
-            program += Pragma('BLOCK')
             program += cnot_gate(a, b)
-            program += Pragma('END_BLOCK')
-    program += Pragma('END_COMMUTING_BLOCKS')
     return program
 
 
@@ -119,13 +111,10 @@ def generate_random_classial_circuit_with_depth(graph: nx.Graph,
     prog += [prep_gate(qubit) for qubit in list(graph.nodes)]
 
     for ddx in range(1, depth + 1):
-        # preserve block ensures the compiler doesn't compile the circuit away
-        prog += Pragma('PRESERVE_BLOCK')
         # random one qubit gates
         prog += random_single_bit_gates(graph, in_x_basis)
         # random two qubit gates
         prog += random_two_bit_gates(graph, in_x_basis)
-        prog += Pragma('END_PRESERVE_BLOCK')
 
     # if in X basis change back to Z basis for measurement
     if in_x_basis:
@@ -339,3 +328,21 @@ def interpolate_2d_landscape(points, values, resolution=200, interp_method='near
     )
     zz = scipy.interpolate.griddata(points, values, (xx, yy), method=interp_method)
     return xx, yy, zz
+
+def CNOT_X_basis(control, target) -> Program:
+    """
+    The CNOT in the X basis, i.e.
+
+    CNOTX = |+X+| * I + |-X-| * Z
+
+    where |+> and |-> are the +/- eigenstate of the Pauli X operator and * denotes a tensor product.
+
+    :param control: qubit label
+    :param target: qubit label
+    :return: program
+    """
+    prog = Program()
+    prog += H(control)
+    prog += CZ(control, target)
+    prog += H(control)
+    return prog
