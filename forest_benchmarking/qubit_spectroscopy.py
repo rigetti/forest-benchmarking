@@ -3,6 +3,7 @@ from typing import Union, List, Tuple
 import numpy as np
 import pandas as pd
 from scipy import optimize
+from matplotlib import pyplot as plt
 
 from pyquil.api import QuantumComputer
 from pyquil.gates import RX, RZ, CZ, MEASURE
@@ -10,6 +11,13 @@ from pyquil.quil import Program
 from pyquil.quilbase import Pragma
 
 
+MICROSECOND = 1e-6 # A microsecond (us) is an SI unit of time 
+NANOSECOND = 1e-9  # A nanosecond (ns) is an SI unit of time 
+
+
+# ===================================================================================================
+#   T1 
+# ===================================================================================================
 def generate_single_t1_experiment(qubits: Union[int, List[int]],
                                   time: float,
                                   n_shots: int = 1000) -> Program:
@@ -41,7 +49,7 @@ def generate_single_t1_experiment(qubits: Union[int, List[int]],
 def generate_t1_experiments(qubits: Union[int, List[int]],
                             stop_time: float,
                             n_shots: int = 1000,
-                            num_points: int = 15) -> List[Tuple[float, Program]]:
+                            n_points: int = 15) -> List[Tuple[float, Program]]:
     """
     Return a list of programs which ran in sequence constitute a t1 experiment to measure the
     decay time from the excited state to ground state.
@@ -54,33 +62,28 @@ def generate_t1_experiments(qubits: Union[int, List[int]],
     """
     start_time = 0
     time_and_programs = []
-    for t in np.linspace(start_time, stop_time, num_points):
+    for t in np.linspace(start_time, stop_time, n_points):
         t = round(t, 7)  # try to keep time on 100ns boundaries
         time_and_programs.append((t, generate_single_t1_experiment(qubits, t, n_shots)))
     return time_and_programs
 
 
-def run_t1(qc: QuantumComputer,
-           qubits: Union[int, List[int]],
-           stop_time: float,
-           n_shots: int = 1000,
-           num_points: int = 15,
-           filename: str = None) -> pd.DataFrame:
+def acquire_data_t1(qc: QuantumComputer,
+                    t1_experiment: List[Tuple[float, Program]],
+                   ) -> pd.DataFrame:
     """
     Execute experiments to measure the t1 decay time of 1 or more qubits.
 
-    :param qc: The QuantumComputer to run the experiment on.
-    :param qubits: Which qubits to measure.
-    :param stop_time: The maximum decay time to measure at.
-    :param n_shots: The number of shots to average over for each data point.
-    :param num_points: The number of points for each t1 curve.
-    :param filename: The name of the file to write JSON-serialized results to.
+    :param qc: The QuantumComputer to run the experiment on
+    :param t1_experiment: list of tuples in the form: (time, t1 program with decay of that time)
+    :return: pandas DataFrame
     """
     results = []
-    for t, program in generate_t1_experiments(qubits, stop_time, n_shots, num_points):
+    for t, program in t1_experiment:
         executable = qc.compiler.native_quil_to_executable(program)
         bitstrings = qc.run(executable)
-
+        
+        qubits = list(program.get_qubits())
         for i in range(len(qubits)):
             avg = np.mean(bitstrings[:, i])
             results.append({
@@ -91,10 +94,96 @@ def run_t1(qc: QuantumComputer,
             })
 
     df = pd.DataFrame(results)
-    if filename is not None:
-        df.to_json(filename)
+
     return df
 
+def fit_t1(df):
+    """
+    Fit T1 experimental data.
+
+    :param df: Experimental T1 results to plot and fit exponential decay curve to.
+    :return: List of dicts.
+    """
+    results = []
+    
+    for q in df['qubit'].unique():
+        df2 = df[df['qubit'] == q].sort_values('time')
+        x_data = df2['time']
+        y_data = df2['avg']
+
+        try:
+            fit_params, fit_params_errs = fit_to_exponential_decay_curve(x_data, y_data)
+            results.append({
+                'qubit': q,
+                'T1': fit_params[1] / MICROSECOND,
+                'fit_params': fit_params,
+                'fit_params_errs':fit_params_errs,
+                'message': None,
+            })
+        except RuntimeError:
+            print(f"Could not fit to experimental data for qubit {q}")
+            results.append({
+                'qubit': q,
+                'T1': None,
+                'fit_params': None,
+                'fit_params_errs': None,
+                'message': 'Could not fit to experimental data for qubit' + str(q),
+            })
+            
+    return results
+
+def plot_t1_fit_over_data(df: pd.DataFrame,
+                          qubits: list = None,
+                          filename: str = None) -> None:
+    """
+    Plot T1 experimental data and fitted exponential decay curve.
+
+    :param df: Experimental results to plot and fit exponential decay curve to.
+    :param qubits: A list of qubits that you actually want plotted. The default is all qubits. 
+    :param qc_type: String indicating whether QVM or QPU was used to collect data.
+    :return: None
+    """
+    if qubits is None:
+        qubits = df['qubit'].unique().tolist()
+        
+    # check the user specified valid qubits
+    for qbx in qubits:
+        if qbx not in df['qubit'].unique():
+            raise ValueError("The list of qubits does not match the ones you experimented on.") 
+    
+    for q in qubits: 
+        df2 = df[df['qubit'] == q].sort_values('time')
+        x_data = df2['time']
+        y_data = df2['avg']
+
+        plt.plot(x_data, y_data, 'o-', label=f"QC{q} T1 data")
+
+        try:
+            fit_params, fit_params_errs = fit_to_exponential_decay_curve(x_data, y_data)
+        except RuntimeError:
+            print(f"Could not fit to experimental data for qubit {q}")
+        else:
+            plt.plot(x_data, exponential_decay_curve(x_data, *fit_params),
+                     label=f"QC{q} fit: T1={fit_params[1] / MICROSECOND:.2f}us")
+
+    plt.xlabel("Time [s]")
+    plt.ylabel("Pr(measuring 1)")
+    plt.title("T1 decay")
+
+    plt.legend(loc='best')
+    plt.tight_layout()
+    if filename is not None:
+        plt.savefig(filename)
+    plt.show()
+    
+
+# save qubit spec
+#    :param filename: The name of the file to write JSON-serialized results to.
+# filename: str = None
+#    if filename is not None:
+#        df.to_json(filename)
+
+# ===================================================================================================
 
 def generate_single_t2_experiment(qubits: Union[int, List[int]],
                                   time: float,
