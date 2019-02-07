@@ -13,7 +13,7 @@ from pyquil.quilbase import Pragma
 
 MICROSECOND = 1e-6 # A microsecond (us) is an SI unit of time 
 NANOSECOND = 1e-9  # A nanosecond (ns) is an SI unit of time 
-
+MHZ = 1e6 # Megahetz
 
 # ===================================================================================================
 #   T1 
@@ -97,7 +97,7 @@ def acquire_data_t1(qc: QuantumComputer,
 
     return df
 
-def fit_t1(df):
+def fit_t1(df: pd.DataFrame):
     """
     Fit T1 experimental data.
 
@@ -156,17 +156,17 @@ def plot_t1_fit_over_data(df: pd.DataFrame,
         x_data = df2['time']
         y_data = df2['avg']
 
-        plt.plot(x_data, y_data, 'o-', label=f"QC{q} T1 data")
+        plt.plot(x_data / MICROSECOND, y_data, 'o-', label=f"QC{q} T1 data")
 
         try:
             fit_params, fit_params_errs = fit_to_exponential_decay_curve(x_data, y_data)
         except RuntimeError:
             print(f"Could not fit to experimental data for qubit {q}")
         else:
-            plt.plot(x_data, exponential_decay_curve(x_data, *fit_params),
+            plt.plot(x_data / MICROSECOND, exponential_decay_curve(x_data, *fit_params),
                      label=f"QC{q} fit: T1={fit_params[1] / MICROSECOND:.2f}us")
 
-    plt.xlabel("Time [s]")
+    plt.xlabel("Time [us]")
     plt.ylabel("Pr(measuring 1)")
     plt.title("T1 decay")
 
@@ -175,22 +175,17 @@ def plot_t1_fit_over_data(df: pd.DataFrame,
     if filename is not None:
         plt.savefig(filename)
     plt.show()
-    
 
-# save qubit spec
-#    :param filename: The name of the file to write JSON-serialized results to.
-# filename: str = None
-#    if filename is not None:
-#        df.to_json(filename)
 
 # ===================================================================================================
-
-def generate_single_t2_experiment(qubits: Union[int, List[int]],
-                                  time: float,
-                                  detuning: float,
-                                  n_shots: int = 1000) -> Program:
+#   T2
+# ===================================================================================================
+def generate_single_t2_star_experiment(qubits: Union[int, List[int]],
+                                       time: float,
+                                       detuning: float,
+                                       n_shots: int = 1000) -> Program:
     """
-    Return a t2 program in native Quil for a single time point.
+    Return a T2 star program in native Quil for a single time point.
 
     :param qubits: Which qubits to measure.
     :param time: The decay time before measurement.
@@ -217,56 +212,49 @@ def generate_single_t2_experiment(qubits: Union[int, List[int]],
     return program
 
 
-def generate_t2_experiments(qubits: Union[int, List[int]],
-                            stop_time: float,
-                            detuning: float = 5e6,
-                            n_shots: int = 1000,
-                            num_points: int = 15) -> List[Tuple[float, Program]]:
+def generate_t2_star_experiments(qubits: Union[int, List[int]],
+                                 stop_time: float,
+                                 detuning: float = 5e6,
+                                 n_shots: int = 1000,
+                                 num_points: int = 15) -> List[Tuple[float, Program]]:
     """
-    Return a list of programs which ran in sequence constitute a t2 experiment to measure the
-    t2 coherence decay time.
+    Return a list of programs which ran in sequence constitute a T2 star experiment to measure the
+    T2 star coherence decay time.
 
     :param qubits: Which qubits to measure.
     :param stop_time: The maximum decay time to measure at.
     :param detuning: The additional detuning frequency about the z axis.
     :param n_shots: The number of shots to average over for each data point.
-    :param num_points: The number of points for each t2 curve.
-    :return: list of tuples in the form: (time, t2 program with decay of that time)
+    :param num_points: The number of points for each T2 curve.
+    :return: list of tuples in the form: (time, T2 program with decay of that time)
     """
     start_time = 0
     time_and_programs = []
     for t in np.linspace(start_time, stop_time, num_points):
         # TODO: avoid aliasing while being mindful of the 20ns resolution in the QCS stack
-        time_and_programs.append((t, generate_single_t2_experiment(qubits, t, detuning,
-                                                                   n_shots=n_shots)))
+        time_and_programs.append((t, generate_single_t2_star_experiment(qubits, t, detuning,
+                                                                        n_shots=n_shots)))
     return time_and_programs
 
 
-def run_t2(qc: QuantumComputer,
-           qubits: Union[int, List[int]],
-           stop_time: float,
-           detuning: float = 5e6,
-           n_shots: int = 1000,
-           num_points: int = 50,
-           filename: str = None) -> Tuple[pd.DataFrame, float]:
+def acquire_data_t2_star(qc: QuantumComputer,
+                         t2_experiment: List[Tuple[float, Program]],
+                         detuning: float = 5e6,
+                        ) -> Tuple[pd.DataFrame, float]:
     """
-    Execute experiments to measure the t2 decay time of 1 or more qubits.
+    Execute experiments to measure the T2 star decay time of 1 or more qubits.
 
-    :param qc: The QuantumComputer to run the experiment on.
-    :param qubits: Which qubits to measure.
-    :param stop_time: The maximum decay time to measure at.
+    :param qc: The QuantumComputer to run the experiment on
+    :param t2_experiment: list of tuples in the form: (time, T2 program with decay of that time)
     :param detuning: The additional detuning frequency about the z axis.
-    :param n_shots: The number of shots to average over for each data point.
-    :param num_points: The number of points for each t2 curve.
-    :param filename: The name of the file to write JSON-serialized results to.
-    :return: T2 results, detuning used in creating experiments for those results
+    :return: pandas DataFrame containing T2 results, and detuning used in creating experiments for those results.
     """
     results = []
-    for t, program in generate_t2_experiments(qubits, stop_time, detuning=detuning,
-                                              n_shots=n_shots, num_points=num_points):
+    for t, program in t2_experiment:
         executable = qc.compiler.native_quil_to_executable(program)
         bitstrings = qc.run(executable)
-
+        
+        qubits = list(program.get_qubits())
         for i in range(len(qubits)):
             avg = np.mean(bitstrings[:, i])
             results.append({
@@ -276,10 +264,288 @@ def run_t2(qc: QuantumComputer,
                 'avg': float(avg),
             })
 
-    if filename:
-        pd.DataFrame(results).to_json(filename)
     return pd.DataFrame(results), detuning
 
+
+def fit_t2_star(df: pd.DataFrame, detuning: float):
+    """
+    Fit T2 star experimental data.
+
+    :param df: Experimental T2 results to plot and fit exponential decay curve to.
+    :param detuning: Detuning frequency used in experiment creation.
+    :return: List of dicts.
+    """
+    results = []
+    
+    for q in df['qubit'].unique():
+        df2 = df[df['qubit'] == q].sort_values('time')
+        x_data = df2['time']
+        y_data = df2['avg']
+
+        try:
+            fit_params, fit_params_errs = fit_to_exponentially_decaying_sinusoidal_curve(x_data,
+                                                                                         y_data,
+                                                                                         detuning)
+            
+            results.append({
+                'qubit': q,
+                'T2': fit_params[1] / MICROSECOND,
+                'Freq':fit_params[2] / MHZ,
+                'fit_params': fit_params,
+                'fit_params_errs':fit_params_errs,
+                'message': None,
+            })
+        except RuntimeError:
+            print(f"Could not fit to experimental data for qubit {q}")
+            results.append({
+                'qubit': q,
+                'T2': None,
+                'Freq': None,
+                'fit_params': None,
+                'fit_params_errs': None,
+                'message': 'Could not fit to experimental data for qubit' + str(q),
+            })
+       
+    return results
+
+
+def plot_t2_star_fit_over_data(df: pd.DataFrame,
+                               qubits: list = None,
+                               detuning: float = 5e6,
+                               filename: str = None) -> None:
+    """
+    Plot T2 star experimental data and fitted exponential decay curve.
+
+    :param df: Experimental results to plot and fit exponential decay curve to.
+    :param qubits: A list of qubits that you actually want plotted. The default is all qubits. 
+    :param detuning: Detuning frequency used in experiment creation.
+    :return: None
+    """
+    if qubits is None:
+        qubits = df['qubit'].unique().tolist()
+        
+    # check the user specified valid qubits
+    for qbx in qubits:
+        if qbx not in df['qubit'].unique():
+            raise ValueError("The list of qubits does not match the ones you experimented on.") 
+    
+    for q in qubits: 
+        df2 = df[df['qubit'] == q].sort_values('time')
+        x_data = df2['time']
+        y_data = df2['avg']
+
+        plt.plot(x_data / MICROSECOND, y_data, 'o-', label=f"Qubit {q} T2 data")
+
+        try:
+            fit_params, fit_params_errs = fit_to_exponentially_decaying_sinusoidal_curve(x_data,
+                                                                                         y_data,
+                                                                                         detuning)
+        except RuntimeError:
+            print(f"Could not fit to experimental data for qubit {q}")
+        else:
+            plt.plot(x_data / MICROSECOND, exponentially_decaying_sinusoidal_curve(x_data, *fit_params),
+                     label=f"QC{q} fit: freq={fit_params[2] / MHZ:.2f}MHz, "f"T2={fit_params[1] / MICROSECOND:.2f}us")
+
+    plt.xlabel("Time [us]")
+    plt.ylabel("Pr(measuring 1)")
+    plt.title("T2 (Ramsey) decay")
+
+    plt.legend(loc='best')
+    plt.tight_layout()
+    if filename is not None:
+        plt.savefig(filename)
+    plt.show()
+
+# ===================================================================================================
+#   T2 echo (Hahn echo)
+# ===================================================================================================
+def generate_single_t2_echo_experiment(qubits: Union[int, List[int]],
+                                       time: float,
+                                       detuning: float,
+                                       n_shots: int = 1000) -> Program:
+    """
+    Return a T2 echo program in native Quil for a single time point.
+
+    :param qubits: Which qubits to measure.
+    :param time: The decay time before measurement.
+    :param detuning: The additional detuning frequency about the z axis.
+    :param n_shots: The number of shots to average over for the data point.
+    :return: A T2 Program.
+    """
+    program = Program()
+
+    try:
+        len(qubits)
+    except TypeError:
+        qubits = [qubits]
+
+    ro = program.declare('ro', 'BIT', len(qubits))
+    for q in qubits:
+        # prepare plus state |+>
+        program += RX(np.pi / 2, q)
+        # wait half of the delay
+        program += Pragma('DELAY', [q], str(time/2))
+        # apply an X gate compiled out of RX(90)
+        program += RX(np.pi / 2, q)
+        program += RX(np.pi / 2, q)
+        # wait the other half of the delay
+        program += Pragma('DELAY', [q], str(time/2))
+        program += RZ(2 * np.pi * time * detuning, q)
+        program += RX(np.pi / 2, q)
+    for i in range(len(qubits)):
+        program += MEASURE(qubits[i], ro[i])
+    program.wrap_in_numshots_loop(n_shots)
+    return program
+
+
+def generate_t2_echo_experiments(qubits: Union[int, List[int]],
+                                 stop_time: float,
+                                 detuning: float = 5e6,
+                                 n_shots: int = 1000,
+                                 num_points: int = 15) -> List[Tuple[float, Program]]:
+    """
+    Return a list of programs which ran in sequence constitute a T2 echo experiment to measure the
+    T2 echo coherence decay time.
+
+    :param qubits: Which qubits to measure.
+    :param stop_time: The maximum decay time to measure at.
+    :param detuning: The additional detuning frequency about the z axis.
+    :param n_shots: The number of shots to average over for each data point.
+    :param num_points: The number of points for each T2 curve.
+    :return: list of tuples in the form: (time, T2 program with decay of that time)
+    """
+    start_time = 0
+    time_and_programs = []
+    for t in np.linspace(start_time, stop_time, num_points):
+        # TODO: avoid aliasing while being mindful of the 20ns resolution in the QCS stack
+        time_and_programs.append((t, generate_single_t2_echo_experiment(qubits, t, detuning,
+                                                                        n_shots=n_shots)))
+    return time_and_programs
+
+
+def acquire_data_t2_echo(qc: QuantumComputer,
+                         t2_experiment: List[Tuple[float, Program]],
+                         detuning: float = 5e6,
+                        ) -> Tuple[pd.DataFrame, float]:
+    """
+    Execute experiments to measure the T2 echo decay time of 1 or more qubits.
+
+    :param qc: The QuantumComputer to run the experiment on
+    :param t2_experiment: list of tuples in the form: (time, T2 program with decay of that time)
+    :param detuning: The additional detuning frequency about the z axis.
+    :return: pandas DataFrame containing T2 results, and detuning used in creating experiments for those results.
+    """
+    results = []
+    for t, program in t2_experiment:
+        executable = qc.compiler.native_quil_to_executable(program)
+        bitstrings = qc.run(executable)
+        
+        qubits = list(program.get_qubits())
+        for i in range(len(qubits)):
+            avg = np.mean(bitstrings[:, i])
+            results.append({
+                'qubit': qubits[i],
+                'time': t,
+                'n_bitstrings': len(bitstrings),
+                'avg': float(avg),
+            })
+
+    return pd.DataFrame(results), detuning
+
+
+def fit_t2_echo(df: pd.DataFrame, detuning: float):
+    """
+    Fit T2 star experimental data.
+
+    :param df: Experimental T2 results to plot and fit exponential decay curve to.
+    :param detuning: Detuning frequency used in experiment creation.
+    :return: List of dicts.
+    """
+    results = []
+    
+    for q in df['qubit'].unique():
+        df2 = df[df['qubit'] == q].sort_values('time')
+        x_data = df2['time']
+        y_data = df2['avg']
+
+        try:
+            fit_params, fit_params_errs = fit_to_exponentially_decaying_sinusoidal_curve(x_data,
+                                                                                         y_data,
+                                                                                         detuning)
+            
+            results.append({
+                'qubit': q,
+                'T2': fit_params[1] / MICROSECOND,
+                'Freq':fit_params[2] / MHZ,
+                'fit_params': fit_params,
+                'fit_params_errs':fit_params_errs,
+                'message': None,
+            })
+        except RuntimeError:
+            print(f"Could not fit to experimental data for qubit {q}")
+            results.append({
+                'qubit': q,
+                'T2': None,
+                'Freq': None,
+                'fit_params': None,
+                'fit_params_errs': None,
+                'message': 'Could not fit to experimental data for qubit' + str(q),
+            })
+       
+    return results
+
+
+def plot_t2_echo_fit_over_data(df: pd.DataFrame,
+                               qubits: list = None,
+                               detuning: float = 5e6,
+                               filename: str = None) -> None:
+    """
+    Plot T2 echo experimental data and fitted exponential decay curve.
+
+    :param df: Experimental results to plot and fit exponential decay curve to.
+    :param qubits: A list of qubits that you actually want plotted. The default is all qubits. 
+    :param detuning: Detuning frequency used in experiment creation.
+    :return: None
+    """
+    if qubits is None:
+        qubits = df['qubit'].unique().tolist()
+        
+    # check the user specified valid qubits
+    for qbx in qubits:
+        if qbx not in df['qubit'].unique():
+            raise ValueError("The list of qubits does not match the ones you experimented on.") 
+    
+    for q in qubits: 
+        df2 = df[df['qubit'] == q].sort_values('time')
+        x_data = df2['time']
+        y_data = df2['avg']
+
+        plt.plot(x_data / MICROSECOND, y_data, 'o-', label=f"Qubit {q} T2 data")
+
+        try:
+            fit_params, fit_params_errs = fit_to_exponentially_decaying_sinusoidal_curve(x_data,
+                                                                                         y_data,
+                                                                                         detuning)
+        except RuntimeError:
+            print(f"Could not fit to experimental data for qubit {q}")
+        else:
+            plt.plot(x_data / MICROSECOND, exponentially_decaying_sinusoidal_curve(x_data, *fit_params),
+                     label=f"QC{q} fit: freq={fit_params[2] / MHZ:.2f}MHz, "f"T2={fit_params[1] / MICROSECOND:.2f}us")
+
+    plt.xlabel("Time [us]")
+    plt.ylabel("Pr(measuring 1)")
+    plt.title("T2 (Ramsey) decay")
+
+    plt.legend(loc='best')
+    plt.tight_layout()
+    if filename is not None:
+        plt.savefig(filename)
+    plt.show()
+
+
+# ===================================================================================================
+#   Rabi
+# ===================================================================================================
 
 def generate_single_rabi_experiment(qubits: Union[int, List[int]],
                                     theta: float,
@@ -366,6 +632,9 @@ def run_rabi(qc: QuantumComputer,
         pd.DataFrame(results).to_json(filename)
     return pd.DataFrame(results)
 
+# ===================================================================================================
+#   CZ phase Ramsey
+# ===================================================================================================
 
 def generate_parametric_cz_phase_ramsey_program(qcid: int,
                                                 other_qcid: int) -> Program:
@@ -443,6 +712,10 @@ def run_cz_phase_ramsey(qc: QuantumComputer,
         pd.DataFrame(results).to_json(filename)
     return pd.DataFrame(results)
 
+
+# ===================================================================================================
+#   Fits and so forth
+# ===================================================================================================
 
 def exponential_decay_curve(t: Union[float, np.ndarray],
                             amplitude: float,
