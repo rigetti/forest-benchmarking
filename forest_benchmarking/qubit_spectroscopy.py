@@ -382,7 +382,7 @@ def fit_t2(df: pd.DataFrame, detuning: float):
 def plot_t2_fit_over_data(df: pd.DataFrame,
                           qubits: list = None,
                           detuning: float = 5e6,
-                          type: str = 'unknown',
+                          t2_type: str = 'unknown',
                           filename: str = None) -> None:
     """
     Plot T2 star or T2 echo experimental data and fitted exponential decay curve.
@@ -423,9 +423,9 @@ def plot_t2_fit_over_data(df: pd.DataFrame,
 
     plt.xlabel("Time [µs]")
     plt.ylabel("Pr(measuring 1)")
-    if type.lower() =='star':
+    if t2_type.lower() =='star':
         plt.title("$T_2^*$ (Ramsey) decay")
-    elif type.lower() =='echo':
+    elif t2_type.lower() =='echo':
         plt.title("$T_2$ (Echo) decay")
     else:
         plt.title("$T_2$ (unknown) decay")
@@ -597,45 +597,10 @@ def fit_rabi(df: pd.DataFrame):
                 'fit_params_errs': None,
                 'message': 'Could not fit to experimental data for qubit' + str(q),
             })
-      return results
-
-def plot_rabi_oscillations(df: pd.DataFrame) -> None:
-    """
-    Plot the Rabi results.
-    """
-    for q in df['qubit'].unique():
-        df2 = df[df['qubit'] == q].sort_values('angle')
-        angles = df2['angle']
-        excited_state_visibilities = df2['avg']
-
-        # plot raw data
-        plt.plot(angles, excited_state_visibilities, 'o-', label=f"QC{q} Rabi data")
-
-        try:
-            # fit to sinusoid
-            fit_params, _ = fit_to_sinusoidal_waveform(angles, excited_state_visibilities)
-        except RuntimeError:
-            # TODO: make into a warning rather than just printing it out
-            print(f"Could not fit to experimental data for QC{q}")
-        else:
-            # overlay fitted sinusoidal curve
-            plt.plot(angles, sinusoidal_waveform(angles, *fit_params),
-                     label=f"QC{q} fitted line")
-
-    plt.xlabel("RX angle [rad]")
-    plt.ylabel("Excited state visibility")
-    plt.title("Rabi flop")
-
-    plt.legend(loc='best')
-    plt.tight_layout()
-    plt.savefig('rabi.png')
-    plt.show()
-
+    return results
 
 def plot_rabi_fit_over_data(df: pd.DataFrame,
                           qubits: list = None,
-                          detuning: float = 5e6,
-                          type: str = 'unknown',
                           filename: str = None) -> None:
     """
     Plot T2 star or T2 echo experimental data and fitted exponential decay curve.
@@ -656,33 +621,26 @@ def plot_rabi_fit_over_data(df: pd.DataFrame,
             raise ValueError("The list of qubits does not match the ones you experimented on.")
 
     for q in qubits:
-        df2 = df[df['qubit'] == q].sort_values('time')
-        x_data = df2['time']
-        y_data = df2['avg']
+        df2 = df[df['qubit'] == q].sort_values('angle')
+        angles = df2['angle']
+        prob_of_one = df2['avg']
 
-        plt.plot(x_data / MICROSECOND, y_data, 'o-', label=f"Qubit {q} T2 data")
+        # plot raw data
+        plt.plot(angles, prob_of_one, 'o-', label=f"qubit {q} Rabi data")
 
         try:
-            fit_params, fit_params_errs = fit_to_exponentially_decaying_sinusoidal_curve(x_data,
-                                                                                         y_data,
-                                                                                         detuning)
+            # fit to sinusoid
+            fit_params, fit_params_errs = fit_to_sinusoidal_waveform(angles, prob_of_one)
+            
         except RuntimeError:
             print(f"Could not fit to experimental data for qubit {q}")
         else:
-            plt.plot(x_data / MICROSECOND,
-                     exponentially_decaying_sinusoidal_curve(x_data, *fit_params),
-                     label=f"QC{q} fit: freq={fit_params[2] / MHZ:.2f}MHz, "
-                           f""f"T2={fit_params[1] / MICROSECOND:.2f}us")
+            # overlay fitted sinusoidal curve
+            plt.plot(angles, sinusoidal_waveform(angles, *fit_params), label=f"qubit {q} fitted line")
 
-    plt.xlabel("Time [µs]")
+    plt.xlabel("RX angle [rad]")
     plt.ylabel("Pr(measuring 1)")
-    if type.lower() =='star':
-        plt.title("$T_2^*$ (Ramsey) decay")
-    elif type.lower() =='echo':
-        plt.title("$T_2$ (Echo) decay")
-    else:
-        plt.title("$T_2$ (unknown) decay")
-
+    plt.title("Rabi flop")
     plt.legend(loc='best')
     plt.tight_layout()
     if filename is not None:
