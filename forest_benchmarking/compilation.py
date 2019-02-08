@@ -112,6 +112,7 @@ def _T(q1):
 def _SWAP(q1, q2):
     """
      A SWAP in terms of _CNOT
+
          .. note:
         This uses :py:func:`_CNOT`, so it picks up a global phase.
         Don't control this gate.
