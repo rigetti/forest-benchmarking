@@ -10,17 +10,18 @@ from pyquil.gates import RX, RZ, CZ, MEASURE
 from pyquil.quil import Program
 from pyquil.quilbase import Pragma
 
-MILLISECOND = 1e-6 # A millisecond (ms) is an SI unit of time
-MICROSECOND = 1e-6 # A microsecond (us) is an SI unit of time
+MILLISECOND = 1e-6  # A millisecond (ms) is an SI unit of time
+MICROSECOND = 1e-6  # A microsecond (us) is an SI unit of time
 NANOSECOND = 1e-9  # A nanosecond (ns) is an SI unit of time
 
-# 1 Hertz (Hz) is a derived unit of frequency in SI Units; it is defined as one cycle per second.
+# A Hertz (Hz) is a derived unit of frequency in SI Units; 1 Hz is defined as one cycle per second.
 KHZ = 1e3  # kHz
 MHZ = 1e6  # MHz
 GHZ = 1e9  # GHz
 
+
 # ==================================================================================================
-#   T1 
+#   T1
 # ==================================================================================================
 def generate_single_t1_experiment(qubits: Union[int, List[int]],
                                   time: float,
@@ -145,7 +146,7 @@ def plot_t1_fit_over_data(df: pd.DataFrame,
     Plot T1 experimental data and fitted exponential decay curve.
 
     :param df: Experimental results to plot and fit exponential decay curve to.
-    :param qubits: A list of qubits that you actually want plotted. The default is all qubits. 
+    :param qubits: A list of qubits that you actually want plotted. The default is all qubits.
     :param qc_type: String indicating whether QVM or QPU was used to collect data.
     :return: None
     """
@@ -388,7 +389,7 @@ def plot_t2_fit_over_data(df: pd.DataFrame,
     Plot T2 star or T2 echo experimental data and fitted exponential decay curve.
 
     :param df: Experimental results to plot and fit exponential decay curve to.
-    :param qubits: A list of qubits that you actually want plotted. The default is all qubits. 
+    :param qubits: A list of qubits that you actually want plotted. The default is all qubits.
     :param detuning: Detuning frequency used in experiment creation.
     :param type: String either 'star' or 'echo'.
     :param filename: String.
@@ -423,9 +424,9 @@ def plot_t2_fit_over_data(df: pd.DataFrame,
 
     plt.xlabel("Time [µs]")
     plt.ylabel("Pr(measuring 1)")
-    if t2_type.lower() =='star':
+    if t2_type.lower() == 'star':
         plt.title("$T_2^*$ (Ramsey) decay")
-    elif t2_type.lower() =='echo':
+    elif t2_type.lower() == 'echo':
         plt.title("$T_2$ (Echo) decay")
     else:
         plt.title("$T_2$ (unknown) decay")
@@ -440,8 +441,6 @@ def plot_t2_fit_over_data(df: pd.DataFrame,
 # ==================================================================================================
 #   TODO CPMG
 # ==================================================================================================
-
-
 
 
 # ==================================================================================================
@@ -500,42 +499,9 @@ def generate_rabi_experiments(qubits: Union[int, List[int]],
     return angle_and_programs
 
 
-def run_rabi(qc: QuantumComputer,
-             qubits: Union[int, List[int]],
-             n_shots: int = 1000,
-             num_points: int = 15,
-             filename: str = None) -> pd.DataFrame:
-    """
-    Execute experiments to measure Rabi flop one or more qubits.
-
-    :param qc: The QuantumComputer to run the experiment on.
-    :param qubits: Which qubits to measure.
-    :param n_shots: The number of shots to average over for each data point.
-    :param num_points: The number of points for each Rabi curve.
-    :param filename: The name of the file to write JSON-serialized results to.
-    :return: DataFrame with Rabi results.
-    """
-    results = []
-    for theta, program in generate_rabi_experiments(qubits, n_shots, num_points):
-        executable = qc.compiler.native_quil_to_executable(program)
-        bitstrings = qc.run(executable)
-
-        for i in range(len(qubits)):
-            avg = np.mean(bitstrings[:, i])
-            results.append({
-                'qubit': qubits[i],
-                'angle': theta,
-                'n_bitstrings': len(bitstrings),
-                'avg': float(avg),
-            })
-
-    if filename:
-        pd.DataFrame(results).to_json(filename)
-    return pd.DataFrame(results)
-
 def acquire_data_rabi(qc: QuantumComputer,
-                    rabi_experiment: List[Tuple[float, Program]],
-                    ) -> pd.DataFrame:
+                      rabi_experiment: List[Tuple[float, Program]],
+                      filename: str = None) -> pd.DataFrame:
     """
     Execute experiments to measure Rabi flop one or more qubits.
 
@@ -558,7 +524,10 @@ def acquire_data_rabi(qc: QuantumComputer,
                 'avg': float(avg),
             })
 
+    if filename:
+        pd.DataFrame(results).to_json(filename)
     return pd.DataFrame(results)
+
 
 def fit_rabi(df: pd.DataFrame):
     """
@@ -599,9 +568,10 @@ def fit_rabi(df: pd.DataFrame):
             })
     return results
 
+
 def plot_rabi_fit_over_data(df: pd.DataFrame,
-                          qubits: list = None,
-                          filename: str = None) -> None:
+                            qubits: list = None,
+                            filename: str = None) -> None:
     """
     Plot T2 star or T2 echo experimental data and fitted exponential decay curve.
 
@@ -631,15 +601,16 @@ def plot_rabi_fit_over_data(df: pd.DataFrame,
         try:
             # fit to sinusoid
             fit_params, fit_params_errs = fit_to_sinusoidal_waveform(angles, prob_of_one)
-            
+
         except RuntimeError:
             print(f"Could not fit to experimental data for qubit {q}")
         else:
             # overlay fitted sinusoidal curve
-            plt.plot(angles, sinusoidal_waveform(angles, *fit_params), label=f"qubit {q} fitted line")
+            plt.plot(angles, sinusoidal_waveform(angles, *fit_params),
+                     label=f"qubit {q} fitted line")
 
     plt.xlabel("RX angle [rad]")
-    plt.ylabel("Pr(measuring 1)")
+    plt.ylabel("Pr($|1\langle)")
     plt.title("Rabi flop")
     plt.legend(loc='best')
     plt.tight_layout()
@@ -652,44 +623,69 @@ def plot_rabi_fit_over_data(df: pd.DataFrame,
 #   CZ phase Ramsey
 # ==================================================================================================
 
-def generate_parametric_cz_phase_ramsey_program(qcid: int,
-                                                other_qcid: int) -> Program:
+def generate_cz_phase_ramsey_program(qb: int, other_qb: int, n_shots: int = 1000) -> Program:
     """
     Generate a single CZ phase Ramsey experiment at a given phase.
 
-    :param qcid: The qubit to move around the Bloch sphere and measure the incurred RZ on.
-    :param other_qcid: The other qubit that constitutes a two-qubit pair along with `qcid`.
+    :param qb: The qubit to move around the Bloch sphere and measure the incurred RZ on.
+    :param other_qb: The other qubit that constitutes a two-qubit pair along with `qb`.
+    :param n_shots: The number of shots to average over for each data point.
     :param phase: The phase kick to supply after playing the CZ pulse on the equator.
     :param num_shots: The number of shots to average over for the data point.
     :return: A parametric Program for performing a CZ Ramsey experiment.
     """
     program = Program()
-    # NOTE: only need readout register for `qcid` not `other_qcid` since `other_qcid` is only
+    # NOTE: only need readout register for `qb` not `other_qb` since `other_qb` is only
     #       needed to identify which CZ gate we're using
     ro = program.declare('ro', 'BIT', 1)
     theta = program.declare('theta', 'REAL')
 
     # go to the equator
-    program += Program(RX(np.pi / 2, qcid))
+    program += Program(RX(np.pi / 2, qb))
     # apply the CZ gate - note that CZ is symmetric, so the order of qubits doesn't matter
-    program += Program(CZ(qcid, other_qcid))
+    program += Program(CZ(qb, other_qb))
     # go to |1> after a phase kick
-    program += Program(RZ(theta, qcid), RX(np.pi / 2, qcid))
+    program += Program(RZ(theta, qb), RX(np.pi / 2, qb))
 
-    program += MEASURE(qcid, ro[0])
+    program += MEASURE(qb, ro[0])
 
+    program.wrap_in_numshots_loop(n_shots)
     return program
 
 
-def run_cz_phase_ramsey(qc: QuantumComputer,
-                        qubits: Tuple[int, int],
-                        start_phase: float = 0.0,
-                        stop_phase: float = 2 * np.pi,
-                        num_points: int = 15,
-                        num_shots: int = 1000,
-                        filename: str = None) -> pd.DataFrame:
+
+def generate_cz_phase_ramsey_experiment(edges: List[Tuple[int, int]],
+                                        start_phase: float = 0.0,
+                                        stop_phase: float = 2 * np.pi,
+                                        num_points: int = 15,
+                                        num_shots: int = 1000):
+    '''
+    Returns a list of parameters and programs that constitute a CZ phase ramsey experiment.
+
+    :param edges: List of Tuples containing edges that one can perform a CZ on.
+    :param start_phase: The starting phase for the CZ phase Ramsey experiment.
+    :param stop_phase: The stopping phase for the CZ phase Ramsey experiment.
+    :param num_points: The number of points to sample at between the starting and stopping phase.
+    :param num_shots: The number of shots to average over for each data point.
+    :return: [start_phase, stop_phase, num_points, num_shots, list_of_programs]
+    '''
+
+    progs = []
+    for edge in edges:
+        qubit, other_qubit = edge
+        parametric_ramsey_prog = generate_cz_phase_ramsey_program(qubit, other_qubit)
+        progs.append(parametric_ramsey_prog)
+
+    return [start_phase, stop_phase, num_points, num_shots, progs]
+
+
+
+
+def acquire_data_cz_phase_ramsey(qc: QuantumComputer,
+                                 cz_experiment: list,
+                                 filename: str = None) -> pd.DataFrame:
     """
-    Execute experiments to measure the RZ incurred as a result of a CZ pulse.
+    Execute experiments to measure the RZ incurred as a result of a CZ gate.
 
     :param qc: The qubit to move around the Bloch sphere and measure the incurred RZ on.
     :param qubits: A list of two connected qubits to perform CZ phase Ramsey experiments on.
@@ -701,12 +697,13 @@ def run_cz_phase_ramsey(qc: QuantumComputer,
     :return: The JSON-serialized results from CZ phase Ramsey experiment.
     """
     # TODO: verify that `qubits` is a list of two connected qubits and raise an exception otherwise
+
+    start_phase, stop_phase, num_points, num_shots, cz_progs = cz_experiment
+
     results = []
 
-    for qubit in qubits:
-        other_qubit = remove_qubits_from_qubit_list(list(qubits), qubit)
+    for parametric_ramsey_prog in cz_progs:
 
-        parametric_ramsey_prog = generate_parametric_cz_phase_ramsey_program(qubit, other_qubit)
         binary = compile_parametric_program(qc, parametric_ramsey_prog, num_shots=num_shots)
         qc.qam.load(binary)
 
@@ -727,6 +724,93 @@ def run_cz_phase_ramsey(qc: QuantumComputer,
     if filename:
         pd.DataFrame(results).to_json(filename)
     return pd.DataFrame(results)
+
+
+def fit_cz_phase_ramsey(df: pd.DataFrame):
+    """
+    Fit Rabi experimental data.
+
+    :param df: Experimental T2 results to plot and fit exponential decay curve to.
+    :param detuning: Detuning frequency used in experiment creation.
+    :return: List of dicts.
+    """
+    results = []
+
+    qubits = df['qubit'].unique()
+    for idx, qubit in enumerate(qubits):
+        qubit_df = df[df['qubit'] == qubit].sort_values('phase')
+        phases = qubit_df['phase']
+        prob_of_one = qubit_df['avg']
+
+        try:
+            # fit to sinusoid
+            fit_params, fit_params_errs = fit_to_sinusoidal_waveform(phases, prob_of_one)
+
+            results.append({
+                'qubit': qubit,
+                'angle': fit_params[1],
+                'prob_of_one': fit_params[2],
+                'fit_params': fit_params,
+                'fit_params_errs': fit_params_errs,
+                'message': None,
+            })
+        except RuntimeError:
+            print(f"Could not fit to experimental data for qubit {q}")
+            results.append({
+                'qubit': qubit,
+                'angle': None,
+                'prob_of_one': None,
+                'fit_params': None,
+                'fit_params_errs': None,
+                'message': 'Could not fit to experimental data for qubit' + str(q),
+            })
+    return results
+
+
+def plot_cz_phase_fringes_fit_over_data(df: pd.DataFrame,
+                                        filename: str = None) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Plot Ramsey experimental data, the fitted sinusoid, and the maximum of that sinusoid.
+
+    :param df: Experimental results to plot and fit exponential decay curve to.
+    :return: None
+    """
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+    qubits = df['qubit'].unique()
+    for idx, qubit in enumerate(qubits):
+        qubit_df = df[df['qubit'] == qubit].sort_values('phase')
+        phases = qubit_df['phase']
+        prob_of_one = qubit_df['avg']
+
+        # plot raw data
+        axes[idx].plot(phases, prob_of_one, 'o', label=f"qubit{qubit} CZ Ramsey data")
+
+        try:
+            # fit to sinusoid
+            fit_params, fit_params_errs = fit_to_sinusoidal_waveform(phases,
+                                                                     prob_of_one)
+        except RuntimeError:
+            print(f"Could not fit to experimental data for qubit {qubit}")
+        else:
+            # find max excited state visibility (ESV) and propagate error from fit params
+            max_ESV, max_ESV_err = get_peak_from_fit_params(fit_params, fit_params_errs)
+
+            # overlay fitted curve and vertical line at maximum ESV
+            axes[idx].plot(phases, sinusoidal_waveform(phases, *fit_params),
+                           label=f"QC{qubit} fitted line")
+            axes[idx].axvline(max_ESV,
+                              label=f"QC{qubit} max ESV={max_ESV:.3f}+/-{max_ESV_err:.3f} rad")
+
+        axes[idx].set_xlabel("Phase on second +X/2 gate [rad]")
+        axes[idx].set_ylabel("Pr($|1\langle)")
+        axes[idx].set_title(f"CZ Phase Ramsey fringes on QC{qubit}\n"
+                            f"due to CZ_{min(qubits)}_{max(qubits)} application")
+        axes[idx].legend(loc='best')
+
+    if filename is not None:
+        plt.savefig(filename)
+    plt.show()
 
 
 # ==================================================================================================
