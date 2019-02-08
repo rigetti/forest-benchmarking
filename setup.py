@@ -53,6 +53,7 @@ setup(
         'scipy',
         'sympy',
         'python-rapidjson',
-        'cvxpy'
+        'cvxpy',
+        'tqdm'
     ],
 )
