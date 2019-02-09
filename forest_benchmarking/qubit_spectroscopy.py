@@ -653,7 +653,6 @@ def generate_cz_phase_ramsey_program(qb: int, other_qb: int, n_shots: int = 1000
     return program
 
 
-
 def generate_cz_phase_ramsey_experiment(edges: List[Tuple[int, int]],
                                         start_phase: float = 0.0,
                                         stop_phase: float = 2 * np.pi,
@@ -673,12 +672,10 @@ def generate_cz_phase_ramsey_experiment(edges: List[Tuple[int, int]],
     progs = []
     for edge in edges:
         qubit, other_qubit = edge
-        parametric_ramsey_prog = generate_cz_phase_ramsey_program(qubit, other_qubit)
+        parametric_ramsey_prog = generate_cz_phase_ramsey_program(qubit, other_qubit, num_shots)
         progs.append(parametric_ramsey_prog)
 
     return [start_phase, stop_phase, num_points, num_shots, progs]
-
-
 
 
 def acquire_data_cz_phase_ramsey(qc: QuantumComputer,
@@ -696,15 +693,15 @@ def acquire_data_cz_phase_ramsey(qc: QuantumComputer,
     :param filename: The name of the file to write JSON-serialized results to.
     :return: The JSON-serialized results from CZ phase Ramsey experiment.
     """
-    # TODO: verify that `qubits` is a list of two connected qubits and raise an exception otherwise
-
     start_phase, stop_phase, num_points, num_shots, cz_progs = cz_experiment
 
     results = []
 
     for parametric_ramsey_prog in cz_progs:
 
+        qubits = list(parametric_ramsey_prog.get_qubits())
         binary = compile_parametric_program(qc, parametric_ramsey_prog, num_shots=num_shots)
+
         qc.qam.load(binary)
 
         for theta in np.linspace(start_phase, stop_phase, num_points):
@@ -715,7 +712,9 @@ def acquire_data_cz_phase_ramsey(qc: QuantumComputer,
 
             avg = np.mean(bitstrings[:, 0])
             results.append({
-                'qubit': qubit,
+                'edges': qubits,
+                'qb1': qubits[0],
+                'qb2': qubits[1],
                 'phase': theta,
                 'n_bitstrings': len(bitstrings),
                 'avg': float(avg),
@@ -728,26 +727,27 @@ def acquire_data_cz_phase_ramsey(qc: QuantumComputer,
 
 def fit_cz_phase_ramsey(df: pd.DataFrame):
     """
-    Fit Rabi experimental data.
+    Fit CZ phase ramsey experimental data.
 
-    :param df: Experimental T2 results to plot and fit exponential decay curve to.
+    :param df: Experimental results to plot and fit exponential decay curve to.
     :param detuning: Detuning frequency used in experiment creation.
     :return: List of dicts.
     """
     results = []
 
-    qubits = df['qubit'].unique()
+    qubits = df['qb1'].unique()
     for idx, qubit in enumerate(qubits):
-        qubit_df = df[df['qubit'] == qubit].sort_values('phase')
+        qubit_df = df[df['qb1'] == qubit].sort_values('phase')
         phases = qubit_df['phase']
         prob_of_one = qubit_df['avg']
+        edge = qubit_df['edges']
 
         try:
             # fit to sinusoid
             fit_params, fit_params_errs = fit_to_sinusoidal_waveform(phases, prob_of_one)
 
             results.append({
-                'qubit': qubit,
+                'edges': edge,
                 'angle': fit_params[1],
                 'prob_of_one': fit_params[2],
                 'fit_params': fit_params,
@@ -755,14 +755,14 @@ def fit_cz_phase_ramsey(df: pd.DataFrame):
                 'message': None,
             })
         except RuntimeError:
-            print(f"Could not fit to experimental data for qubit {q}")
+            print(f"Could not fit to experimental data for edge {edge}")
             results.append({
-                'qubit': qubit,
+                'edges': edge,
                 'angle': None,
                 'prob_of_one': None,
                 'fit_params': None,
                 'fit_params_errs': None,
-                'message': 'Could not fit to experimental data for qubit' + str(q),
+                'message': 'Could not fit to experimental data for edge' + str(edge),
             })
     return results
 
@@ -776,10 +776,10 @@ def plot_cz_phase_fringes_fit_over_data(df: pd.DataFrame,
     :return: None
     """
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-
-    qubits = df['qubit'].unique()
+    qubits = df['qb1'].unique()
     for idx, qubit in enumerate(qubits):
-        qubit_df = df[df['qubit'] == qubit].sort_values('phase')
+
+        qubit_df = df[df['qb1'] == qubit].sort_values('phase')
         phases = qubit_df['phase']
         prob_of_one = qubit_df['avg']
 
