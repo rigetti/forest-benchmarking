@@ -140,8 +140,8 @@ def estimate_t1(df: pd.DataFrame):
 
 
 def plot_t1_estimate_over_data(df: pd.DataFrame,
-                          qubits: list = None,
-                          filename: str = None) -> None:
+                               qubits: list = None,
+                               filename: str = None) -> None:
     """
     Plot T1 experimental data and estimated value of T1 as and exponential decay curve.
 
@@ -318,7 +318,8 @@ def acquire_data_t2(qc: QuantumComputer,
     :param qc: The QuantumComputer to run the experiment on
     :param t2_experiment: list of tuples in the form: (time, T2 program with decay of that time)
     :param detuning: The additional detuning frequency about the z axis.
-    :return: pandas DataFrame containing T2 results, and detuning used in creating experiments for those results.
+    :return: pandas DataFrame containing T2 results, and detuning used in creating experiments for
+    those results.
     """
     results = []
     for t, program in t2_experiment:
@@ -338,9 +339,9 @@ def acquire_data_t2(qc: QuantumComputer,
     return pd.DataFrame(results), detuning
 
 
-def fit_t2(df: pd.DataFrame, detuning: float):
+def estimate_t2(df: pd.DataFrame, detuning: float):
     """
-    Fit T2 star or T2 echo experimental data.
+    Estimate T2 star or T2 echo from experimental data.
 
     :param df: Experimental T2 results to plot and fit exponential decay curve to.
     :param detuning: Detuning frequency used in experiment creation.
@@ -380,13 +381,14 @@ def fit_t2(df: pd.DataFrame, detuning: float):
     return results
 
 
-def plot_t2_fit_over_data(df: pd.DataFrame,
-                          qubits: list = None,
-                          detuning: float = 5e6,
-                          t2_type: str = 'unknown',
-                          filename: str = None) -> None:
+def plot_t2_estimate_over_data(df: pd.DataFrame,
+                               qubits: list = None,
+                               detuning: float = 5e6,
+                               t2_type: str = 'unknown',
+                               filename: str = None) -> None:
     """
-    Plot T2 star or T2 echo experimental data and fitted exponential decay curve.
+    Plot T2 star or T2 echo experimental data and estimated value of T1 as and exponential decay
+    curve.
 
     :param df: Experimental results to plot and fit exponential decay curve to.
     :param qubits: A list of qubits that you actually want plotted. The default is all qubits.
