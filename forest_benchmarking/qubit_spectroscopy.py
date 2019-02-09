@@ -103,12 +103,12 @@ def acquire_data_t1(qc: QuantumComputer,
     return df
 
 
-def fit_t1(df: pd.DataFrame):
+def estimate_t1(df: pd.DataFrame):
     """
-    Fit T1 experimental data.
+    Estimate T1 from experimental data.
 
-    :param df: Experimental T1 results to plot and fit exponential decay curve to.
-    :return: List of dicts.
+    :param df: Experimental T1 results to plot and fit exponential decay curve to
+    :return: List of dicts with estimates and error bars
     """
     results = []
 
@@ -139,11 +139,11 @@ def fit_t1(df: pd.DataFrame):
     return results
 
 
-def plot_t1_fit_over_data(df: pd.DataFrame,
+def plot_t1_estimate_over_data(df: pd.DataFrame,
                           qubits: list = None,
                           filename: str = None) -> None:
     """
-    Plot T1 experimental data and fitted exponential decay curve.
+    Plot T1 experimental data and estimated value of T1 as and exponential decay curve.
 
     :param df: Experimental results to plot and fit exponential decay curve to.
     :param qubits: A list of qubits that you actually want plotted. The default is all qubits.
