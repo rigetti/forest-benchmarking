@@ -508,7 +508,7 @@ def acquire_data_rabi(qc: QuantumComputer,
     Execute experiments to measure Rabi flop one or more qubits.
 
     :param qc: The QuantumComputer to run the experiment on.
-    :param rabi_experiment: list of tuples in the form: (time, T2 program with decay of that time)
+    :param rabi_experiment: list of tuples in the form: (theta, Rabi program)
     :return: DataFrame with Rabi results.
     """
     results = []
@@ -531,12 +531,11 @@ def acquire_data_rabi(qc: QuantumComputer,
     return pd.DataFrame(results)
 
 
-def fit_rabi(df: pd.DataFrame):
+def estimate_rabi(df: pd.DataFrame):
     """
-    Fit Rabi experimental data.
+    Estimate Rabi oscillation from experimental data.
 
-    :param df: Experimental T2 results to plot and fit exponential decay curve to.
-    :param detuning: Detuning frequency used in experiment creation.
+    :param df: Experimental Rabi results to estimate.
     :return: List of dicts.
     """
     results = []
@@ -571,16 +570,14 @@ def fit_rabi(df: pd.DataFrame):
     return results
 
 
-def plot_rabi_fit_over_data(df: pd.DataFrame,
-                            qubits: list = None,
-                            filename: str = None) -> None:
+def plot_rabi_estimate_over_data(df: pd.DataFrame,
+                                 qubits: list = None,
+                                 filename: str = None) -> None:
     """
-    Plot T2 star or T2 echo experimental data and fitted exponential decay curve.
+    Plot Rabi oscillation experimental data and estimated curve.
 
-    :param df: Experimental results to plot and fit exponential decay curve to.
+    :param df: Experimental results to plot and fit curve to.
     :param qubits: A list of qubits that you actually want plotted. The default is all qubits.
-    :param detuning: Detuning frequency used in experiment creation.
-    :param type: String either 'star' or 'echo'.
     :param filename: String.
     :return: None
     """
