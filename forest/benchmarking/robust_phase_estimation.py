@@ -14,6 +14,24 @@ from forest.benchmarking.utils import transform_bit_moments_to_pauli, local_paul
 import matplotlib.pyplot as plt
 
 
+def rpe_dataframe(subgraph: List[Tuple], num_depths: int, ):
+
+    def df_dict():
+        for exponent in range(num_depths):
+            depth = 2 ** exponent
+            for meas_dir in ['X', 'Y']:
+                yield {"Subgraph": subgraph,
+                       "Depth": depth,
+                       "Meas_Direction": meas_dir,
+                       "Experiment": generate_single_depth_rpe_experiment(rotation, axis, depth,
+                                                                          meas_dir,
+                                                                          measurement_qubit,
+                                                                          custom_prep)}
+
+    # TODO: Put dtypes on this DataFrame in the right way
+    return DataFrame(df_dict())
+
+
 def prepare_state_about_axis(qubit: int, axis: Tuple[float, float]) -> Program:
     """
     Generates a program that prepares a state perpendicular to the given (theta, phi) axis on
@@ -24,7 +42,7 @@ def prepare_state_about_axis(qubit: int, axis: Tuple[float, float]) -> Program:
     is the polar angle, theta, in radians from the pauli Z axis (north pole or zero state on the
     Bloch sphere). The second entry is the azimuthal angle, phi, of the axis from the X-Z plane
     of the Bloch sphere. The prepared state is a point on the sphere whose radial line is
-    perpendicular to the supplied axis.
+    perpendicular to the supplied axis; the state is pi radians in the theta direction from axis.
 
     For example, the axis (0, 0) corresponds to an RPE experiment estimating the angle parameter
     of the rotation RZ(angle). The initial state of this experiment would be the plus one
@@ -109,9 +127,9 @@ def generate_single_depth_rpe_experiment(rotation: Program, axis: Tuple[float, f
     return experiment
 
 
-def generate_rpe_experiments(rotation: Program, axis: Tuple[float, float], num_depths: int = 5,
-                             measurement_qubit: int = None, custom_prep: Program = None) \
-        -> DataFrame:
+def generate_single_rpe_experiment(rotation: Program, axis: Tuple[float, float],
+                                   num_depths: int = 5, measurement_qubit: int = None,
+                                   custom_prep: Program = None) -> DataFrame:
     """
     Generate a dataframe containing all the experiments needed to perform robust phase estimation
     to estimate the angle of rotation about the given axis performed by the given rotation program.
@@ -169,6 +187,9 @@ def generate_rpe_experiments(rotation: Program, axis: Tuple[float, float], num_d
 
     # TODO: Put dtypes on this DataFrame in the right way
     return DataFrame(df_dict())
+
+
+def generate_rpe_experiments()
 
 
 def get_additive_error_factor(M_j: float, max_additive_error: float) -> float:
@@ -340,6 +361,7 @@ def robust_phase_estimate(xs: List, ys: List, x_stds: List, y_stds: List,
                           bloch_data: List = None) -> float:
     """
     Estimate the phase in an iterative fashion as described in section V. of [RPE]
+
     Note: in the realistic case that additive errors are present, the estimate is biased.
     See Appendix B of [RPE] for discussion/comparison to other techniques.
 
