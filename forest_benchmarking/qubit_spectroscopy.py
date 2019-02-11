@@ -739,36 +739,38 @@ def estimate_cz_phase_ramsey(df: pd.DataFrame):
     :return: List of dicts.
     """
     results = []
+    edges = df['edges'].unique()
 
-    qubits = df['qb1'].unique()
-    for idx, qubit in enumerate(qubits):
-        qubit_df = df[df['qb1'] == qubit].sort_values('phase')
-        phases = qubit_df['phase']
-        prob_of_one = qubit_df['avg']
-        edge = qubit_df['edges']
+    for id_row, edge in enumerate(edges):
 
-        try:
-            # fit to sinusoid
-            fit_params, fit_params_errs = fit_to_sinusoidal_waveform(phases, prob_of_one)
+        for id_col, qubit in enumerate(edge):
+            qubit_df = df[(df['rz_qb'] == qubit) & (df['edges'] == edge)].sort_values('phase')
+            phases = qubit_df['phase']
+            prob_of_one = qubit_df['avg']
 
-            results.append({
-                'edges': edge,
-                'angle': fit_params[1],
-                'prob_of_one': fit_params[2],
-                'fit_params': fit_params,
-                'fit_params_errs': fit_params_errs,
-                'message': None,
-            })
-        except RuntimeError:
-            print(f"Could not fit to experimental data for edge {edge}")
-            results.append({
-                'edges': edge,
-                'angle': None,
-                'prob_of_one': None,
-                'fit_params': None,
-                'fit_params_errs': None,
-                'message': 'Could not fit to experimental data for edge' + str(edge),
-            })
+            try:
+                # fit to sinusoid
+                fit_params, fit_params_errs = fit_to_sinusoidal_waveform(phases, prob_of_one)
+                results.append({
+                    'edges': edge,
+                    'rz_qb': rz_qb,
+                    'angle': fit_params[1],
+                    'prob_of_one': fit_params[2],
+                    'fit_params': fit_params,
+                    'fit_params_errs': fit_params_errs,
+                    'message': None,
+                })
+            except RuntimeError:
+                print(f"Could not fit to experimental data for edge {edge}")
+                results.append({
+                    'edges': edge,
+                    'rz_qb': rz_qb,
+                    'angle': None,
+                    'prob_of_one': None,
+                    'fit_params': None,
+                    'fit_params_errs': None,
+                    'message': 'Could not fit to experimental data for edge' + str(edge),
+                })
     return results
 
 
