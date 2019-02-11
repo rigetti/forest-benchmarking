@@ -669,12 +669,17 @@ def generate_cz_phase_ramsey_experiment(edges: List[Tuple[int, int]],
     '''
 
     progs = []
+    rz_qubit = []  # this is the qubit to which the RZ is applied
     for edge in edges:
         qubit, other_qubit = edge
         parametric_ramsey_prog = generate_cz_phase_ramsey_program(qubit, other_qubit, num_shots)
         progs.append(parametric_ramsey_prog)
+        rz_qubit.append(qubit)
+        parametric_ramsey_prog = generate_cz_phase_ramsey_program(other_qubit, qubit, num_shots)
+        progs.append(parametric_ramsey_prog)
+        rz_qubit.append(other_qubit)
 
-    return [start_phase, stop_phase, num_points, num_shots, progs]
+    return [start_phase, stop_phase, num_points, num_shots, rz_qubit, progs]
 
 
 def acquire_data_cz_phase_ramsey(qc: QuantumComputer,
@@ -692,11 +697,11 @@ def acquire_data_cz_phase_ramsey(qc: QuantumComputer,
     :param filename: The name of the file to write JSON-serialized results to.
     :return: The JSON-serialized results from CZ phase Ramsey experiment.
     """
-    start_phase, stop_phase, num_points, num_shots, cz_progs = cz_experiment
+    start_phase, stop_phase, num_points, num_shots, rz_qubit, cz_progs = cz_experiment
 
     results = []
 
-    for parametric_ramsey_prog in cz_progs:
+    for rz_qb, parametric_ramsey_prog in zip(rz_qubit, cz_progs):
 
         qubits = list(parametric_ramsey_prog.get_qubits())
         binary = compile_parametric_program(qc, parametric_ramsey_prog, num_shots=num_shots)
@@ -711,9 +716,10 @@ def acquire_data_cz_phase_ramsey(qc: QuantumComputer,
 
             avg = np.mean(bitstrings[:, 0])
             results.append({
-                'edges': qubits,
+                'edges': tuple(qubits),
                 'qb1': qubits[0],
                 'qb2': qubits[1],
+                'rz_qb': rz_qb,
                 'phase': theta,
                 'n_bitstrings': len(bitstrings),
                 'avg': float(avg),
@@ -774,39 +780,41 @@ def plot_cz_phase_estimate_over_data(df: pd.DataFrame,
     :param df: Experimental results to plot and fit exponential decay curve to.
     :return: None
     """
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-    qubits = df['qb1'].unique()
-    for idx, qubit in enumerate(qubits):
+    edges = df['edges'].unique()
+    fig, axes = plt.subplots(nrows=len(edges), ncols=2, figsize=(24, 30))
 
-        qubit_df = df[df['qb1'] == qubit].sort_values('phase')
-        phases = qubit_df['phase']
-        prob_of_one = qubit_df['avg']
+    for id_row, edge in enumerate(edges):
 
-        # plot raw data
-        axes[idx].plot(phases, prob_of_one, 'o', label=f"qubit{qubit} CZ Ramsey data")
+        for id_col, qubit in enumerate(edge):
+            qubit_df = df[(df['rz_qb'] == qubit) & (df['edges'] == edge)].sort_values('phase')
+            phases = qubit_df['phase']
+            prob_of_one = qubit_df['avg']
 
-        try:
-            # fit to sinusoid
-            fit_params, fit_params_errs = fit_to_sinusoidal_waveform(phases,
-                                                                     prob_of_one)
-        except RuntimeError:
-            print(f"Could not fit to experimental data for qubit {qubit}")
-        else:
-            # find max excited state visibility (ESV) and propagate error from fit params
-            max_ESV, max_ESV_err = get_peak_from_fit_params(fit_params, fit_params_errs)
+            # plot raw data
+            axes[id_row, id_col].plot(phases, prob_of_one, 'o',
+                                      label=f"qubit{qubit} CZ Ramsey data")
 
-            # overlay fitted curve and vertical line at maximum ESV
-            axes[idx].plot(phases, sinusoidal_waveform(phases, *fit_params),
-                           label=f"QC{qubit} fitted line")
-            axes[idx].axvline(max_ESV,
-                              label=f"QC{qubit} max ESV={max_ESV:.3f}+/-{max_ESV_err:.3f} rad")
+            try:
+                # fit to sinusoid
+                fit_params, fit_params_errs = fit_to_sinusoidal_waveform(phases,
+                                                                         prob_of_one)
+            except RuntimeError:
+                print(f"Could not fit to experimental data for qubit {qubit}")
+            else:
+                # find max excited state visibility (ESV) and propagate error from fit params
+                max_ESV, max_ESV_err = get_peak_from_fit_params(fit_params, fit_params_errs)
 
-        axes[idx].set_xlabel("Phase on second +X/2 gate [rad]")
-        axes[idx].set_ylabel("Pr($|1\langle)")
-        axes[idx].set_title(f"CZ Phase Ramsey fringes on QC{qubit}\n"
-                            f"due to CZ_{min(qubits)}_{max(qubits)} application")
-        axes[idx].legend(loc='best')
+                # overlay fitted curve and vertical line at maximum ESV
+                axes[id_row, id_col].plot(phases, sinusoidal_waveform(phases, *fit_params),
+                                          label=f"QC{qubit} fitted line")
+                axes[id_row, id_col].axvline(max_ESV,
+                                             label=f"QC{qubit} max ESV={max_ESV:.3f}+/-{max_ESV_err:.3f} rad")
 
+            axes[id_row, id_col].set_xlabel("Phase on second +X/2 gate [rad]")
+            axes[id_row, id_col].set_ylabel("Pr($|1\langle)")
+            axes[id_row, id_col].set_title(f"CZ Phase Ramsey fringes on QC{qubit}\n"
+                                           f"due to CZ_{edge[0]}_{edge[1]} application")
+            axes[id_row, id_col].legend(loc='best')
     if filename is not None:
         plt.savefig(filename)
     plt.show()
@@ -871,12 +879,15 @@ def sinusoidal_waveform(x: float,
 
 
 def fit_to_sinusoidal_waveform(x_data: np.ndarray,
-                               y_data: List[float]) -> Tuple[np.ndarray, np.ndarray]:
+                               y_data: List[float],
+                               displayflag: bool = False,
+                               ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Fit experimental data to sinusoid.
 
     :param x_data: Independent data to fit to.
     :param y_data: Experimental, dependent data to fit to.
+    :param displayflag: If True displays results from scipy curve fit analysis.
     :return: Arrays of fitted decay curve parameters and their standard deviations
     """
     params, params_covariance = optimize.curve_fit(sinusoidal_waveform, x_data, y_data,
@@ -891,11 +902,12 @@ def fit_to_sinusoidal_waveform(x_data: np.ndarray,
         print_params.append(params[idx])
         print_params.append(params_errs[idx])
 
-    print("scipy curve fitting analysis returned\n"
-          "amplitude:\t{:.5f} +/- {:.5f}\n"
-          "baseline:\t{:.5f} +/- {:.5f}\n"
-          "frequency:\t{:.5f} +/- {:.5f}\n"
-          "x offset:\t{:.5f} +/- {:.5f}".format(*print_params))
+    if displayflag:
+        print("scipy curve fitting analysis returned\n"
+              "amplitude:\t{:.5f} +/- {:.5f}\n"
+              "baseline:\t{:.5f} +/- {:.5f}\n"
+              "frequency:\t{:.5f} +/- {:.5f}\n"
+              "x offset:\t{:.5f} +/- {:.5f}".format(*print_params))
 
     return params, params_errs
 
