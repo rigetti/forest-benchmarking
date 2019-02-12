@@ -23,6 +23,7 @@ GHZ = 1e9  # GHz
 # ==================================================================================================
 #   T1
 # ==================================================================================================
+
 def generate_single_t1_experiment(qubits: Union[int, List[int]],
                                   time: float,
                                   n_shots: int = 1000) -> Program:
@@ -54,7 +55,7 @@ def generate_single_t1_experiment(qubits: Union[int, List[int]],
 def generate_t1_experiments(qubits: Union[int, List[int]],
                             stop_time: float,
                             n_shots: int = 1000,
-                            n_points: int = 15) -> List[Tuple[float, Program]]:
+                            n_points: int = 15) -> pd.DataFrame:
     """
     Return a list of programs which ran in sequence constitute a t1 experiment to measure the
     decay time from the excited state to ground state.
@@ -63,18 +64,22 @@ def generate_t1_experiments(qubits: Union[int, List[int]],
     :param stop_time: The maximum decay time to measure at.
     :param n_shots: The number of shots to average over for each data point.
     :param num_points: The number of points for each t1 curve.
-    :return: list of tuples in the form: (time, t1 program with decay of that time)
+    :return: A dataframe with columns: time, t1 program
     """
     start_time = 0
     time_and_programs = []
+
     for t in np.linspace(start_time, stop_time, n_points):
         t = round(t, 7)  # try to keep time on 100ns boundaries
-        time_and_programs.append((t, generate_single_t1_experiment(qubits, t, n_shots)))
-    return time_and_programs
+        time_and_programs.append({
+            'times': t,
+            'programs': generate_single_t1_experiment(qubits, t, n_shots)
+        })
+    return pd.DataFrame(time_and_programs)
 
 
 def acquire_data_t1(qc: QuantumComputer,
-                    t1_experiment: List[Tuple[float, Program]],
+                    t1_experiment: pd.DataFrame,
                     ) -> pd.DataFrame:
     """
     Execute experiments to measure the t1 decay time of 1 or more qubits.
@@ -84,7 +89,11 @@ def acquire_data_t1(qc: QuantumComputer,
     :return: pandas DataFrame
     """
     results = []
-    for t, program in t1_experiment:
+
+    for index, row in t1_experiment.iterrows():
+        t = row['times']
+        program = row['programs']
+
         executable = qc.compiler.native_quil_to_executable(program)
         bitstrings = qc.run(executable)
 
@@ -96,10 +105,10 @@ def acquire_data_t1(qc: QuantumComputer,
                 'time': t,
                 'n_bitstrings': len(bitstrings),
                 'avg': float(avg),
+                'programs': program,
             })
 
     df = pd.DataFrame(results)
-
     return df
 
 
