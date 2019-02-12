@@ -748,7 +748,7 @@ def acquire_data_cz_phase_ramsey(qc: QuantumComputer,
     return pd.DataFrame(results)
 
 
-def estimate_cz_phase_ramsey(df: pd.DataFrame):
+def estimate_cz_phase_ramsey(df: pd.DataFrame) -> List[Dict]:
     """
     Estimate CZ phase ramsey experimental data.
 
