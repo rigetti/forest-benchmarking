@@ -118,10 +118,10 @@ def hilbert_schmidt_ip(A, B):
 def smith_fidelity(rho, sigma, power):
     """
     Computes the Smith fidelity F_S(rho,sigma,power) between two quantum states rho and sigma.
-    
-    The Smith fidelity is  defined as F_S = sqrt(F)^power, where F is  standard fidelity 
+
+    The Smith fidelity is  defined as F_S = sqrt(F)^power, where F is  standard fidelity
     F = fidelity(rho, sigma). As the power is only defined for values less than 2, F_S > F.
-    At present there is no known operational interpretation of the Smith fidelity for an arbitrary 
+    At present there is no known operational interpretation of the Smith fidelity for an arbitrary
     power.
 
     :param rho: Is a D x D positive matrix.
@@ -129,11 +129,32 @@ def smith_fidelity(rho, sigma, power):
     :param power: Is a positive scalar less than 2.
     :return: Smith Fidelity which is a scalar.
     """
-    if power <0:
+    if power < 0:
         raise ValueError("Power must be positive")
     if power >= 2:
         raise ValueError("Power must be less than 2")
     return np.sqrt(fidelity(rho, sigma)) ** power
+
+
+def total_variation_distance(P, Q):
+    r"""
+    Computes the total variation distance between two probability measures P(x) and Q(x).
+
+    When x is a finite alphabet then the definition is
+
+    tvd(P,Q) = (1/2) \sum_x |P(x) - Q(x)|
+
+    where tvd(P,Q) is in [0,1]. There is an alternate definition for non-finite alphabet measures
+    involving a supremum.
+
+    :param P: Is a numpy array of length D.
+    :param Q: Is a numpy array of length D.
+    :return: total variation distance which is a scalar.
+    """
+    if len(P) != len(Q):
+        raise ValueError("Arrays must be the same length")
+
+    return (np.sum( np.abs(P - Q) ) / 2)
 
 
 # ============================================================================
@@ -175,9 +196,9 @@ def process_fidelity(pauli_lio0: np.ndarray, pauli_lio1: np.ndarray) -> float:
     dim2 = pauli_lio0.shape[0]
     dim = int(np.sqrt(dim2))
 
-    Fe = np.trace( np.matmul( np.transpose(np.conj(pauli_lio0)), pauli_lio1) ) / ( dim ** 2 )
+    Fe = np.trace(np.matmul(np.transpose(np.conj(pauli_lio0)), pauli_lio1)) / (dim ** 2)
 
-    return ( dim * Fe + 1) / (dim + 1)
+    return (dim * Fe + 1) / (dim + 1)
 
 
 def diamond_norm(choi0: np.ndarray, choi1: np.ndarray) -> float:
@@ -192,7 +213,7 @@ def diamond_norm(choi0: np.ndarray, choi1: np.ndarray) -> float:
 
     :param choi0: A 4^N x 4^N matrix (where N is the number of qubits)
     :param choi1: A 4^N x 4^N matrix (where N is the number of qubits)
- 
+
     """
     # Kudos: Based on MatLab code written by Marcus P. da Silva
     # (https://github.com/BBN-Q/matlab-diamond-norm/)
