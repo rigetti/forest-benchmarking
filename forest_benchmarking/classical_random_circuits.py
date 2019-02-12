@@ -247,8 +247,8 @@ def get_random_classical_circuit_results(qc_perfect: QuantumComputer,
 
         # for each graph size flatten the results
         wt_flat = flatten_list(wt)
-        hamming_wt_distr = get_error_hamming_distributions_from_list(wt_flat, subgraph_size
-                                                                    )
+        hamming_wt_distr = get_error_hamming_distributions_from_list(wt_flat, subgraph_size)
+
         # list of dicts. The keys are (depth, width, hamming_dist)
         data.append({'depth': depth, 'width': subgraph_size, 'hamming_dist': hamming_wt_distr})
     return data
