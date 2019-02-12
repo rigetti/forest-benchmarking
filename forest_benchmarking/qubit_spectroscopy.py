@@ -804,7 +804,7 @@ def plot_cz_phase_estimate_over_data(df: pd.DataFrame,
     if len(edges) == 1:
         # this deals with the one edge case, then plot will have an empty row
         # if you don't do this you get `axes.shape = (2,)`
-        fig, axes = plt.subplots(nrows=len(edges) + 1, ncols=2, figsize=(24, 30))
+        fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(24, 30))
     else:
         fig, axes = plt.subplots(nrows=len(edges), ncols=2, figsize=(24, 10 * len(edges)))
 
