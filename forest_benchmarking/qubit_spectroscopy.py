@@ -793,7 +793,7 @@ def estimate_cz_phase_ramsey(df: pd.DataFrame):
 
 
 def plot_cz_phase_estimate_over_data(df: pd.DataFrame,
-                                     filename: str = None) -> Tuple[np.ndarray, np.ndarray]:
+                                     filename: str = None) -> None:
     """
     Plot Ramsey experimental data, the fitted sinusoid, and the maximum of that sinusoid.
 
