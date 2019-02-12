@@ -1,4 +1,4 @@
-from typing import List, Sequence, Tuple, Callable
+from typing import List, Sequence, Tuple, Callable, Dict
 import warnings
 import logging
 log = logging.getLogger(__name__)
@@ -92,6 +92,34 @@ def collect_heavy_outputs(wfn_sim: NumpyWavefunctionSimulator, permutations: np.
     return heavy_outputs
 
 
+def generate_abstract_qv_circuit(depth: int) -> Tuple[List[np.ndarray], np.ndarray]:
+    """
+    Produces an abstract description of the square model circuit of given depth=width used in a
+    quantum volume measurement.
+
+    The description remains abstract as it does not directly reference qubits in a circuit; rather,
+    the circuit is specified as a list of depth many permutations and depth many layers of two
+    qubit gates specified as a depth by depth//2 numpy array whose entries are each a haar random
+    four by four matrix (a single 2 qubit gate). Each permutation is simply a list of the numbers
+    0 through depth-1, where the number x at index i indicates the qubit in position i should be
+    moved to position x. The 4 by 4 matrix at gates[i, j] is the gate acting on the qubits at
+    positions 2j, 2j+1 after the i^th permutation has occurred.
+
+    :param depth: the depth, and also width, of the model circuit
+    :return: the random depth-many permutations and depth by depth//2 many 2q-gates which comprise
+        the model quantum circuit of [QVol] for a given depth.
+    """
+    # generate a simple list representation for each permutation of the depth many qubits
+    permutations = [np.random.permutation(range(depth)) for _ in range(depth)]
+
+    # generate a matrix representation of each 2q gate in the circuit
+    num_gates_per_layer = depth // 2  # if odd number of qubits, don't do anything to last qubit
+    gates = np.asarray([[haar_rand_unitary(4) for _ in range(num_gates_per_layer)]
+                        for _ in range(depth)])
+
+    return permutations, gates
+
+
 def sample_rand_circuits_for_heavy_out(qc: QuantumComputer,
                                        qubits: Sequence[int], depth: int,
                                        program_generator: Callable[[QuantumComputer, Sequence[int],
@@ -123,13 +151,8 @@ def sample_rand_circuits_for_heavy_out(qc: QuantumComputer,
     num_heavy = 0
     # display progress bar using tqdm
     for _ in tqdm(range(num_circuits), disable=not show_progress_bar):
-        # generate a simple list representation for each permutation of the depth many qubits
-        permutations = [np.random.permutation(range(depth)) for _ in range(depth)]
 
-        # generate a matrix representation of each 2q gate in the circuit
-        num_gates_per_layer = depth // 2
-        gates = np.asarray([[haar_rand_unitary(4) for _ in range(num_gates_per_layer)]
-                            for _ in range(depth)])
+        permutations, gates = generate_abstract_qv_circuit(depth)
 
         # generate a PyQuil program in native quil that implements the model circuit
         # The program should measure the output qubits in the order that is consistent with the
@@ -154,142 +177,27 @@ def sample_rand_circuits_for_heavy_out(qc: QuantumComputer,
     return num_heavy
 
 
-def quantum_volume_dataframe(qubits, num_circuits, depths):
+def calculate_prob_est_and_err(num_heavy: int, num_circuits: int, num_shots: int) \
+        -> Tuple[float, float]:
+    """
+    Helper to calculate the estimate for the probability of sampling a heavy output at a
+    particular depth as well as the 2 sigma one-sided confidence interval on this estimate.
 
-    def df_dict():
-        for d in depths:
-            for _ in range(num_circuits):
-                yield OrderedDict({"Qubits": qubits,
-                                   "Depth": d})
+    :param num_heavy: total number of heavy outputs sampled at particular depth across all circuits
+    :param num_circuits: the total number of depth=width model circuits whose output was sampled
+    :param num_shots: the total number of shots taken for each circuit
+    :return: estimate for the probability of sampling a heavy output at a particular depth as
+        well as the 2 sigma one-sided confidence interval on this estimate.
+    """
+    total_sampled_outputs = num_circuits * num_shots
+    prob_sample_heavy = num_heavy / total_sampled_outputs
 
-    return DataFrame(df_dict())
+    # Eq. (C3) of [QVol]. Assume that num_heavy/num_shots is worst-case binomial with param
+    # num_circuits and take gaussian approximation. Get 2 sigma one-sided confidence interval.
+    one_sided_confidence_interval = prob_sample_heavy - \
+        2 * np.sqrt(num_heavy * (num_shots - num_heavy / num_circuits)) / total_sampled_outputs
 
-
-def generate_qv_circuit(depth):
-    # generate a simple list representation for each permutation of the depth many qubits
-    permutations = [np.random.permutation(range(depth)) for _ in range(depth)]
-
-    # generate a matrix representation of each 2q gate in the circuit
-    num_gates_per_layer = depth // 2
-    gates = np.asarray([[haar_rand_unitary(4) for _ in range(num_gates_per_layer)]
-                        for _ in range(depth)])
-
-    return permutations, gates
-
-
-def add_circuits_to_dataframe(df):
-    new_df = df.copy()
-    new_df["Circuit"] = Series([generate_qv_circuit(d) for d in new_df["Depth"].values])
-    return new_df
-
-
-def acquire_qv_data(df, qc, num_shots, use_active_reset = False):
-    new_df = df.copy()
-
-    total_start = time.time()
-
-    def run(qc, qbits, circuit):
-        start = time.time()
-
-        program = _naive_program_generator(qc, qbits, *circuit)
-        actual_qubits = program.get_qubits()
-
-        if use_active_reset:
-            reset_measure_program = Program(RESET())
-            program = reset_measure_program + program
-
-        # run the program num_shots many times
-        program.wrap_in_numshots_loop(num_shots)
-        executable = qc.compiler.native_quil_to_executable(program)
-
-        res = qc.run(executable)
-
-        end = time.time()
-        return res, end - start, actual_qubits
-
-    qubits = new_df["Qubits"].values
-    circuits = new_df["Circuit"].values
-    data = [run(qc, qbits, circuit) for qbits, circuit in zip(qubits, circuits)]
-
-    results = [datum[0] for datum in data]
-    times = [datum[1] for datum in data]
-    act_qubits = [datum[2] for datum in data]
-
-    new_df["Results"] = Series(results)
-    new_df["RunTime"] = Series(times)
-    new_df["Qubits"] = Series(act_qubits)
-
-    total_end = time.time()
-
-    return new_df, total_end-total_start
-
-
-def acquire_heavy_hitters(df):
-    new_df = df.copy()
-
-    total_start = time.time()
-
-    def run(depth, circuit):
-        wfn_sim = NumpyWavefunctionSimulator(depth)
-
-        start = time.time()
-        heavy_outputs = collect_heavy_outputs(wfn_sim, *circuit)
-        end = time.time()
-        return heavy_outputs, end - start
-
-    circuits = new_df["Circuit"].values
-    depths = new_df["Depth"].values
-
-    data = [run(d, ckt) for d, ckt in zip(depths, circuits)]
-
-    heavy_hitters = [datum[0] for datum in data]
-    times = [datum[1] for datum in data]
-
-    new_df["HeavyHitters"] = Series(heavy_hitters)
-    new_df["SimTime"] = Series(times)
-
-    def count_hh_samples(hh, res):
-        num_heavy = 0
-        # determine if each result bitstring is a heavy output, as determined from simulation
-        for result in res:
-            # convert result to int for comparison with heavy outputs.
-            output = bit_array_to_int(result)
-            if output in hh:
-                num_heavy += 1
-        return num_heavy
-
-    exp_results = new_df["Results"].values
-
-    new_df["NumHHSampled"] = Series([count_hh_samples(hh, exp_res) for hh, exp_res in zip(
-        heavy_hitters, exp_results)])
-
-    total_end = time.time()
-
-    return new_df, total_end - total_start
-
-
-def get_results_by_depth(df):
-    depths = df["Depth"].values
-
-    results = {}
-    for depth in depths:
-        single_depth = df.loc[df["Depth"] == depth]
-        num_shots = len(single_depth["Results"].values[0])
-        num_heavy = sum(single_depth["NumHHSampled"].values)
-        num_circuits = len(single_depth["Circuit"].values)
-
-        total_sampled_outputs = num_circuits * num_shots
-        prob_sample_heavy = num_heavy / total_sampled_outputs
-
-        # Eq. (C3) of [QVol]. Assume that num_heavy/num_shots is worst-case binomial with param
-        # num_circuits and take gaussian approximation. Get 2 sigma one-sided confidence interval.
-        one_sided_confidence_interval = prob_sample_heavy - \
-                                        2 * np.sqrt(
-            num_heavy * (num_shots - num_heavy / num_circuits)) / total_sampled_outputs
-
-        results[depth] = (prob_sample_heavy, one_sided_confidence_interval)
-
-    return results
+    return prob_sample_heavy, one_sided_confidence_interval
 
 
 def measure_quantum_volume(qc: QuantumComputer, qubits: Sequence[int] = None,
@@ -299,7 +207,7 @@ def measure_quantum_volume(qc: QuantumComputer, qubits: Sequence[int] = None,
                            num_circuits: int = 100, num_shots: int = 1000,
                            depths: np.ndarray = None, achievable_threshold: float = 2/3,
                            stop_when_fail: bool = True, show_progress_bar: bool = False) \
-                            -> List[Tuple[int, float, float, bool]]:
+                            -> Dict[int, Tuple[float, float, bool]]:
     """
     Measures the quantum volume of a quantum resource, as described in [QVol].
 
@@ -338,9 +246,9 @@ def measure_quantum_volume(qc: QuantumComputer, qubits: Sequence[int] = None,
         the one-sided confidence interval of this estimate is greater than the given threshold.
     :param stop_when_fail: if true, the measurement will stop after the first un-achievable depth
     :param show_progress_bar: displays a progress bar for each depth if true.
-    :return: a list of all tuples (depth, prob_sample_heavy, is_achievable) indicating the
-        estimated probability of sampling a heavy output at each depth and whether that depth
-        qualifies as being achievable.
+    :return: depth: (prob_sample_heavy, ons_sided_conf_interval, is_achievable) dict indicating the
+        estimated probability of sampling a heavy output at each depth, a 2-sigma lower bound on
+        this estimate, and whether that depth qualifies as being achievable based on the lower bound
     """
 
     if num_circuits < 100:
@@ -352,7 +260,7 @@ def measure_quantum_volume(qc: QuantumComputer, qubits: Sequence[int] = None,
     if depths is None:
         depths = np.arange(2, len(qubits) + 1)
 
-    results = []
+    results = {}
     for depth in depths:
         log.info("Starting depth {}".format(depth))
 
@@ -361,19 +269,15 @@ def measure_quantum_volume(qc: QuantumComputer, qubits: Sequence[int] = None,
         num_heavy = sample_rand_circuits_for_heavy_out(qc, qubits, depth, program_generator,
                                                        num_circuits, num_shots, show_progress_bar)
 
-        total_sampled_outputs = num_circuits * num_shots
-        prob_sample_heavy = num_heavy/total_sampled_outputs
-
-        # Eq. (C3) of [QVol]. Assume that num_heavy/num_shots is worst-case binomial with param
-        # num_circuits and take gaussian approximation. Get 2 sigma one-sided confidence interval.
-        one_sided_confidence_interval = prob_sample_heavy - \
-            2 * np.sqrt(num_heavy * (num_shots - num_heavy / num_circuits)) / total_sampled_outputs
+        prob_sample_heavy, one_sided_conf_intrvl = calculate_prob_est_and_err(num_heavy,
+                                                                              num_circuits,
+                                                                              num_shots)
 
         # prob of sampling heavy output must be large enough such that the one-sided confidence
         # interval is larger than the threshold
-        is_achievable = one_sided_confidence_interval > achievable_threshold
+        is_achievable = one_sided_conf_intrvl > achievable_threshold
 
-        results.append((depth, prob_sample_heavy, one_sided_confidence_interval, is_achievable))
+        results[depth] = (prob_sample_heavy, one_sided_conf_intrvl, is_achievable)
 
         if stop_when_fail and not is_achievable:
             break
@@ -381,7 +285,173 @@ def measure_quantum_volume(qc: QuantumComputer, qubits: Sequence[int] = None,
     return results
 
 
-def extract_quantum_volume_from_results(results: List[Tuple[int, float, bool]]) -> int:
+def generate_quantum_volume_experiments(depths: Sequence[int], num_circuits: int) -> DataFrame:
+    """
+
+    :param num_circuits:
+    :param depths:
+    :return:
+    """
+    def df_dict():
+        for d in depths:
+            for _ in range(num_circuits):
+                yield OrderedDict({"Depth": d,
+                                   "Abstract Ckt": generate_abstract_qv_circuit(d)})
+    return DataFrame(df_dict())
+
+
+def add_programs_to_dataframe(df: DataFrame, qc: QuantumComputer,
+                              qubits_at_depth: Dict[int, Sequence[int]] = None,
+                              program_generator: Callable[[QuantumComputer, Sequence[int],
+                                                           np.ndarray, np.ndarray], Program] =
+                              _naive_program_generator) -> DataFrame:
+    """
+
+    :param df:
+    :param qc:
+    :param qubits_at_depth:
+    :param program_generator:
+    :return:
+    """
+    new_df = df.copy()
+
+    depths = new_df["Depth"].values
+    circuits = new_df["Abstract Ckt"].values
+
+    if qubits_at_depth is None:
+        all_qubits = qc.qubits()  # by default the program can act on any qubit in the computer
+        qubits = [all_qubits for _ in circuits]
+    else:
+        qubits = [qubits_at_depth[depth] for depth in depths]
+
+    # these are all possible qubits allowed in the program, not necessarily measured or even used.
+    new_df["Qubits"] = Series(qubits)
+    new_df["Program"] = Series([program_generator(qc, qbits, *ckt) for qbits, ckt in zip(qubits,
+                                                                                         circuits)])
+    return new_df
+
+
+def acquire_quantum_volume_data(df: DataFrame, qc: QuantumComputer, num_shots: int = 1000,
+                                use_active_reset: bool = False) -> DataFrame:
+    """
+
+    :param df:
+    :param qc:
+    :param num_shots:
+    :param use_active_reset:
+    :return:
+    """
+    new_df = df.copy()
+
+    def run(q_comp, program, n_shots):
+        start = time.time()
+
+        if use_active_reset:
+            reset_measure_program = Program(RESET())
+            program = reset_measure_program + program
+
+        # run the program num_shots many times
+        program.wrap_in_numshots_loop(n_shots)
+        executable = q_comp.compiler.native_quil_to_executable(program)
+
+        res = q_comp.run(executable)
+
+        end = time.time()
+        return res, end - start
+
+    programs = new_df["Program"].values
+    data = [run(qc, program, num_shots) for program in programs]
+
+    results = [datum[0] for datum in data]
+    times = [datum[1] for datum in data]
+
+    new_df["Results"] = Series(results)
+    new_df["Run Time"] = Series(times)
+
+    return new_df
+
+
+def acquire_heavy_hitters(df: DataFrame) -> DataFrame:
+    """
+
+    :param df:
+    :return:
+    """
+    new_df = df.copy()
+
+    def run(depth, circuit):
+        wfn_sim = NumpyWavefunctionSimulator(depth)
+
+        start = time.time()
+        heavy_outputs = collect_heavy_outputs(wfn_sim, *circuit)
+        end = time.time()
+
+        return heavy_outputs, end - start
+
+    circuits = new_df["Circuit"].values
+    depths = new_df["Depth"].values
+
+    data = [run(d, ckt) for d, ckt in zip(depths, circuits)]
+
+    heavy_hitters = [datum[0] for datum in data]
+    times = [datum[1] for datum in data]
+
+    new_df["Heavy Hitters"] = Series(heavy_hitters)
+    new_df["Sim Time"] = Series(times)
+
+    return new_df
+
+
+def count_heavy_hitters_sampled(df: DataFrame) -> DataFrame:
+    """
+
+    :param df:
+    :return:
+    """
+    new_df = df.copy()
+
+    def count(hh, res):
+        num_heavy = 0
+        # determine if each result bitstring is a heavy output, as determined from simulation
+        for result in res:
+            # convert result to int for comparison with heavy outputs.
+            output = bit_array_to_int(result)
+            if output in hh:
+                num_heavy += 1
+        return num_heavy
+
+    exp_results = new_df["Results"].values
+    heavy_hitters = new_df["HeavyHitters"].values
+
+    new_df["Num HH Sampled"] = Series([count(hh, exp_res) for hh, exp_res in zip(heavy_hitters,
+                                                                                 exp_results)])
+
+    return new_df
+
+
+def get_results_by_depth(df: DataFrame) -> Dict[int, Tuple[float, float, bool]]:
+    """
+
+    :param df:
+    :return:
+    """
+    depths = df["Depth"].values
+
+    results = {}
+    for depth in depths:
+        single_depth = df.loc[df["Depth"] == depth]
+        num_shots = len(single_depth["Results"].values[0])
+        num_heavy = sum(single_depth["Num HH Sampled"].values)
+        num_circuits = len(single_depth["Circuit"].values)
+
+        prob_est, conf_intrvl = calculate_prob_est_and_err(num_heavy, num_circuits, num_shots)
+
+        results[depth] = (prob_est, conf_intrvl, conf_intrvl > 2/3)
+
+    return results
+
+
+def extract_quantum_volume_from_results(results: Dict[int, Tuple[float, float, bool]]) -> int:
     """
     Provides convenient extraction of quantum volume from the results returned by a default run of
     measure_quantum_volume above
@@ -389,11 +459,14 @@ def extract_quantum_volume_from_results(results: List[Tuple[int, float, bool]]) 
     :param results: results of measure_quantum_volume with sequential depths and their achievability
     :return: the quantum volume, eq. 7 of [QVol]
     """
+    depths = sorted(results.keys())
+
     max_depth = 1
-    for (d, prob, is_ach) in results:
+    for depth in depths:
+        (_, _, is_ach) = results[depth]
         if not is_ach:
             break
-        max_depth = d
+        max_depth = depth
 
     quantum_volume = 2**max_depth
     return quantum_volume
