@@ -85,7 +85,7 @@ def acquire_data_t1(qc: QuantumComputer,
     Execute experiments to measure the t1 decay time of 1 or more qubits.
 
     :param qc: The QuantumComputer to run the experiment on
-    :param t1_experiment: list of tuples in the form: (time, t1 program with decay of that time)
+    :param t1_experiment: A pandas DataFrame with columns: time, t1 program
     :return: pandas DataFrame
     """
     results = []
@@ -116,7 +116,7 @@ def estimate_t1(df: pd.DataFrame):
     """
     Estimate T1 from experimental data.
 
-    :param df: Experimental T1 results to plot and fit exponential decay curve to
+    :param df: A pandas DataFrame of experimental T1 results to plot
     :return: pandas DataFrame
     """
     results = []
@@ -154,7 +154,7 @@ def plot_t1_estimate_over_data(df: pd.DataFrame,
     """
     Plot T1 experimental data and estimated value of T1 as and exponential decay curve.
 
-    :param df: Experimental results to plot and fit exponential decay curve to.
+    :param df: A pandas DataFrame experimental results to plot and fit exponential decay curve to.
     :param qubits: A list of qubits that you actually want plotted. The default is all qubits.
     :param qc_type: String indicating whether QVM or QPU was used to collect data.
     :return: None
@@ -330,7 +330,7 @@ def acquire_data_t2(qc: QuantumComputer,
     Execute experiments to measure the T2 star or T2 echo decay time of 1 or more qubits.
 
     :param qc: The QuantumComputer to run the experiment on
-    :param t2_experiment: list of tuples in the form: (time, T2 program with decay of that time)
+    :param t2_experiment: A pandas DataFrame containing: time, T2 program
     :param detuning: The additional detuning frequency about the z axis.
     :return: pandas DataFrame containing T2 results, and detuning used in creating experiments for
     those results.
@@ -362,8 +362,8 @@ def estimate_t2(df: pd.DataFrame) -> pd.DataFrame:
     """
     Estimate T2 star or T2 echo from experimental data.
 
-    :param df: Experimental T2 results to plot and fit exponential decay curve to.
-    :param detuning: Detuning frequency used in experiment creation.
+    :param df: A pandas DataFrame with experimental T2 results
+    :param detuning: Detuning frequency used in experiment creation
     :return: pandas DataFrame
     """
     results = []
@@ -407,7 +407,7 @@ def plot_t2_estimate_over_data(df: pd.DataFrame,
     Plot T2 star or T2 echo experimental data and estimated value of T1 as and exponential decay
     curve.
 
-    :param df: Experimental results to plot and fit exponential decay curve to.
+    :param df: A pandas DataFrame containing experimental results to plot.
     :param qubits: A list of qubits that you actually want plotted. The default is all qubits.
     :param detuning: Detuning frequency used in experiment creation.
     :param type: String either 'star' or 'echo'.
@@ -499,7 +499,7 @@ def generate_single_rabi_experiment(qubits: Union[int, List[int]],
 
 def generate_rabi_experiments(qubits: Union[int, List[int]],
                               n_shots: int = 1000,
-                              num_points: int = 15) -> List[Tuple[float, Program]]:
+                              num_points: int = 15) -> pd.DataFrame:
     """
     Return a list of programs which, when run in sequence, constitute a Rabi experiment.
 
@@ -507,30 +507,33 @@ def generate_rabi_experiments(qubits: Union[int, List[int]],
     state.
 
     :param qubits: Which qubits to measure.
-    :param n_shots: The number of shots to average over for each data point.
-    :param num_points: The number of points for each Rabi curve.
-    :return: list of tuples in the form: (angle, program for Rabi rotation of that angle)
+    :param n_shots: The number of shots to average over for each data point
+    :param num_points: The number of points for each Rabi curve
+    :return: pandas DataFrame with columns: angle, program
     """
     angle_and_programs = []
     for theta in np.linspace(0.0, 2 * np.pi, num_points):
-        angle_and_programs.append((theta, generate_single_rabi_experiment(qubits,
-                                                                          theta,
-                                                                          n_shots)))
-    return angle_and_programs
+        angle_and_programs.append({
+            'angle': theta,
+            'programs': generate_single_rabi_experiment(qubits, theta, n_shots),
+        })
+    return pd.DataFrame(angle_and_programs)
 
 
 def acquire_data_rabi(qc: QuantumComputer,
-                      rabi_experiment: List[Tuple[float, Program]],
+                      rabi_experiment: pd.DataFrame,
                       filename: str = None) -> pd.DataFrame:
     """
     Execute experiments to measure Rabi flop one or more qubits.
 
-    :param qc: The QuantumComputer to run the experiment on.
-    :param rabi_experiment: list of tuples in the form: (theta, Rabi program)
-    :return: DataFrame with Rabi results.
+    :param qc: The QuantumComputer to run the experiment on
+    :param rabi_experiment: pandas DataFrame: (theta, Rabi program)
+    :return: DataFrame with Rabi results
     """
     results = []
-    for theta, program in rabi_experiment:
+    for index, row in rabi_experiment.iterrows():
+        theta = row['angle']
+        program = row['programs']
         executable = qc.compiler.native_quil_to_executable(program)
         bitstrings = qc.run(executable)
 
@@ -553,8 +556,8 @@ def estimate_rabi(df: pd.DataFrame):
     """
     Estimate Rabi oscillation from experimental data.
 
-    :param df: Experimental Rabi results to estimate.
-    :return: List of dicts.
+    :param df: Experimental Rabi results to estimate
+    :return: pandas DataFrame
     """
     results = []
 
@@ -585,7 +588,7 @@ def estimate_rabi(df: pd.DataFrame):
                 'fit_params_errs': None,
                 'message': 'Could not fit to experimental data for qubit' + str(q),
             })
-    return results
+    return pd.DataFrame(results)
 
 
 def plot_rabi_estimate_over_data(df: pd.DataFrame,
@@ -748,7 +751,7 @@ def acquire_data_cz_phase_ramsey(qc: QuantumComputer,
     return pd.DataFrame(results)
 
 
-def estimate_cz_phase_ramsey(df: pd.DataFrame) -> List[Dict]:
+def estimate_cz_phase_ramsey(df: pd.DataFrame):# -> List[Dict]:
     """
     Estimate CZ phase ramsey experimental data.
 
