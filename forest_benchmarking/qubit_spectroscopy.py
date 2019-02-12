@@ -117,7 +117,7 @@ def estimate_t1(df: pd.DataFrame):
     Estimate T1 from experimental data.
 
     :param df: Experimental T1 results to plot and fit exponential decay curve to
-    :return: List of dicts with estimates and error bars
+    :return: pandas DataFrame
     """
     results = []
 
@@ -232,7 +232,7 @@ def generate_t2_star_experiments(qubits: Union[int, List[int]],
                                  stop_time: float,
                                  detuning: float = 5e6,
                                  n_shots: int = 1000,
-                                 num_points: int = 15) -> List[Tuple[float, Program]]:
+                                 num_points: int = 15)  -> pd.DataFrame:
     """
     Return a list of programs which ran in sequence constitute a T2 star experiment to measure the
     T2 star coherence decay time.
@@ -242,15 +242,18 @@ def generate_t2_star_experiments(qubits: Union[int, List[int]],
     :param detuning: The additional detuning frequency about the z axis.
     :param n_shots: The number of shots to average over for each data point.
     :param num_points: The number of points for each T2 curve.
-    :return: list of tuples in the form: (time, T2 program with decay of that time)
+    :return: pandas DataFrame with columns: time, program, detuning
     """
     start_time = 0
     time_and_programs = []
     for t in np.linspace(start_time, stop_time, num_points):
         # TODO: avoid aliasing while being mindful of the 20ns resolution in the QCS stack
-        time_and_programs.append((t, generate_single_t2_star_experiment(qubits, t, detuning,
-                                                                        n_shots=n_shots)))
-    return time_and_programs
+        time_and_programs.append({
+            'times': t,
+            'programs': generate_single_t2_star_experiment(qubits, t, detuning, n_shots=n_shots),
+            'detuning': detuning,
+        })
+    return pd.DataFrame(time_and_programs)
 
 
 def generate_single_t2_echo_experiment(qubits: Union[int, List[int]],
@@ -296,7 +299,7 @@ def generate_t2_echo_experiments(qubits: Union[int, List[int]],
                                  stop_time: float,
                                  detuning: float = 5e6,
                                  n_shots: int = 1000,
-                                 num_points: int = 15) -> List[Tuple[float, Program]]:
+                                 num_points: int = 15) -> pd.DataFrame:
     """
     Return a list of programs which ran in sequence constitute a T2 echo experiment to measure the
     T2 echo coherence decay time.
@@ -306,21 +309,23 @@ def generate_t2_echo_experiments(qubits: Union[int, List[int]],
     :param detuning: The additional detuning frequency about the z axis.
     :param n_shots: The number of shots to average over for each data point.
     :param num_points: The number of points for each T2 curve.
-    :return: list of tuples in the form: (time, T2 program with decay of that time)
+    :return: pandas DataFrame with columns: time, program, detuning
     """
     start_time = 0
     time_and_programs = []
     for t in np.linspace(start_time, stop_time, num_points):
         # TODO: avoid aliasing while being mindful of the 20ns resolution in the QCS stack
-        time_and_programs.append((t, generate_single_t2_echo_experiment(qubits, t, detuning,
-                                                                        n_shots=n_shots)))
-    return time_and_programs
+        time_and_programs.append({
+            'times': t,
+            'programs': generate_single_t2_echo_experiment(qubits, t, detuning, n_shots=n_shots),
+            'detuning': detuning,
+        })
+    return pd.DataFrame(time_and_programs)
 
 
 def acquire_data_t2(qc: QuantumComputer,
-                    t2_experiment: List[Tuple[float, Program]],
-                    detuning: float = 5e6,
-                    ) -> Tuple[pd.DataFrame, float]:
+                    t2_experiment: pd.DataFrame,
+                    ) -> pd.DataFrame:
     """
     Execute experiments to measure the T2 star or T2 echo decay time of 1 or more qubits.
 
@@ -331,7 +336,11 @@ def acquire_data_t2(qc: QuantumComputer,
     those results.
     """
     results = []
-    for t, program in t2_experiment:
+
+    for index, row in t2_experiment.iterrows():
+        t = row['times']
+        program = row['programs']
+        detuning = row['detuning']
         executable = qc.compiler.native_quil_to_executable(program)
         bitstrings = qc.run(executable)
 
@@ -343,31 +352,31 @@ def acquire_data_t2(qc: QuantumComputer,
                 'time': t,
                 'n_bitstrings': len(bitstrings),
                 'avg': float(avg),
+                'detuning': float(detuning),
             })
 
-    return pd.DataFrame(results), detuning
+    return pd.DataFrame(results)
 
 
-def estimate_t2(df: pd.DataFrame, detuning: float):
+def estimate_t2(df: pd.DataFrame) -> pd.DataFrame:
     """
     Estimate T2 star or T2 echo from experimental data.
 
     :param df: Experimental T2 results to plot and fit exponential decay curve to.
     :param detuning: Detuning frequency used in experiment creation.
-    :return: List of dicts.
+    :return: pandas DataFrame
     """
     results = []
-
     for q in df['qubit'].unique():
         df2 = df[df['qubit'] == q].sort_values('time')
         x_data = df2['time']
         y_data = df2['avg']
+        detuning = df2['detuning'].values[0]
 
         try:
             fit_params, fit_params_errs = fit_to_exponentially_decaying_sinusoidal_curve(x_data,
                                                                                          y_data,
                                                                                          detuning)
-
             results.append({
                 'qubit': q,
                 'T2': fit_params[1] / MICROSECOND,
@@ -387,12 +396,11 @@ def estimate_t2(df: pd.DataFrame, detuning: float):
                 'message': 'Could not fit to experimental data for qubit' + str(q),
             })
 
-    return results
+    return pd.DataFrame(results)
 
 
 def plot_t2_estimate_over_data(df: pd.DataFrame,
                                qubits: list = None,
-                               detuning: float = 5e6,
                                t2_type: str = 'unknown',
                                filename: str = None) -> None:
     """
@@ -418,6 +426,7 @@ def plot_t2_estimate_over_data(df: pd.DataFrame,
         df2 = df[df['qubit'] == q].sort_values('time')
         x_data = df2['time']
         y_data = df2['avg']
+        detuning = df2['detuning'].values[0]
 
         plt.plot(x_data / MICROSECOND, y_data, 'o-', label=f"Qubit {q} T2 data")
 
