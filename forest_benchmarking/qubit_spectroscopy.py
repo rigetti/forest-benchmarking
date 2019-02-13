@@ -686,45 +686,61 @@ def generate_cz_phase_ramsey_experiment(edges: List[Tuple[int, int]],
     :param stop_phase: The stopping phase for the CZ phase Ramsey experiment.
     :param num_points: The number of points to sample at between the starting and stopping phase.
     :param num_shots: The number of shots to average over for each data point.
-    :return: [start_phase, stop_phase, num_points, num_shots, list_of_programs]
+    :return: pandas DataFrame
     '''
 
-    progs = []
+    cz_expriment = []
     rz_qubit = []  # this is the qubit to which the RZ is applied
     for edge in edges:
         qubit, other_qubit = edge
-        parametric_ramsey_prog = generate_cz_phase_ramsey_program(qubit, other_qubit, num_shots)
-        progs.append(parametric_ramsey_prog)
-        rz_qubit.append(qubit)
-        parametric_ramsey_prog = generate_cz_phase_ramsey_program(other_qubit, qubit, num_shots)
-        progs.append(parametric_ramsey_prog)
-        rz_qubit.append(other_qubit)
 
-    return [start_phase, stop_phase, num_points, num_shots, rz_qubit, progs]
+        # first qubit gets RZ
+        cz_expriment.append({
+            'edges': tuple(edge),
+            'rz_qb': qubit,
+            'programs': generate_cz_phase_ramsey_program(qubit, other_qubit, num_shots),
+            'start_phase': start_phase,
+            'stop_phase': stop_phase,
+            'num_points': num_points,
+            'num_shots': num_shots,
+        })
+
+        # second qubit gets RZ
+        cz_expriment.append({
+            'edges': tuple(edge),
+            'rz_qb': other_qubit,
+            'programs': generate_cz_phase_ramsey_program(other_qubit, qubit, num_shots),
+            'start_phase': start_phase,
+            'stop_phase': stop_phase,
+            'num_points': num_points,
+            'num_shots': num_shots,
+        })
+
+    return pd.DataFrame(cz_expriment)
 
 
 def acquire_data_cz_phase_ramsey(qc: QuantumComputer,
-                                 cz_experiment: list,
+                                 cz_experiment: pd.DataFrame,
                                  filename: str = None) -> pd.DataFrame:
     """
     Execute experiments to measure the RZ incurred as a result of a CZ gate.
 
-    :param qc: The qubit to move around the Bloch sphere and measure the incurred RZ on.
-    :param qubits: A list of two connected qubits to perform CZ phase Ramsey experiments on.
-    :param start_phase: The starting phase for the CZ phase Ramsey experiment.
-    :param stop_phase: The stopping phase for the CZ phase Ramsey experiment.
-    :param num_points: The number of points to sample at between the starting and stopping phase.
-    :param num_shots: The number of shots to average over for each data point.
-    :param filename: The name of the file to write JSON-serialized results to.
-    :return: The JSON-serialized results from CZ phase Ramsey experiment.
+    :param qc: The qubit to move around the Bloch sphere and measure the incurred RZ on
+    :param cz_experiment: pandas DataFrame
+    :param filename: The name of the file to write JSON-serialized results to
+    :return: pandas DataFrame
     """
-    start_phase, stop_phase, num_points, num_shots, rz_qubit, cz_progs = cz_experiment
-
     results = []
 
-    for rz_qb, parametric_ramsey_prog in zip(rz_qubit, cz_progs):
+    for index, row in cz_experiment.iterrows():
+        parametric_ramsey_prog = row['programs']
+        edge = row['edges']
+        rz_qb = row['rz_qb']
+        start_phase = row['start_phase']
+        stop_phase = row['stop_phase']
+        num_points = row['num_points']
+        num_shots = row['num_shots']
 
-        qubits = list(parametric_ramsey_prog.get_qubits())
         binary = compile_parametric_program(qc, parametric_ramsey_prog, num_shots=num_shots)
 
         qc.qam.load(binary)
@@ -737,9 +753,7 @@ def acquire_data_cz_phase_ramsey(qc: QuantumComputer,
 
             avg = np.mean(bitstrings[:, 0])
             results.append({
-                'edges': tuple(qubits),
-                'qb1': qubits[0],
-                'qb2': qubits[1],
+                'edges': edge,
                 'rz_qb': rz_qb,
                 'phase': theta,
                 'n_bitstrings': len(bitstrings),
@@ -768,6 +782,7 @@ def estimate_cz_phase_ramsey(df: pd.DataFrame):# -> List[Dict]:
             qubit_df = df[(df['rz_qb'] == qubit) & (df['edges'] == edge)].sort_values('phase')
             phases = qubit_df['phase']
             prob_of_one = qubit_df['avg']
+            rz_qb = qubit_df['rz_qb'].values[0]
 
             try:
                 # fit to sinusoid
