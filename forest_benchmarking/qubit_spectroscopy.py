@@ -765,7 +765,7 @@ def acquire_data_cz_phase_ramsey(qc: QuantumComputer,
     return pd.DataFrame(results)
 
 
-def estimate_cz_phase_ramsey(df: pd.DataFrame):# -> List[Dict]:
+def estimate_cz_phase_ramsey(df: pd.DataFrame) -> pd.DataFrame:
     """
     Estimate CZ phase ramsey experimental data.
 
@@ -807,7 +807,7 @@ def estimate_cz_phase_ramsey(df: pd.DataFrame):# -> List[Dict]:
                     'fit_params_errs': None,
                     'message': 'Could not fit to experimental data for edge' + str(edge),
                 })
-    return results
+    return pd.DataFrame(results)
 
 
 def plot_cz_phase_estimate_over_data(df: pd.DataFrame,
