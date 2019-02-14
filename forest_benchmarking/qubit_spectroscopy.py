@@ -72,8 +72,8 @@ def generate_t1_experiments(qubits: Union[int, List[int]],
     for t in np.linspace(start_time, stop_time, n_points):
         t = round(t, 7)  # try to keep time on 100ns boundaries
         time_and_programs.append({
-            'times': t,
-            'programs': generate_single_t1_experiment(qubits, t, n_shots)
+            'Time': t,
+            'Program': generate_single_t1_experiment(qubits, t, n_shots)
         })
     return pd.DataFrame(time_and_programs)
 
@@ -91,8 +91,8 @@ def acquire_data_t1(qc: QuantumComputer,
     results = []
 
     for index, row in t1_experiment.iterrows():
-        t = row['times']
-        program = row['programs']
+        t = row['Time']
+        program = row['Program']
 
         executable = qc.compiler.native_quil_to_executable(program)
         bitstrings = qc.run(executable)
@@ -101,11 +101,11 @@ def acquire_data_t1(qc: QuantumComputer,
         for i in range(len(qubits)):
             avg = np.mean(bitstrings[:, i])
             results.append({
-                'qubit': qubits[i],
-                'time': t,
-                'n_bitstrings': len(bitstrings),
-                'avg': float(avg),
-                'programs': program,
+                'Qubit': qubits[i],
+                'Time': t,
+                'Num_bitstrings': len(bitstrings),
+                'Average': float(avg),
+                'Program': program,
             })
 
     df = pd.DataFrame(results)
@@ -121,28 +121,28 @@ def estimate_t1(df: pd.DataFrame):
     """
     results = []
 
-    for q in df['qubit'].unique():
-        df2 = df[df['qubit'] == q].sort_values('time')
-        x_data = df2['time']
-        y_data = df2['avg']
+    for q in df['Qubit'].unique():
+        df2 = df[df['Qubit'] == q].sort_values('Time')
+        x_data = df2['Time']
+        y_data = df2['Average']
 
         try:
             fit_params, fit_params_errs = fit_to_exponential_decay_curve(x_data, y_data)
             results.append({
-                'qubit': q,
+                'Qubit': q,
                 'T1': fit_params[1] / MICROSECOND,
-                'fit_params': fit_params,
-                'fit_params_errs': fit_params_errs,
-                'message': None,
+                'Fit_params': fit_params,
+                'Fit_params_errs': fit_params_errs,
+                'Message': None,
             })
         except RuntimeError:
             print(f"Could not fit to experimental data for qubit {q}")
             results.append({
-                'qubit': q,
+                'Qubit': q,
                 'T1': None,
-                'fit_params': None,
-                'fit_params_errs': None,
-                'message': 'Could not fit to experimental data for qubit' + str(q),
+                'Fit_params': None,
+                'Fit_params_errs': None,
+                'Message': 'Could not fit to experimental data for qubit' + str(q),
             })
 
     return results
@@ -160,17 +160,17 @@ def plot_t1_estimate_over_data(df: pd.DataFrame,
     :return: None
     """
     if qubits is None:
-        qubits = df['qubit'].unique().tolist()
+        qubits = df['Qubit'].unique().tolist()
 
     # check the user specified valid qubits
     for qbx in qubits:
-        if qbx not in df['qubit'].unique():
+        if qbx not in df['Qubit'].unique():
             raise ValueError("The list of qubits does not match the ones you experimented on.")
 
     for q in qubits:
-        df2 = df[df['qubit'] == q].sort_values('time')
-        x_data = df2['time']
-        y_data = df2['avg']
+        df2 = df[df['Qubit'] == q].sort_values('Time')
+        x_data = df2['Time']
+        y_data = df2['Average']
 
         plt.plot(x_data / MICROSECOND, y_data, 'o-', label=f"QC{q} T1 data")
 
@@ -249,9 +249,9 @@ def generate_t2_star_experiments(qubits: Union[int, List[int]],
     for t in np.linspace(start_time, stop_time, num_points):
         # TODO: avoid aliasing while being mindful of the 20ns resolution in the QCS stack
         time_and_programs.append({
-            'times': t,
-            'programs': generate_single_t2_star_experiment(qubits, t, detuning, n_shots=n_shots),
-            'detuning': detuning,
+            'Time': t,
+            'Program': generate_single_t2_star_experiment(qubits, t, detuning, n_shots=n_shots),
+            'Detuning': detuning,
         })
     return pd.DataFrame(time_and_programs)
 
@@ -316,9 +316,9 @@ def generate_t2_echo_experiments(qubits: Union[int, List[int]],
     for t in np.linspace(start_time, stop_time, num_points):
         # TODO: avoid aliasing while being mindful of the 20ns resolution in the QCS stack
         time_and_programs.append({
-            'times': t,
-            'programs': generate_single_t2_echo_experiment(qubits, t, detuning, n_shots=n_shots),
-            'detuning': detuning,
+            'Time': t,
+            'Program': generate_single_t2_echo_experiment(qubits, t, detuning, n_shots=n_shots),
+            'Detuning': detuning,
         })
     return pd.DataFrame(time_and_programs)
 
@@ -338,9 +338,9 @@ def acquire_data_t2(qc: QuantumComputer,
     results = []
 
     for index, row in t2_experiment.iterrows():
-        t = row['times']
-        program = row['programs']
-        detuning = row['detuning']
+        t = row['Time']
+        program = row['Program']
+        detuning = row['Detuning']
         executable = qc.compiler.native_quil_to_executable(program)
         bitstrings = qc.run(executable)
 
@@ -348,11 +348,11 @@ def acquire_data_t2(qc: QuantumComputer,
         for i in range(len(qubits)):
             avg = np.mean(bitstrings[:, i])
             results.append({
-                'qubit': qubits[i],
-                'time': t,
-                'n_bitstrings': len(bitstrings),
-                'avg': float(avg),
-                'detuning': float(detuning),
+                'Qubit': qubits[i],
+                'Time': t,
+                'Num_bitstrings': len(bitstrings),
+                'Average': float(avg),
+                'Detuning': float(detuning),
             })
 
     return pd.DataFrame(results)
@@ -367,33 +367,33 @@ def estimate_t2(df: pd.DataFrame) -> pd.DataFrame:
     :return: pandas DataFrame
     """
     results = []
-    for q in df['qubit'].unique():
-        df2 = df[df['qubit'] == q].sort_values('time')
-        x_data = df2['time']
-        y_data = df2['avg']
-        detuning = df2['detuning'].values[0]
+    for q in df['Qubit'].unique():
+        df2 = df[df['Qubit'] == q].sort_values('Time')
+        x_data = df2['Time']
+        y_data = df2['Average']
+        detuning = df2['Detuning'].values[0]
 
         try:
             fit_params, fit_params_errs = fit_to_exponentially_decaying_sinusoidal_curve(x_data,
                                                                                          y_data,
                                                                                          detuning)
             results.append({
-                'qubit': q,
+                'Qubit': q,
                 'T2': fit_params[1] / MICROSECOND,
                 'Freq': fit_params[2] / MHZ,
-                'fit_params': fit_params,
-                'fit_params_errs': fit_params_errs,
-                'message': None,
+                'Fit_params': fit_params,
+                'Fit_params_errs': fit_params_errs,
+                'Message': None,
             })
         except RuntimeError:
             print(f"Could not fit to experimental data for qubit {q}")
             results.append({
-                'qubit': q,
+                'Qubit': q,
                 'T2': None,
                 'Freq': None,
-                'fit_params': None,
-                'fit_params_errs': None,
-                'message': 'Could not fit to experimental data for qubit' + str(q),
+                'Fit_params': None,
+                'Fit_params_errs': None,
+                'Message': 'Could not fit to experimental data for qubit' + str(q),
             })
 
     return pd.DataFrame(results)
@@ -415,18 +415,18 @@ def plot_t2_estimate_over_data(df: pd.DataFrame,
     :return: None
     """
     if qubits is None:
-        qubits = df['qubit'].unique().tolist()
+        qubits = df['Qubit'].unique().tolist()
 
     # check the user specified valid qubits
     for qbx in qubits:
-        if qbx not in df['qubit'].unique():
+        if qbx not in df['Qubit'].unique():
             raise ValueError("The list of qubits does not match the ones you experimented on.")
 
     for q in qubits:
-        df2 = df[df['qubit'] == q].sort_values('time')
-        x_data = df2['time']
-        y_data = df2['avg']
-        detuning = df2['detuning'].values[0]
+        df2 = df[df['Qubit'] == q].sort_values('Time')
+        x_data = df2['Time']
+        y_data = df2['Average']
+        detuning = df2['Detuning'].values[0]
 
         plt.plot(x_data / MICROSECOND, y_data, 'o-', label=f"Qubit {q} T2 data")
 
@@ -514,8 +514,8 @@ def generate_rabi_experiments(qubits: Union[int, List[int]],
     angle_and_programs = []
     for theta in np.linspace(0.0, 2 * np.pi, num_points):
         angle_and_programs.append({
-            'angle': theta,
-            'programs': generate_single_rabi_experiment(qubits, theta, n_shots),
+            'Angle': theta,
+            'Program': generate_single_rabi_experiment(qubits, theta, n_shots),
         })
     return pd.DataFrame(angle_and_programs)
 
@@ -532,8 +532,8 @@ def acquire_data_rabi(qc: QuantumComputer,
     """
     results = []
     for index, row in rabi_experiment.iterrows():
-        theta = row['angle']
-        program = row['programs']
+        theta = row['Angle']
+        program = row['Program']
         executable = qc.compiler.native_quil_to_executable(program)
         bitstrings = qc.run(executable)
 
@@ -541,10 +541,10 @@ def acquire_data_rabi(qc: QuantumComputer,
         for i in range(len(qubits)):
             avg = np.mean(bitstrings[:, i])
             results.append({
-                'qubit': qubits[i],
-                'angle': theta,
-                'n_bitstrings': len(bitstrings),
-                'avg': float(avg),
+                'Qubit': qubits[i],
+                'Angle': theta,
+                'Num_bitstrings': len(bitstrings),
+                'Average': float(avg),
             })
 
     if filename:
@@ -561,32 +561,32 @@ def estimate_rabi(df: pd.DataFrame):
     """
     results = []
 
-    for q in df['qubit'].unique():
-        df2 = df[df['qubit'] == q].sort_values('angle')
-        angles = df2['angle']
-        prob_of_one = df2['avg']
+    for q in df['Qubit'].unique():
+        df2 = df[df['Qubit'] == q].sort_values('Angle')
+        angles = df2['Angle']
+        prob_of_one = df2['Average']
 
         try:
             # fit to sinusoid
             fit_params, fit_params_errs = fit_to_sinusoidal_waveform(angles, prob_of_one)
 
             results.append({
-                'qubit': q,
-                'angle': fit_params[1],
-                'prob_of_one': fit_params[2],
-                'fit_params': fit_params,
-                'fit_params_errs': fit_params_errs,
-                'message': None,
+                'Qubit': q,
+                'Angle': fit_params[1],
+                'Prob_of_one': fit_params[2],
+                'Fit_params': fit_params,
+                'Fit_params_errs': fit_params_errs,
+                'Message': None,
             })
         except RuntimeError:
             print(f"Could not fit to experimental data for qubit {q}")
             results.append({
-                'qubit': q,
-                'angle': None,
-                'prob_of_one': None,
-                'fit_params': None,
-                'fit_params_errs': None,
-                'message': 'Could not fit to experimental data for qubit' + str(q),
+                'Qubit': q,
+                'Angle': None,
+                'Prob_of_one': None,
+                'Fit_params': None,
+                'Fit_params_errs': None,
+                'Message': 'Could not fit to experimental data for qubit' + str(q),
             })
     return pd.DataFrame(results)
 
@@ -603,17 +603,17 @@ def plot_rabi_estimate_over_data(df: pd.DataFrame,
     :return: None
     """
     if qubits is None:
-        qubits = df['qubit'].unique().tolist()
+        qubits = df['Qubit'].unique().tolist()
 
     # check the user specified valid qubits
     for qbx in qubits:
-        if qbx not in df['qubit'].unique():
+        if qbx not in df['Qubit'].unique():
             raise ValueError("The list of qubits does not match the ones you experimented on.")
 
     for q in qubits:
-        df2 = df[df['qubit'] == q].sort_values('angle')
-        angles = df2['angle']
-        prob_of_one = df2['avg']
+        df2 = df[df['Qubit'] == q].sort_values('Angle')
+        angles = df2['Angle']
+        prob_of_one = df2['Average']
 
         # plot raw data
         plt.plot(angles, prob_of_one, 'o-', label=f"qubit {q} Rabi data")
@@ -696,24 +696,24 @@ def generate_cz_phase_ramsey_experiment(edges: List[Tuple[int, int]],
 
         # first qubit gets RZ
         cz_expriment.append({
-            'edges': tuple(edge),
-            'rz_qb': qubit,
-            'programs': generate_cz_phase_ramsey_program(qubit, other_qubit, num_shots),
-            'start_phase': start_phase,
-            'stop_phase': stop_phase,
-            'num_points': num_points,
-            'num_shots': num_shots,
+            'Edge': tuple(edge),
+            'Rz_qubit': qubit,
+            'Program': generate_cz_phase_ramsey_program(qubit, other_qubit, num_shots),
+            'Start_phase': start_phase,
+            'Stop_phase': stop_phase,
+            'Num_points': num_points,
+            'Num_shots': num_shots,
         })
 
         # second qubit gets RZ
         cz_expriment.append({
-            'edges': tuple(edge),
-            'rz_qb': other_qubit,
-            'programs': generate_cz_phase_ramsey_program(other_qubit, qubit, num_shots),
-            'start_phase': start_phase,
-            'stop_phase': stop_phase,
-            'num_points': num_points,
-            'num_shots': num_shots,
+            'Edge': tuple(edge),
+            'Rz_qubit': other_qubit,
+            'Program': generate_cz_phase_ramsey_program(other_qubit, qubit, num_shots),
+            'Start_phase': start_phase,
+            'Stop_phase': stop_phase,
+            'Num_points': num_points,
+            'Num_shots': num_shots,
         })
 
     return pd.DataFrame(cz_expriment)
@@ -733,13 +733,13 @@ def acquire_data_cz_phase_ramsey(qc: QuantumComputer,
     results = []
 
     for index, row in cz_experiment.iterrows():
-        parametric_ramsey_prog = row['programs']
-        edge = row['edges']
-        rz_qb = row['rz_qb']
-        start_phase = row['start_phase']
-        stop_phase = row['stop_phase']
-        num_points = row['num_points']
-        num_shots = row['num_shots']
+        parametric_ramsey_prog = row['Program']
+        edge = row['Edge']
+        rz_qb = row['Rz_qubit']
+        start_phase = row['Start_phase']
+        stop_phase = row['Stop_phase']
+        num_points = row['Num_points']
+        num_shots = row['Num_shots']
 
         binary = compile_parametric_program(qc, parametric_ramsey_prog, num_shots=num_shots)
 
@@ -753,11 +753,11 @@ def acquire_data_cz_phase_ramsey(qc: QuantumComputer,
 
             avg = np.mean(bitstrings[:, 0])
             results.append({
-                'edges': edge,
-                'rz_qb': rz_qb,
-                'phase': theta,
-                'n_bitstrings': len(bitstrings),
-                'avg': float(avg),
+                'Edge': edge,
+                'Rz_qubit': rz_qb,
+                'Phase': theta,
+                'Num_bitstrings': len(bitstrings),
+                'Average': float(avg),
             })
 
     if filename:
@@ -774,38 +774,38 @@ def estimate_cz_phase_ramsey(df: pd.DataFrame) -> pd.DataFrame:
     :return: List of dicts.
     """
     results = []
-    edges = df['edges'].unique()
+    edges = df['Edge'].unique()
 
     for id_row, edge in enumerate(edges):
 
         for id_col, qubit in enumerate(edge):
-            qubit_df = df[(df['rz_qb'] == qubit) & (df['edges'] == edge)].sort_values('phase')
-            phases = qubit_df['phase']
-            prob_of_one = qubit_df['avg']
-            rz_qb = qubit_df['rz_qb'].values[0]
+            qubit_df = df[(df['Rz_qubit'] == qubit) & (df['Edge'] == edge)].sort_values('Phase')
+            phases = qubit_df['Phase']
+            prob_of_one = qubit_df['Average']
+            rz_qb = qubit_df['Rz_qubit'].values[0]
 
             try:
                 # fit to sinusoid
                 fit_params, fit_params_errs = fit_to_sinusoidal_waveform(phases, prob_of_one)
                 results.append({
-                    'edges': edge,
-                    'rz_qb': rz_qb,
-                    'angle': fit_params[1],
-                    'prob_of_one': fit_params[2],
-                    'fit_params': fit_params,
-                    'fit_params_errs': fit_params_errs,
-                    'message': None,
+                    'Edge': edge,
+                    'Rz_qubit': rz_qb,
+                    'Angle': fit_params[1],
+                    'Prob_of_one': fit_params[2],
+                    'Fit_params': fit_params,
+                    'Fit_params_errs': fit_params_errs,
+                    'Message': None,
                 })
             except RuntimeError:
                 print(f"Could not fit to experimental data for edge {edge}")
                 results.append({
-                    'edges': edge,
-                    'rz_qb': rz_qb,
-                    'angle': None,
-                    'prob_of_one': None,
-                    'fit_params': None,
-                    'fit_params_errs': None,
-                    'message': 'Could not fit to experimental data for edge' + str(edge),
+                    'Edge': edge,
+                    'Rz_qubit': rz_qb,
+                    'Angle': None,
+                    'Prob_of_one': None,
+                    'Fit_params': None,
+                    'Fit_params_errs': None,
+                    'Message': 'Could not fit to experimental data for edge' + str(edge),
                 })
     return pd.DataFrame(results)
 
@@ -818,7 +818,7 @@ def plot_cz_phase_estimate_over_data(df: pd.DataFrame,
     :param df: Experimental results to plot and fit exponential decay curve to.
     :return: None
     """
-    edges = df['edges'].unique()
+    edges = df['Edge'].unique()
     if len(edges) == 1:
         # this deals with the one edge case, then plot will have an empty row
         # if you don't do this you get `axes.shape = (2,)`
@@ -829,9 +829,9 @@ def plot_cz_phase_estimate_over_data(df: pd.DataFrame,
     for id_row, edge in enumerate(edges):
 
         for id_col, qubit in enumerate(edge):
-            qubit_df = df[(df['rz_qb'] == qubit) & (df['edges'] == edge)].sort_values('phase')
-            phases = qubit_df['phase']
-            prob_of_one = qubit_df['avg']
+            qubit_df = df[(df['Rz_qubit'] == qubit) & (df['Edge'] == edge)].sort_values('Phase')
+            phases = qubit_df['Phase']
+            prob_of_one = qubit_df['Average']
 
             # plot raw data
             axes[id_row, id_col].plot(phases, prob_of_one, 'o',
