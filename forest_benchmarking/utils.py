@@ -2,6 +2,8 @@ import itertools
 from collections import OrderedDict
 from random import random, seed
 from typing import Sequence
+from datetime import date, datetime
+from git import Repo
 
 import numpy as np
 from numpy import pi
@@ -410,3 +412,56 @@ def partial_trace(rho, keep, dims, optimize=False):
     rho_a = rho.reshape(np.tile(dims, 2))
     rho_a = np.einsum(rho_a, idx1 + idx2, optimize=optimize)
     return rho_a.reshape(Nkeep, Nkeep)
+
+
+def metadata_save(qc: QuantumComputer,
+                  repo_path: str = None,
+                  filename: str = None) -> pd.DataFrame:
+    '''
+    This helper function saves metadata related to your run on a Quantum computer.
+
+    Basic data saved includes the date and time. Additionally information related to the quantum
+    computer is saved: device name, topology, qubit labels, edges that have two qubit gates,
+    device specs
+
+    If a path is passed to this function information related to the Git Repository is saved,
+    specifically the repository: name, branch and commit.
+
+    :param qc: The QuantumComputer to run the experiment on.
+    :param repo_path: path to repository e.g. '../'
+    :param filename: The name of the file to write JSON-serialized results to.
+    :return: pandas DataFrame
+    '''
+
+    # Git related things
+    if repo_path is not None:
+        repo = Repo(repo_path)
+        branch = repo.active_branch
+        sha = repo.head.object.hexsha
+        short_sha = repo.git.rev_parse(sha, short=7)
+        the_repo = repo.git_dir
+        the_branch = branch.name
+        the_commit = short_sha
+    else:
+        the_repo = None
+        the_branch = None
+        the_commit = None
+
+    metadata = {
+        # Time and date
+        'Date': str(date.today()),
+        'Time': str(datetime.now().time()),
+        # Git stuff
+        'Repository': the_repo,
+        'Branch': the_branch,
+        'Git_commit': the_commit,
+        # QPU data
+        'Device_name': qc.name,
+        'Topology': qc.qubit_topology(),
+        'Qubits': list(qc.qubit_topology().nodes),
+        'Two_Qubit_Gates': list(qc.qubit_topology().edges),
+        'Device_Specs': qc.device.get_specs(),
+    }
+    if filename:
+        pd.DataFrame(metadata).to_json(filename)
+    return pd.DataFrame(metadata)
