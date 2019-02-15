@@ -179,18 +179,61 @@ def flatten_list(xlist):
     '''Flattens a list of lists.
 
     :param xlist: list of lists
-    :returns: a flattend list
+    :returns: a flattened list
     '''
     return [item for sublist in xlist for item in sublist]
 
-def get_random_classical_circuit_results(qc_perfect: QuantumComputer,
-                                         qc_noisy: QuantumComputer,
-                                         circuit_depth: int,
-                                         circuit_width: int,
-                                         num_rand_subgraphs: int = 10,
-                                         num_shots_per_circuit: int = 100,
-                                         in_x_basis: bool = False,
-                                         use_active_reset: bool = False):
+def generate_rand_cir_for_rand_lattices_experiments(qc_noisy: QuantumComputer,
+                                                    circuit_depth: int,
+                                                    circuit_width: int,
+                                                    num_rand_subgraphs: int = 10,
+                                                    num_shots_per_circuit: int = 100,
+                                                    in_x_basis: bool = False,
+                                                    use_active_reset: bool = False) -> pd.DataFrame:
+    '''
+    Return a DataFrame where the rows contain all the information needed to run random circuits
+    of a certain width and depth on a particular lattice.
+
+    :param qc_noisy: the noisy quantum resource (QPU or QVM)
+    :param circuit_depth: maximum depth of quantum circuit
+    :param circuit_width: maximum width of quantum circuit
+    :param num_rand_subgraphs: number of random circuits of circuit_width to be sampled
+    :param num_shots_per_circuit: number of shots per random circuit
+    :param in_x_basis: performs the random circuit in the x basis
+    :param use_active_reset: if True uses active reset. Doing so will speed up execution on a QPU.
+    :return: pandas DataFrame
+    '''
+    # get the networkx graph of the lattice
+    G = qc_noisy.qubit_topology()
+
+    if circuit_width > len(G.nodes):
+        raise ValueError("You must have circuit widths less than or equal to the number of qubits on a lattice.")
+
+    experiment = []
+    # loop over different graph sizes
+    for depth, subgraph_size in itertools.product(range(1, circuit_depth+1),
+                                                  range(1, circuit_width+1)):
+
+        list_of_graphs = generate_connected_subgraphs(G, subgraph_size)
+        for kdx in range(1, num_rand_subgraphs+1):
+            # randomly choose a lattice from list
+            lattice = random.choice(list_of_graphs)
+            prog = generate_random_classial_circuit_with_depth(lattice, depth, in_x_basis)
+
+            experiment.append({'Depth': depth,
+                               'Width': subgraph_size,
+                               'Lattice':lattice,
+                               'In X basis': in_x_basis,
+                               'Active Reset': use_active_reset,
+                               'Program': prog,
+                               'Trials': num_shots_per_circuit,
+                               })
+    return pd.DataFrame(experiment)
+
+
+def acquire_data_random_classical_circuit(qc_perfect: QuantumComputer,
+                                          qc_noisy: QuantumComputer,
+                                          rand_circ_expt: pd.DataFrame) -> pd.DataFrame:
     '''
     Convenient wrapper for collecting the results of running classical random circuits on a
     particular lattice.
@@ -209,21 +252,34 @@ def get_random_classical_circuit_results(qc_perfect: QuantumComputer,
         on a QPU.
     :return: the data as a list of dicts with keys 'depth', 'width', and 'hamming_dist'.
     '''
+
+    circuit_depth: int,
+    circuit_width: int,
+    num_rand_subgraphs: int = 10,
+    num_shots_per_circuit: int = 100,
+    in_x_basis: bool = False,
+    use_active_reset: bool = False)
     if qc_perfect.name == qc_noisy.name:
         raise ValueError("The noisy and perfect device can't be the same device.")
 
     # get the networkx graph of the lattice
     G = qc_perfect.qubit_topology()
 
-    if circuit_width > len(G.nodes):
-        raise ValueError("You must have circuit widths less than or equal to the number of qubits on a lattice.")
-
-    # add active reset
-    reset_prog = Program()
-    if use_active_reset:
-        reset_prog += RESET()
-
     data = []
+    for index, row in t1_experiment.iterrows():
+        prog = row['Program']
+        use_active_reset = row['Active Reset']
+        num_shots_per_circuit = row['Trials']
+
+        perfect_bitstring = qc_perfect.run_and_measure(prog, trials=1)
+        perfect_bitstring_array = np.vstack(perfect_bitstring[q] for q in prog.get_qubits()).T
+
+        # add active reset
+        reset_prog = Program()
+        if use_active_reset:
+            reset_prog += RESET()
+
+
     # loop over different graph sizes
     for depth, subgraph_size in itertools.product(range(1, circuit_depth+1),
                                                   range(1, circuit_width+1)):
@@ -236,8 +292,7 @@ def get_random_classical_circuit_results(qc_perfect: QuantumComputer,
             prog = generate_random_classial_circuit_with_depth(lattice, depth, in_x_basis)
 
             # perfect
-            perfect_bitstring = qc_perfect.run_and_measure(prog, trials=1)
-            perfect_bitstring_array = np.vstack(perfect_bitstring[q] for q in prog.get_qubits()).T
+
 
             # run on hardware or noisy QVM
             # only need to pre append active reset on something that may run on the hardware
