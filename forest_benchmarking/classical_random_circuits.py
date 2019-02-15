@@ -8,6 +8,7 @@ import networkx as nx
 import random
 import pandas as pd
 
+from pyquil.numpy_simulator import NumpyWavefunctionSimulator
 from pyquil.gates import CNOT, CCNOT, X, Z, I, H, CZ, MEASURE, RESET
 from pyquil.quilbase import Pragma
 from pyquil.quil import Program
@@ -243,22 +244,10 @@ def acquire_data_random_classical_circuit(qc_perfect: QuantumComputer,
 
     :param qc_perfect: the "perfect" quantum resource (QVM) to determine the true outcome.
     :param qc_noisy: the noisy quantum resource (QPU or QVM) to
-    :param circuit_depth: maximum depth of quantum circuit
-    :param circuit_width: maximum width of quantum circuit
-    :param num_rand_subgraphs: number of random circuits of circuit_width to be sampled
-    :param num_shots_per_circuit: number of shots per random circuit
-    :param in_x_basis: performs the random circuit in the x basis
-    :param use_active_reset: whether or not to use active reset. Doing so will speed up execution
-        on a QPU.
-    :return: the data as a list of dicts with keys 'depth', 'width', and 'hamming_dist'.
+    :param rand_circ_expt: pandas DataFrame where the rows contain experiments
+    :return: pandas DataFrame
     '''
 
-    circuit_depth: int,
-    circuit_width: int,
-    num_rand_subgraphs: int = 10,
-    num_shots_per_circuit: int = 100,
-    in_x_basis: bool = False,
-    use_active_reset: bool = False)
     if qc_perfect.name == qc_noisy.name:
         raise ValueError("The noisy and perfect device can't be the same device.")
 
@@ -266,11 +255,12 @@ def acquire_data_random_classical_circuit(qc_perfect: QuantumComputer,
     G = qc_perfect.qubit_topology()
 
     data = []
-    for index, row in t1_experiment.iterrows():
+    for index, row in rand_circ_expt.iterrows():
         prog = row['Program']
         use_active_reset = row['Active Reset']
         num_shots_per_circuit = row['Trials']
 
+        # run on perfect QVM or Wavefunction simulator
         perfect_bitstring = qc_perfect.run_and_measure(prog, trials=1)
         perfect_bitstring_array = np.vstack(perfect_bitstring[q] for q in prog.get_qubits()).T
 
@@ -279,34 +269,49 @@ def acquire_data_random_classical_circuit(qc_perfect: QuantumComputer,
         if use_active_reset:
             reset_prog += RESET()
 
+        # run on hardware or noisy QVM
+        # only need to pre append active reset on something that may run on the hardware
+        actual_bitstring = qc_noisy.run_and_measure(reset_prog + prog, trials=num_shots_per_circuit)
+        actual_bitstring_array = np.vstack(actual_bitstring[q] for q in prog.get_qubits()).T
 
-    # loop over different graph sizes
-    for depth, subgraph_size in itertools.product(range(1, circuit_depth+1),
-                                                  range(1, circuit_width+1)):
+        # list of dicts.
+        data.append({'Depth': row['Depth'],
+                     'Width': row['Width'],
+                     'Lattice': row['Lattice'],
+                     'In X basis': row['In X basis'],
+                     'Active Reset': use_active_reset,
+                     'Program': prog,
+                     'Trials': num_shots_per_circuit,
+                     'Answer': perfect_bitstring_array,
+                     'Samples': actual_bitstring_array,
+                     })
+        return pd.DataFrame(data)
 
-        list_of_graphs = generate_connected_subgraphs(G, subgraph_size)
-        wt = []
-        for kdx in range(1, num_rand_subgraphs+1):
-            # randomly choose a lattice from list
-            lattice = random.choice(list_of_graphs)
-            prog = generate_random_classial_circuit_with_depth(lattice, depth, in_x_basis)
 
-            # perfect
+    # # loop over different graph sizes
+    # for depth, subgraph_size in itertools.product(range(1, circuit_depth+1),
+    #                                               range(1, circuit_width+1)):
+    #
+    #     list_of_graphs = generate_connected_subgraphs(G, subgraph_size)
+    #     wt = []
+    #     for kdx in range(1, num_rand_subgraphs+1):
+    #         # randomly choose a lattice from list
+    #         lattice = random.choice(list_of_graphs)
+    #         prog = generate_random_classial_circuit_with_depth(lattice, depth, in_x_basis)
+    #
+    #         # perfect
+    #
+    #
+    #         # run on hardware or noisy QVM
+    #         # only need to pre append active reset on something that may run on the hardware
+    #         actual_bitstring = qc_noisy.run_and_measure(reset_prog+prog, trials=num_shots_per_circuit)
+    #         actual_bitstring_array = np.vstack(actual_bitstring[q] for q in prog.get_qubits()).T
+    #         wt.append(get_error_hamming_distance_from_results(perfect_bitstring_array, actual_bitstring_array))
+    #
+    #     # for each graph size flatten the results
+    #     wt_flat = flatten_list(wt)
+    #     hamming_wt_distr = get_error_hamming_distributions_from_list(wt_flat, subgraph_size)
 
-
-            # run on hardware or noisy QVM
-            # only need to pre append active reset on something that may run on the hardware
-            actual_bitstring = qc_noisy.run_and_measure(reset_prog+prog, trials=num_shots_per_circuit)
-            actual_bitstring_array = np.vstack(actual_bitstring[q] for q in prog.get_qubits()).T
-            wt.append(get_error_hamming_distance_from_results(perfect_bitstring_array, actual_bitstring_array))
-
-        # for each graph size flatten the results
-        wt_flat = flatten_list(wt)
-        hamming_wt_distr = get_error_hamming_distributions_from_list(wt_flat, subgraph_size)
-
-        # list of dicts. The keys are (depth, width, hamming_dist)
-        data.append({'depth': depth, 'width': subgraph_size, 'hamming_dist': hamming_wt_distr})
-    return data
 
 
 # helper functions to manipulate the dataframes
