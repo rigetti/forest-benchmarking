@@ -57,8 +57,8 @@ def generate_t1_experiments(qubits: Union[int, List[int]],
                             n_shots: int = 1000,
                             n_points: int = 15) -> pd.DataFrame:
     """
-    Return a list of programs which ran in sequence constitute a t1 experiment to measure the
-    decay time from the excited state to ground state.
+    Return a DataFrame containing programs which ran in sequence constitute a t1 experiment to
+    measure the decay time from the excited state to ground state.
 
     :param qubits: Which qubits to measure.
     :param stop_time: The maximum decay time to measure at.
@@ -82,7 +82,7 @@ def acquire_data_t1(qc: QuantumComputer,
                     t1_experiment: pd.DataFrame,
                     ) -> pd.DataFrame:
     """
-    Execute experiments to measure the t1 decay time of 1 or more qubits.
+    Execute experiments to measure the T1 decay time of 1 or more qubits.
 
     :param qc: The QuantumComputer to run the experiment on
     :param t1_experiment: A pandas DataFrame with columns: time, t1 program
@@ -234,8 +234,8 @@ def generate_t2_star_experiments(qubits: Union[int, List[int]],
                                  n_shots: int = 1000,
                                  num_points: int = 15)  -> pd.DataFrame:
     """
-    Return a list of programs which ran in sequence constitute a T2 star experiment to measure the
-    T2 star coherence decay time.
+    Return a DataFrame containing programs which ran in sequence constitute a T2 star
+    experiment to measure the T2 star coherence decay time.
 
     :param qubits: Which qubits to measure.
     :param stop_time: The maximum decay time to measure at.
@@ -301,8 +301,8 @@ def generate_t2_echo_experiments(qubits: Union[int, List[int]],
                                  n_shots: int = 1000,
                                  num_points: int = 15) -> pd.DataFrame:
     """
-    Return a list of programs which ran in sequence constitute a T2 echo experiment to measure the
-    T2 echo coherence decay time.
+    Return a DataFrame containing programs which ran in sequence constitute a T2 echo
+    experiment to measure the T2 echo coherence decay time.
 
     :param qubits: Which qubits to measure.
     :param stop_time: The maximum decay time to measure at.
@@ -501,7 +501,8 @@ def generate_rabi_experiments(qubits: Union[int, List[int]],
                               n_shots: int = 1000,
                               num_points: int = 15) -> pd.DataFrame:
     """
-    Return a list of programs which, when run in sequence, constitute a Rabi experiment.
+    Return a DataFrame containing programs which, when run in sequence, constitute a Rabi
+    experiment.
 
     Rabi oscillations are observed by applying successively larger rotations to the same initial
     state.
@@ -679,7 +680,7 @@ def generate_cz_phase_ramsey_experiment(edges: List[Tuple[int, int]],
                                         num_points: int = 15,
                                         num_shots: int = 1000):
     '''
-    Returns a list of parameters and programs that constitute a CZ phase ramsey experiment.
+    Returns a DataFrame of parameters and programs that constitute a CZ phase ramsey experiment.
 
     :param edges: List of Tuples containing edges that one can perform a CZ on.
     :param start_phase: The starting phase for the CZ phase Ramsey experiment.
