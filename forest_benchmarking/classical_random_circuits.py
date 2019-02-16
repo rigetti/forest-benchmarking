@@ -289,9 +289,6 @@ def acquire_data_random_classical_circuit(qc_perfect: QuantumComputer,
 
 
 
-
-
-
 # helper functions to manipulate the dataframes
 def get_hamming_dist(df: pd.DataFrame, depth_val: int, width_val: int):
     '''
