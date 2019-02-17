@@ -14,6 +14,8 @@ from pyquil.quilbase import Pragma
 from pyquil.quil import Program
 from pyquil.api import QuantumComputer
 
+from forest_benchmarking.distance_measures import total_variation_distance as tvd
+
 def generate_connected_subgraphs(G: nx.Graph, n_vert: int):
     '''
     Given a lattice on the QPU or QVM, specified by a networkx graph, return a list of all
@@ -288,6 +290,63 @@ def acquire_data_random_classical_circuit(qc_perfect: QuantumComputer,
     return pd.DataFrame(data)
 
 
+def estimate_random_classical_circuit_errors(df: pd.DataFrame) -> pd.DataFrame:
+    '''
+    asdf
+
+    :param df: pandas DataFrame containing experimental results
+    :return: pandas DataFrame containing estiamted errors and experimental results
+    '''
+    results = []
+    for _, row in df.iterrows():
+        wt = []
+        perfect_bitstring_array = np.asarray(row['Answer'])
+        actual_bitstring_array = np.asarray(row['Samples'])
+        wt.append(get_error_hamming_distance_from_results(perfect_bitstring_array, actual_bitstring_array))
+        wt_flat = flatten_list(wt)
+
+        # Hamming weight distributions
+        wt_dist_data = np.asarray(get_error_hamming_distributions_from_list(wt_flat, row['Width'])) # data
+        wt_dist_rand = np.asarray(hamming_dist_rand(row['Width'])) # random guessing
+        wt_dist_ideal = np.zeros_like(wt_dist_rand) # perfect
+        wt_dist_ideal[0] = 1
+
+        # Total variation distance
+        tvd_data_ideal =tvd(wt_dist_data, wt_dist_ideal)
+        tvd_data_rand = tvd(wt_dist_data, wt_dist_rand)
+
+        # Probablity of success
+        pr_suc_data = wt_dist_data[0]
+        pr_suc_rand = wt_dist_rand[0]
+
+        # Probablity of success with basement[ log_2(width) - 1 ] errors
+        # I.e. error when you allow for a logarithmic number of bit flips from the answer
+        num_bit_flips_allowed_from_answer = int(basement_function(np.log2(row['Width'])-1))
+        pr_suc_log_err_data = sum([wt_dist_data[idx] for idx in range(0,num_bit_flips_allowed_from_answer+1)])
+        pr_suc_log_err_rand = sum([wt_dist_rand[idx] for idx in range(0,num_bit_flips_allowed_from_answer+1)])
+
+        results.append({'Depth': row['Depth'],
+                        'Width': row['Width'],
+                        'Lattice': row['Lattice'],
+                        'In X basis': row['In X basis'],
+                        'Active Reset': row['Active Reset'],
+                        'Program': row['Program'],
+                        'Trials': row['Trials'],
+                        'Answer': perfect_bitstring_array,
+                        'Samples': actual_bitstring_array,
+                        'Hamming dist. data': wt_dist_data,
+                        'Hamming dist. rand': wt_dist_rand,
+                        'Hamming dist. ideal': wt_dist_ideal,
+                        'TVD(data, ideal)': tvd_data_ideal,
+                        'TVD(data, rand)': tvd_data_rand,
+                        'Pr. success data': pr_suc_data,
+                        'Pr. success rand': pr_suc_rand,
+                        'loge = basement[log_2(Width)-1]': num_bit_flips_allowed_from_answer,
+                        'Pr. success loge data': pr_suc_log_err_data,
+                        'Pr. success loge rand': pr_suc_log_err_rand,
+                        })
+    return pd.DataFrame(results)
+
 
 # helper functions to manipulate the dataframes
 def get_hamming_dist(df: pd.DataFrame, depth_val: int, width_val: int):
@@ -299,8 +358,8 @@ def get_hamming_dist(df: pd.DataFrame, depth_val: int, width_val: int):
     :param width_val: width of quantum circuit
     :return: smaller dataframe
     '''
-    idx = df.depth== depth_val
-    jdx = df.width== width_val
+    idx = df.Depth== depth_val
+    jdx = df.Width== width_val
     return df[idx&jdx].reset_index(drop=True)
 
 def get_hamming_dists_fn_width(df: pd.DataFrame, depth_val: int):
@@ -311,7 +370,7 @@ def get_hamming_dists_fn_width(df: pd.DataFrame, depth_val: int):
     :param depth_val: depth of quantum circuit
     :return: smaller dataframe
     '''
-    idx = df.depth== depth_val
+    idx = df.Depth== depth_val
     return df[idx].reset_index(drop=True)
 
 def get_hamming_dists_fn_depth(df: pd.DataFrame, width_val: int):
@@ -322,7 +381,7 @@ def get_hamming_dists_fn_depth(df: pd.DataFrame, width_val: int):
     :param width_val: width of quantum circuit
     :return: smaller dataframe
     '''
-    jdx = df.width== width_val
+    jdx = df.Width== width_val
     return df[jdx].reset_index(drop=True)
 
 def basement_function(number: float):
