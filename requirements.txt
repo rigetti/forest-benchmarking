@@ -10,6 +10,7 @@ seaborn
 cvxpy>=1.0.0
 dataclasses; python_version < "3.7"
 tqdm
+gitpython
 
 # test dependencies
 pytest
