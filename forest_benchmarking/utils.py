@@ -24,6 +24,17 @@ def bit_array_to_int(bit_array: Sequence[int]) -> int:
     return output
 
 
+def int_to_bit_array(num: int, n_bits: int) -> Sequence[int]:
+    """
+    Converts a number into an array of bits where the right-most bit is least significant.
+
+    :param num: the integer corresponding to the bitstring.
+    :param n_bits: the number of bits to report
+    :return:  an array of n_bits bits with right-most bit considered least significant.
+    """
+    return [num >> bit & 1 for bit in range(n_bits - 1, -1, -1)]
+
+
 def pack_shot_data(shot_data):
     return np.packbits(shot_data, axis=1)
 

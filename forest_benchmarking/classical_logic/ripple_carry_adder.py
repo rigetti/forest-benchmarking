@@ -30,6 +30,7 @@ from pyquil.unitary_tools import all_bitstrings
 
 from forest_benchmarking.readout import _readout_group_parameterized_bitstring
 from forest_benchmarking.classical_logic.primitives import *
+from forest_benchmarking.utils import bit_array_to_int, int_to_bit_array
 
 
 def assign_registers_to_line_or_cycle(start: int, graph: nx.Graph, num_length: int) \
@@ -269,30 +270,6 @@ def adder(num_a: Sequence[int], num_b: Sequence[int], register_a: Sequence[int],
     prog += MEASURE(z_ancilla, ro[0])
 
     return prog
-
-
-def bit_array_to_int(bit_array: Sequence[int]) -> int:
-    """
-    Converts a bit array into an integer where the right-most bit is least significant.
-
-    :param bit_array: an array of bits with right-most bit considered least significant.
-    :return: the integer corresponding to the bitstring.
-    """
-    output = 0
-    for bit in bit_array:
-        output = (output << 1) | bit
-    return output
-
-
-def int_to_bit_array(num: int, n_bits: int) -> Sequence[int]:
-    """
-    Converts a number into an array of bits where the right-most bit is least significant.
-
-    :param num: the integer corresponding to the bitstring.
-    :param n_bits: the number of bits to report
-    :return:  an array of n_bits bits with right-most bit considered least significant.
-    """
-    return [num >> bit & 1 for bit in range(n_bits - 1, -1, -1)]
 
 
 def get_n_bit_adder_results(qc: QuantumComputer, n_bits: int,
