@@ -7,10 +7,12 @@ from git import Repo
 
 import numpy as np
 from numpy import pi
+import pandas as pd
 
 from pyquil.gates import I, RX, RY, RZ
 from pyquil.paulis import PauliTerm
 from pyquil.quil import Program
+from pyquil.api import QuantumComputer
 
 
 def bit_array_to_int(bit_array: Sequence[int]) -> int:
