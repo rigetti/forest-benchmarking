@@ -80,10 +80,8 @@ def test_reset_confusion_consistency(qvm):
     num_trials = 10
     qubits = (0, 1)
 
-    active_reset = estimate_joint_reset_confusion(qvm, qubits, num_trials, len(qubits))[qubits]
     passive_reset = estimate_joint_reset_confusion(qvm, qubits, num_trials, len(qubits),
                                                    use_active_reset=False)[qubits]
 
     atol = .1
-    np.testing.assert_allclose(active_reset, passive_reset, atol=atol)
     np.testing.assert_allclose(passive_reset[:, 0], np.ones(4).T, atol=atol)
