@@ -178,7 +178,7 @@ def plot_t1_estimate_over_data(df: pd.DataFrame,
         row = df_est[df_est['Qubit'] == q]
 
         if row['Fit_params'].values[0] is None:
-            print(f"T1 estimte did not succeed for qubit {q}")
+            print(f"T1 estimate did not succeed for qubit {q}")
         else:
             fit_params = (row['Fit_params'].values)[0]
             plt.plot(x_data / MICROSECOND, exponential_decay_curve(x_data, *fit_params),
@@ -437,7 +437,7 @@ def plot_t2_estimate_over_data(df: pd.DataFrame,
         row = df_est[df_est['Qubit'] == q]
 
         if row['Fit_params'].values[0] is None:
-            print(f"T2 estimte did not succeed for qubit {q}")
+            print(f"T2 estimate did not succeed for qubit {q}")
         else:
             fit_params = (row['Fit_params'].values)[0]
             plt.plot(x_data / MICROSECOND,
@@ -627,7 +627,7 @@ def plot_rabi_estimate_over_data(df: pd.DataFrame,
         row = df_est[df_est['Qubit'] == q]
 
         if row['Fit_params'].values[0] is None:
-            print(f"Rabi estimte did not succeed for qubit {q}")
+            print(f"Rabi estimate did not succeed for qubit {q}")
         else:
             fit_params = (row['Fit_params'].values)[0]
             # overlay fitted sinusoidal curve
@@ -854,7 +854,7 @@ def plot_cz_phase_estimate_over_data(df: pd.DataFrame,
             row = df_est[df_est['Rz_qubit'] == qubit]
 
             if row['Fit_params'].values[0] is None:
-                print(f"Rabi estimte did not succeed for qubit {q}")
+                print(f"Rabi estimate did not succeed for qubit {q}")
             else:
                 fit_params = (row['Fit_params'].values)[0]
                 max_ESV = (row['max_ESV'].values)[0]
