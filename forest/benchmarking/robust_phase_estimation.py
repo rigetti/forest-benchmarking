@@ -1,35 +1,36 @@
-from typing import Tuple, List
+from typing import Tuple, List, Sequence, Union
 
 import numpy as np
 from numpy import pi
 from pandas import DataFrame, Series
+import pandas
 
 from pyquil.gates import I, RX, RY, RZ, X
-from pyquil.quil import Program
+from pyquil.quil import Program, merge_programs
 from pyquil.quilbase import Gate
 from pyquil.api import QuantumComputer
 from forest.benchmarking.compilation import basic_compile
-from forest.benchmarking.utils import transform_bit_moments_to_pauli, local_pauli_eig_meas
+from forest.benchmarking.utils import transform_bit_moments_to_pauli, local_pauli_eig_meas, \
+    determine_simultaneous_grouping
 
 import matplotlib.pyplot as plt
 
 
-def rpe_dataframe(subgraph: List[Tuple], num_depths: int, ):
-
-    def df_dict():
-        for exponent in range(num_depths):
-            depth = 2 ** exponent
-            for meas_dir in ['X', 'Y']:
-                yield {"Subgraph": subgraph,
-                       "Depth": depth,
-                       "Meas_Direction": meas_dir,
-                       "Experiment": generate_single_depth_rpe_experiment(rotation, axis, depth,
-                                                                          meas_dir,
-                                                                          measurement_qubit,
-                                                                          custom_prep)}
-
-    # TODO: Put dtypes on this DataFrame in the right way
-    return DataFrame(df_dict())
+# def rpe_dataframe(subgraph: List[Tuple], num_depths: int, ):
+#
+#     def df_dict():
+#         for exponent in range(num_depths):
+#             depth = 2 ** exponent
+#             for meas_dir in ['X', 'Y']:
+#                 yield {"Subgraph": subgraph,
+#                        "Depth": depth,
+#                        "Meas_Direction": meas_dir,
+#                        "Experiment": generate_single_depth_rpe_experiment(rotation, axis, depth,
+#                                                                           meas_dir,
+#                                                                           measurement_qubit,
+#                                                                           custom_prep)}
+#
+#     return DataFrame(df_dict())
 
 
 def prepare_state_about_axis(qubit: int, axis: Tuple[float, float]) -> Program:
@@ -60,11 +61,11 @@ def prepare_state_about_axis(qubit: int, axis: Tuple[float, float]) -> Program:
     return prep
 
 
-def generate_single_depth_rpe_experiment(rotation: Program, axis: Tuple[float, float], depth: int,
+def generate_single_depth_rpe_program(rotation: Program, axis: Tuple[float, float], depth: int,
                                          meas_dir: str, measurement_qubit: int,
                                          custom_prep: Program = None) -> Program:
     """
-    Generate a single RPE experiment where rotation is applied depth many times before a final
+    Generate a single RPE program where rotation is applied depth many times before a final
     measurement in either the X or Y 'direction' relative to a frame with the rotation axis
     corresponding to the Z axis.
 
@@ -94,42 +95,42 @@ def generate_single_depth_rpe_experiment(rotation: Program, axis: Tuple[float, f
     :param axis: the axis of rotation corresponding to the rotation program, specified in
         radians as (theta, phi) in typical spherical coordinates, with standard Bloch sphere
         orientation (Z axis vertical with |0> at top, +X cross +Y = +Z using right-hand rule)
-    :param depth: the number of times we apply the rotation in the experiment
+    :param depth: the number of times we apply the rotation in the program
     :param meas_dir: X or Y, specifying which operator to measure following the depth many
         rotations and after the plane of rotation has been brought to the X-Y plane.
     :param measurement_qubit:
     :param custom_prep: an optional preparation program to run before the standard preparation
     :return: a program implementing a single iteration of the RPE protocol in [RPE]
     """
-    experiment = Program()
+    program = Program()
 
     # if a custom preparation is supplied, do that first
     if custom_prep is not None:
-        experiment += custom_prep
+        program += custom_prep
 
     # prepare the measurement qubit in a state perpendicular to the axis of rotation
-    experiment += prepare_state_about_axis(measurement_qubit, axis)
+    program += prepare_state_about_axis(measurement_qubit, axis)
 
     # rotate the state depth many times
     for _ in range(depth):
-        experiment.inst(rotation)
+        program.inst(rotation)
 
     # return state to X-Y plane
-    experiment += RZ(-axis[1], measurement_qubit)
-    experiment += RY(-axis[0], measurement_qubit)
+    program += RZ(-axis[1], measurement_qubit)
+    program += RY(-axis[0], measurement_qubit)
 
     # measure either in either X or Y basis
-    experiment += local_pauli_eig_meas(meas_dir, measurement_qubit)
+    program += local_pauli_eig_meas(meas_dir, measurement_qubit)
 
-    ro_bit = experiment.declare("ro", "BIT", 1)
-    experiment.measure(measurement_qubit, ro_bit[0])
+    ro_bit = program.declare("ro", "BIT", 1)
+    program.measure(measurement_qubit, ro_bit[0])
 
-    return experiment
+    return program
 
 
-def generate_single_rpe_experiment(rotation: Program, axis: Tuple[float, float],
-                                   num_depths: int = 5, measurement_qubit: int = None,
-                                   custom_prep: Program = None) -> DataFrame:
+def generate_rpe_experiment(rotation: Program, axis: Tuple[float, float],
+                            num_depths: int = 5, measurement_qubit: int = None,
+                            custom_prep: Program = None) -> DataFrame:
     """
     Generate a dataframe containing all the experiments needed to perform robust phase estimation
     to estimate the angle of rotation about the given axis performed by the given rotation program.
@@ -161,35 +162,40 @@ def generate_single_rpe_experiment(rotation: Program, axis: Tuple[float, float],
     :param custom_prep: an optional prep program that will be run before the standard preparation
         of the measurement qubit. This could, for example, be supplied to initialize the control
         qubit of a CZ to |1>, with the target qubit as the measurement qubit.
-    :return: a dataframe populated with all of experiments necessary for the RPE protocol in
+    :return: a dataframe populated with all of programs necessary for the RPE protocol in
         [RPE] with the necessary depth, measurement_direction, and program.
     """
     if isinstance(rotation, Gate):
         rotation = Program(rotation)
 
+    rotation_qubits = rotation.get_qubits()
     if measurement_qubit is None:
-        qubits = rotation.get_qubits()
-        if len(qubits) == 1:
-            measurement_qubit = qubits.pop()  # measure the relevant qubit
+        if len(rotation_qubits) == 1:
+            measurement_qubit = list(rotation_qubits)[0]  # measure the only privileged qubit
         else:
             raise ValueError("A measurement qubit must be specified.")
+
+    custom_prep_qubits = set()
+    if custom_prep is not None:
+        custom_prep_qubits = custom_prep.get_qubits()
+
+    qubits = rotation_qubits.union(custom_prep_qubits)
+    qubits.add(measurement_qubit)
 
     def df_dict():
         for exponent in range(num_depths):
             depth = 2 ** exponent
             for meas_dir in ['X', 'Y']:
-                yield {"Depth": depth,
+                yield {"Qubits": qubits,
+                       "Depth": depth,
                        "Meas_Direction": meas_dir,
-                       "Experiment": generate_single_depth_rpe_experiment(rotation, axis, depth,
+                       "Program": generate_single_depth_rpe_program(rotation, axis, depth,
                                                                           meas_dir,
                                                                           measurement_qubit,
                                                                           custom_prep)}
 
     # TODO: Put dtypes on this DataFrame in the right way
     return DataFrame(df_dict())
-
-
-def generate_rpe_experiments()
 
 
 def get_additive_error_factor(M_j: float, max_additive_error: float) -> float:
@@ -212,18 +218,18 @@ def get_additive_error_factor(M_j: float, max_additive_error: float) -> float:
 def num_trials(depth, max_depth, alpha, beta, multiplicative_factor: float = 1.0,
                additive_error: float = None) -> int:
     """
-    Calculate the optimal number of shots per experiment with a given depth.
+    Calculate the optimal number of shots per program with a given depth.
 
     The calculation is given by equations V.11 and V.17 in [RPE]. A non-default multiplicative
     factor breaks the optimality guarantee.
 
-    :param depth: the depth of the experiment whose number of trials is calculated
-    :param max_depth: maximum depth of the experiments
+    :param depth: the depth of the program whose number of trials is calculated
+    :param max_depth: maximum depth of programs in the experiment
     :param alpha: a hyper-parameter in equation V.11 of [RPE], suggested to be 5/2
     :param beta: a hyper-parameter in equation V.11 of [RPE], suggested to be 1/2
     :param multiplicative_factor: extra add-hoc factor that multiplies the optimal number of shots
     :param additive_error: estimate of the max additive error in the experiment, eq. V.15 of [RPE]
-    :return: Mj, the number of shots for experiment with depth 2**(j-1) in iteration j of RPE
+    :return: Mj, the number of shots for program with depth 2**(j-1) in iteration j of RPE
     """
     j = np.log2(depth) + 1
     K = np.log2(max_depth) + 1
@@ -233,14 +239,62 @@ def num_trials(depth, max_depth, alpha, beta, multiplicative_factor: float = 1.0
     return int(np.ceil(Mj * multiplicative_factor))
 
 
-def acquire_rpe_data(experiments: DataFrame, qc: QuantumComputer,
+def _run_rpe_program(qc: QuantumComputer, prog: Program, num_shots: int) -> np.ndarray:
+    """
+    Simple helper to run a program with appropriate number of shots and return result.
+
+    Note that the program is first compiled with basic_compile.
+
+    :param qc: quantum computer to run program on
+    :param prog: program to run
+    :param num_shots: number of shots to repeat the program
+    :return: the results of the program
+    """
+    prog.wrap_in_numshots_loop(num_shots)
+    executable = qc.compiler.native_quil_to_executable(basic_compile(prog))
+    return qc.run(executable)
+
+
+def run_single_rpe_experiment(experiment: DataFrame, qc: QuantumComputer,
                      multiplicative_factor: float = 1.0, additive_error: float = None,
                      results_label="Results") -> DataFrame:
     """
-    Run each experiment in the experiments data frame a number of times which is specified by
+    Run each program in the experiment data frame a number of times which is specified by
     num_trials().
 
-    The experiments df is copied, and raw shot outputs are stored in a column labeled by
+    The experiment df is copied, and raw shot outputs are stored in a column labeled by
+    results_label, which defaults to "Results". The number of shots run at each depth can be
+    modified indirectly by adjusting multiplicative_factor and additive_error.
+
+    :param experiment: dataframe generated by generate_rpe_experiment()
+    :param qc: a quantum computer, e.g. QVM or QPU, that runs each program in the experiment
+    :param multiplicative_factor: ad-hoc factor to multiply the number of shots per iteration. See
+        num_trials() which computes the optimal number of shots per iteration.
+    :param additive_error: estimate of the max additive error in the experiment, see num_trials()
+    :param results_label: label for the column of the returned df to be populated with results
+    :return: A copy of the experiment data frame with the raw shot results in a new column.
+    """
+    alpha = 5 / 2  # should be > 2
+    beta = 1 / 2  # should be > 0
+    max_depth = max(experiment["Depth"].values)
+    results = [_run_rpe_program(qc, program,
+                                num_trials(depth, max_depth, alpha, beta, multiplicative_factor,
+                                           additive_error))
+               for (depth, program) in zip(experiment["Depth"].values,
+                                           experiment["Program"].values)]
+    exp_with_results = experiment.copy()
+    exp_with_results[results_label] = Series(results)
+    return exp_with_results
+
+
+def acquire_rpe_data(qc: QuantumComputer, experiments: Union[DataFrame, Sequence[DataFrame]],
+                     multiplicative_factor: float = 1.0, additive_error: float = None,
+                     grouping: Sequence[Tuple[int]] = None,
+                     results_label="Results") -> DataFrame:
+    """
+    Run each experiment in the sequence of experiments.
+
+    Each individual experiment df is copied, and raw shot outputs are stored in a column labeled by
     results_label, which defaults to "Results". The number of shots run at each depth can be
     modified indirectly by adjusting multiplicative_factor and additive_error.
 
@@ -253,20 +307,90 @@ def acquire_rpe_data(experiments: DataFrame, qc: QuantumComputer,
     :return: A copy of the experiments data frame with the raw shot results in a new column.
     """
 
-    def run(qc: QuantumComputer, exp: Program, n_trials: int) -> np.ndarray:
-        exp.wrap_in_numshots_loop(n_trials)
-        executable = qc.compiler.native_quil_to_executable(basic_compile(exp))
-        return qc.run(executable)
+    if isinstance(experiments, DataFrame):
+        return run_single_rpe_experiment(qc, experiments, multiplicative_factor, additive_error,
+                                         results_label)
 
-    alpha = 5 / 2  # should be > 2
-    beta = 1 / 2  # should be > 0
-    max_depth = max(experiments["Depth"].values)
-    results = [run(qc, experiment,
+    if grouping is None:
+        grouping = determine_simultaneous_grouping(experiments)
+
+    results = []
+    for group in grouping:
+        grouped_expts = [experiments[idx] for idx in group]
+
+        depths = [expt["Depth"] for expt in grouped_expts]
+        for d1, d2 in zip(depths[:-1], depths[1:]):
+            assert d1.equals(d2), "Depths must be equivalent to run experiments simultaneously."
+
+        programs_df = pandas.concat([expt["Program"] for expt in grouped_expts], axis=1)
+        programs = programs_df.apply(merge_programs, axis=1)
+
+        max_depth = max(depths[0])
+        alpha = 5 / 2  # should be > 2
+        beta = 1 / 2  # should be > 0
+
+        results = [_run_rpe_program(qc, program,
                    num_trials(depth, max_depth, alpha, beta, multiplicative_factor, additive_error))
-               for (depth, experiment) in zip(experiments["Depth"].values, experiments["Experiment"].values)]
+                   for (depth, program) in zip(depths[0], programs.values)]
+
     experiments = experiments.copy()
     experiments[results_label] = Series(results)
     return experiments
+
+
+# def separate_rpe_results_by_id(df: DataFrame) -> Sequence[DataFrame]:
+#     """
+#     Takes a single DataFrame with a number of different RPE experiments which were run
+#     simultaneously and returns a list of separate data frames for each experiment.
+#
+#     :param df: a data frame output by a run of acquire_rpe_data on a list of experiments.
+#     :return: a list of separate experiment data frames with results.
+#     """
+#     ids = df["Exp. ID"].unique()
+#
+#     experiments = []
+#     for id in ids:
+#         single_experiment = df.loc[df["Exp. ID"] == id]
+#         experiments.append(single_experiment)
+#
+#
+#     return experiments
+
+
+# def acquire_rpe_data(experiments: DataFrame, qc: QuantumComputer,
+#                      multiplicative_factor: float = 1.0, additive_error: float = None,
+#                      results_label="Results") -> DataFrame:
+#     """
+#     Run each experiment in the experiments data frame a number of times which is specified by
+#     num_trials().
+#
+#     The experiments df is copied, and raw shot outputs are stored in a column labeled by
+#     results_label, which defaults to "Results". The number of shots run at each depth can be
+#     modified indirectly by adjusting multiplicative_factor and additive_error.
+#
+#     :param experiments: dataframe containing experiments, generated by generate_rpe_experiments()
+#     :param qc: a quantum computer, e.g. QVM or QPU, that runs the experiments
+#     :param multiplicative_factor: ad-hoc factor to multiply the number of shots per iteration. See
+#         num_trials() which computes the optimal number of shots per iteration.
+#     :param additive_error: estimate of the max additive error in the experiment, see num_trials()
+#     :param results_label: label for the column of the returned df to be populated with results
+#     :return: A copy of the experiments data frame with the raw shot results in a new column.
+#     """
+#
+#     def run(qc: QuantumComputer, exp: Program, n_trials: int) -> np.ndarray:
+#         exp.wrap_in_numshots_loop(n_trials)
+#         executable = qc.compiler.native_quil_to_executable(basic_compile(exp))
+#         return qc.run(executable)
+#
+#     alpha = 5 / 2  # should be > 2
+#     beta = 1 / 2  # should be > 0
+#     max_depth = max(experiments["Depth"].values)
+#     results = [run(qc, experiment,
+#                    num_trials(depth, max_depth, alpha, beta, multiplicative_factor, additive_error))
+#                for (depth, experiment) in zip(experiments["Depth"].values, experiments["Experiment"].values)]
+#     experiments = experiments.copy()
+#     experiments[results_label] = Series(results)
+#     return experiments
 
 
 #########
@@ -296,24 +420,24 @@ def _xci(h: int) -> float:
     return 2 * pi / (2 ** h)
 
 
-def get_variance_upper_bound(experiments: DataFrame, results_label='Results') -> float:
+def get_variance_upper_bound(experiment: DataFrame, results_label='Results') -> float:
     """
     Equation V.9 in [RPE]
 
-    :param experiments: a dataframe with RPE results. Importantly the bound follows from the number
-    of shots at each iteration of the experiment, so experiments needs to be populated with the
-    desired number of shots results.
+    :param experiment: a dataframe with RPE results. Importantly the bound follows from the number
+        of shots at each iteration of the experiment, so the data frame needs to be populated with
+        the desired number-of-shots-many results.
     :param results_label: label for the column with results from which the variance is estimated
     :return: An upper bound of the variance of the angle estimate corresponding to the input
-    experiments.
+        experiments.
     """
-    max_depth = max(experiments["Depth"].values)
+    max_depth = max(experiment["Depth"].values)
     K = np.log2(max_depth).astype(int) + 1
 
     M_js = []
     # 1 <= j <= K, where j is the one-indexed iteration number
     for j in range(1, K + 1):
-        single_depth = experiments.groupby(["Depth"]).get_group(2 ** (j - 1)).set_index(
+        single_depth = experiment.groupby(["Depth"]).get_group(2 ** (j - 1)).set_index(
             'Meas_Direction')
         M_j = len(single_depth.loc['X', results_label])
         M_js += [M_j]
@@ -323,13 +447,13 @@ def get_variance_upper_bound(experiments: DataFrame, results_label='Results') ->
         [_xci(i + 1) ** 2 * _p_max(M_j) for i, M_j in enumerate(M_js)])
 
 
-def find_expectation_values(experiments: DataFrame, results_label='Results') -> \
+def find_expectation_values(experiment: DataFrame, results_label='Results') -> \
         Tuple[List, List, List, List]:
     """
     Calculate expectation values and standard deviation of the mean for each depth and
     experiment type.
 
-    :param experiments: a dataframe with RPE results populated by a call to acquire_rpe_data
+    :param experiment: a dataframe with RPE results populated by a call to acquire_rpe_data
     :param results_label: label for the column with results from which the variance is estimated
     """
     xs = []
@@ -337,7 +461,7 @@ def find_expectation_values(experiments: DataFrame, results_label='Results') -> 
     x_stds = []
     y_stds = []
 
-    for depth, group in experiments.groupby(["Depth"]):
+    for depth, group in experiment.groupby(["Depth"]):
         N = len(group[group['Meas_Direction'] == 'X'][results_label].values[0])
 
         p_x = group[group['Meas_Direction'] == 'X'][results_label].values[0].mean()

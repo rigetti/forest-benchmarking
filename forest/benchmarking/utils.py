@@ -1,13 +1,15 @@
 import itertools
 from collections import OrderedDict
 from random import random, seed
-from typing import Sequence
+from typing import Sequence, List, Set
 from datetime import date, datetime
 from git import Repo
-
 import numpy as np
 from numpy import pi
+import networkx as nx
+from networkx.algorithms.approximation.clique import clique_removal
 import pandas as pd
+from pandas import DataFrame
 
 from pyquil.gates import I, RX, RY, RZ
 from pyquil.paulis import PauliTerm
@@ -37,6 +39,30 @@ def int_to_bit_array(num: int, n_bits: int) -> Sequence[int]:
     :return:  an array of n_bits bits with right-most bit considered least significant.
     """
     return [num >> bit & 1 for bit in range(n_bits - 1, -1, -1)]
+
+
+def determine_simultaneous_grouping(experiments: Sequence[DataFrame]) -> List[Set[int]]:
+    """
+    Determines a grouping of experiments acting on disjoint sets of qubits that can be run
+    simultaneously.
+
+    :param experiments:
+    :return: a list of the simultaneous groups, each specified by a set of indices of each grouped
+        experiment in experiments
+    """
+    g = nx.Graph()
+    nodes = np.arange(len(experiments))
+    g.add_nodes_from(nodes)
+    qubits = [experiment["Qubits"].values[0] for experiment in experiments]
+    for node1 in nodes:
+        qbs1 = qubits[node1]
+        for node2 in nodes[node1+1:]:
+            if len(qbs1.intersection(qubits[node2])) == 0:
+                g.add_edge(node1, node2)
+
+    _, cliqs = clique_removal(g)
+
+    return cliqs
 
 
 def pack_shot_data(shot_data):
