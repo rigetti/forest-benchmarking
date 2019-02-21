@@ -402,6 +402,7 @@ def estimate_t2(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def plot_t2_estimate_over_data(df: pd.DataFrame,
+                               df_est: pd.DataFrame,
                                qubits: list = None,
                                t2_type: str = 'unknown',
                                filename: str = None) -> None:
@@ -410,6 +411,7 @@ def plot_t2_estimate_over_data(df: pd.DataFrame,
     curve.
 
     :param df: A pandas DataFrame containing experimental results to plot.
+    :param df_est: A pandas DataFrame containing estimates of T2.
     :param qubits: A list of qubits that you actually want plotted. The default is all qubits.
     :param detuning: Detuning frequency used in experiment creation.
     :param type: String either 'star' or 'echo'.
@@ -432,20 +434,19 @@ def plot_t2_estimate_over_data(df: pd.DataFrame,
 
         plt.plot(x_data / MICROSECOND, y_data, 'o-', label=f"Qubit {q} T2 data")
 
-        try:
-            fit_params, fit_params_errs = fit_to_exponentially_decaying_sinusoidal_curve(x_data,
-                                                                                         y_data,
-                                                                                         detuning)
-        except RuntimeError:
-            print(f"Could not fit to experimental data for qubit {q}")
+        row = df_est[df_est['Qubit'] == q]
+
+        if row['Fit_params'].values[0] is None:
+            print(f"T2 estimte did not succeed for qubit {q}")
         else:
+            fit_params = (row['Fit_params'].values)[0]
             plt.plot(x_data / MICROSECOND,
                      exponentially_decaying_sinusoidal_curve(x_data, *fit_params),
                      label=f"QC{q} fit: freq={fit_params[2] / MHZ:.2f}MHz, "
                            f""f"T2={fit_params[1] / MICROSECOND:.2f}us")
 
     plt.xlabel("Time [µs]")
-    plt.ylabel("Pr(measuring 1)")
+    plt.ylabel("Pr(1)")
     if t2_type.lower() == 'star':
         plt.title("$T_2^*$ (Ramsey) decay")
     elif t2_type.lower() == 'echo':
@@ -595,12 +596,14 @@ def estimate_rabi(df: pd.DataFrame):
 
 
 def plot_rabi_estimate_over_data(df: pd.DataFrame,
+                                 df_est: pd.DataFrame,
                                  qubits: list = None,
                                  filename: str = None) -> None:
     """
     Plot Rabi oscillation experimental data and estimated curve.
 
     :param df: Experimental results to plot and fit curve to.
+    :param df_est: Estimates of Rabi oscillation.
     :param qubits: A list of qubits that you actually want plotted. The default is all qubits.
     :param filename: String.
     :return: None
@@ -621,13 +624,12 @@ def plot_rabi_estimate_over_data(df: pd.DataFrame,
         # plot raw data
         plt.plot(angles, prob_of_one, 'o-', label=f"qubit {q} Rabi data")
 
-        try:
-            # fit to sinusoid
-            fit_params, fit_params_errs = fit_to_sinusoidal_waveform(angles, prob_of_one)
+        row = df_est[df_est['Qubit'] == q]
 
-        except RuntimeError:
-            print(f"Could not fit to experimental data for qubit {q}")
+        if row['Fit_params'].values[0] is None:
+            print(f"Rabi estimte did not succeed for qubit {q}")
         else:
+            fit_params = (row['Fit_params'].values)[0]
             # overlay fitted sinusoidal curve
             plt.plot(angles, sinusoidal_waveform(angles, *fit_params),
                      label=f"qubit {q} fitted line")
@@ -790,6 +792,9 @@ def estimate_cz_phase_ramsey(df: pd.DataFrame) -> pd.DataFrame:
             try:
                 # fit to sinusoid
                 fit_params, fit_params_errs = fit_to_sinusoidal_waveform(phases, prob_of_one)
+                # find max excited state visibility (ESV) and propagate error from fit params
+                max_ESV, max_ESV_err = get_peak_from_fit_params(fit_params, fit_params_errs)
+
                 results.append({
                     'Edge': edge,
                     'Rz_qubit': rz_qb,
@@ -797,6 +802,8 @@ def estimate_cz_phase_ramsey(df: pd.DataFrame) -> pd.DataFrame:
                     'Prob_of_one': fit_params[2],
                     'Fit_params': fit_params,
                     'Fit_params_errs': fit_params_errs,
+                    'max_ESV': max_ESV,
+                    'max_ESV_err': max_ESV_err,
                     'Message': None,
                 })
             except RuntimeError:
@@ -808,17 +815,21 @@ def estimate_cz_phase_ramsey(df: pd.DataFrame) -> pd.DataFrame:
                     'Prob_of_one': None,
                     'Fit_params': None,
                     'Fit_params_errs': None,
+                    'max_ESV': None,
+                    'max_ESV_err': None,
                     'Message': 'Could not fit to experimental data for edge' + str(edge),
                 })
     return pd.DataFrame(results)
 
 
 def plot_cz_phase_estimate_over_data(df: pd.DataFrame,
+                                     df_est: pd.DataFrame,
                                      filename: str = None) -> None:
     """
     Plot Ramsey experimental data, the fitted sinusoid, and the maximum of that sinusoid.
 
     :param df: Experimental results to plot and fit exponential decay curve to.
+    :param df_est: estimates of CZ Ramsey experiments
     :return: None
     """
     edges = df['Edge'].unique()
@@ -840,15 +851,14 @@ def plot_cz_phase_estimate_over_data(df: pd.DataFrame,
             axes[id_row, id_col].plot(phases, prob_of_one, 'o',
                                       label=f"qubit{qubit} CZ Ramsey data")
 
-            try:
-                # fit to sinusoid
-                fit_params, fit_params_errs = fit_to_sinusoidal_waveform(phases,
-                                                                         prob_of_one)
-            except RuntimeError:
-                print(f"Could not fit to experimental data for qubit {qubit}")
+            row = df_est[df_est['Rz_qubit'] == qubit]
+
+            if row['Fit_params'].values[0] is None:
+                print(f"Rabi estimte did not succeed for qubit {q}")
             else:
-                # find max excited state visibility (ESV) and propagate error from fit params
-                max_ESV, max_ESV_err = get_peak_from_fit_params(fit_params, fit_params_errs)
+                fit_params = (row['Fit_params'].values)[0]
+                max_ESV = (row['max_ESV'].values)[0]
+                max_ESV_err = (row['max_ESV_err'].values)[0]
 
                 # overlay fitted curve and vertical line at maximum ESV
                 axes[id_row, id_col].plot(phases, sinusoidal_waveform(phases, *fit_params),
