@@ -5,45 +5,74 @@ from numpy import pi
 from pandas import DataFrame, Series
 import pandas
 
-from pyquil.gates import I, RX, RY, RZ, X
 from pyquil.quil import Program, merge_programs
+from pyquil.gates import RZ, RX
 from pyquil.quilbase import Gate
 from pyquil.api import QuantumComputer
 from forest.benchmarking.compilation import basic_compile
 from forest.benchmarking.utils import transform_bit_moments_to_pauli, local_pauli_eig_meas, \
-    determine_simultaneous_grouping
+    determine_simultaneous_grouping, prepare_state_on_bloch_sphere, standard_basis_to_bloch_vector
 
 import matplotlib.pyplot as plt
 
 
-# def rpe_dataframe(subgraph: List[Tuple], num_depths: int, ):
-#
-#     def df_dict():
-#         for exponent in range(num_depths):
-#             depth = 2 ** exponent
-#             for meas_dir in ['X', 'Y']:
-#                 yield {"Subgraph": subgraph,
-#                        "Depth": depth,
-#                        "Meas_Direction": meas_dir,
-#                        "Experiment": generate_single_depth_rpe_experiment(rotation, axis, depth,
-#                                                                           meas_dir,
-#                                                                           measurement_qubit,
-#                                                                           custom_prep)}
-#
-#     return DataFrame(df_dict())
+def eigenvector_superposition_prep(qubit, e1: np.ndarray, e2: np.ndarray):
+    """
+    Provides a program which, from the |0> state, prepares the equal superposition of the given
+    orthogonal vectors.
+
+    Note that for a single qubit Hilbert space, specifying a single eigenvector e1 of an operator A
+    necessarily determines the other eigenvector e2 since these vectors are necessarily
+    orthogonal and span the Hilbert space. However, each eigenvector in isolation is only defined
+    up to some global phase. Hence, for the superposition to be un-ambiguously determined,
+    we require both eigenvectors be supplied, which specifies a specific relative phase.
+
+    :param qubit: the qubit to prepare in the given state.
+    :param e1: a vector [alpha, beta]
+    :param e2: a vector [alpha2, beta2] specifying a vector orthogonal to e1
+    :return: a program preparing the state (e1 + e2)/sqrt(2)
+    """
+    superposition = (e1 + e2) / np.sqrt(2)
+    theta, phi = standard_basis_to_bloch_vector(superposition)
+
+    return prepare_state_on_bloch_sphere(qubit, theta, phi)
 
 
-def prepare_state_about_axis(qubit: int, axis: Tuple[float, float]) -> Program:
+def orthogonal_to_axis_measures(qubit: int, axis: Tuple[float, float]) -> Program:
+    """
+    Return the measure programs for the RPE experiment on a rotation about axis.
+
+    This method simply treats the state at axis as if it is the +Z state and returns
+    programs
+    that measure along the induced "X" and "Y" axes, where we follow the convention of
+    orthogonal_to_axis_prep that the +X state is pi/2 radians from axis in the theta direction.
+
+    :param qubit:
+    :param axis:
+    :return:
+    """
+    # the "X" measurement is simply in the direction of the initial preparation
+    x_measurment = orthogonal_to_axis_prep(qubit, axis).dagger()
+
+    # for "Y" measurement, first undo phi rotation
+    y_measurement = Program(RZ(-axis[1], qubit))
+    y_measurement += RX(pi / 2, qubit)  # then rotate +Y up to +Z
+
+    return x_measurment, y_measurement
+
+
+def orthogonal_to_axis_prep(qubit: int, axis: Tuple[float, float]) -> Program:
     """
     Generates a program that prepares a state perpendicular to the given (theta, phi) axis on
     the Bloch sphere.
 
     In the context of an RPE experiment, the supplied axis is the axis of rotation of the gate
-    whose magnitude of rotation the experimenter is trying to estimate. The first entry of axis
-    is the polar angle, theta, in radians from the pauli Z axis (north pole or zero state on the
-    Bloch sphere). The second entry is the azimuthal angle, phi, of the axis from the X-Z plane
-    of the Bloch sphere. The prepared state is a point on the sphere whose radial line is
-    perpendicular to the supplied axis; the state is pi radians in the theta direction from axis.
+    whose magnitude of rotation the experimenter is trying to estimate. Equivalently, axis is the
+    plus eigenvector of the rotation. The prepared state is a point on the sphere whose radial
+    line is perpendicular to the supplied axis; the state is pi radians in the theta direction
+    from axis. Equivalently, the final state is simply some equal magnitude (perhaps with a
+    relative phase) superposition of the two eigenstates operator which rotates about the given
+    rotation axis.
 
     For example, the axis (0, 0) corresponds to an RPE experiment estimating the angle parameter
     of the rotation RZ(angle). The initial state of this experiment would be the plus one
@@ -55,82 +84,12 @@ def prepare_state_about_axis(qubit: int, axis: Tuple[float, float]) -> Program:
     :param axis: axis of rotation specified as (theta, phi) in typical spherical coordinates.
     :return: A preparation program that prepares the qubit in a state perpendicular to axis.
     """
-    prep = Program()
-    prep += RY(pi / 2 + axis[0], qubit)
-    prep += RZ(axis[1], qubit)
-    return prep
+    return prepare_state_on_bloch_sphere(qubit, axis[0] + pi / 2, axis[1])
 
 
-def generate_single_depth_rpe_program(rotation: Program, axis: Tuple[float, float], depth: int,
-                                         meas_dir: str, measurement_qubit: int,
-                                         custom_prep: Program = None) -> Program:
-    """
-    Generate a single RPE program where rotation is applied depth many times before a final
-    measurement in either the X or Y 'direction' relative to a frame with the rotation axis
-    corresponding to the Z axis.
-
-    Rotation should be the program implementing the gate whose magnitude of rotation about the
-    supplied axis we wish to estimate. A single RPE experiment iteration comprises preparing a
-    state perpendicular to the axis of rotation, rotating this state depth many times,
-    and measuring in the plane perpendicular to the axis of rotation along one of two orthogonal
-    directions; to specify which of these two directions, we adopt a frame where the axis of
-    rotation corresponds to the Z axis and meas_dir takes the value either 'X' or 'Y'. For
-    conceptual clarity, the rotated state is physically returned to the X-Y plane before being
-    measured in the X or Y basis. Note that only Z-basis measurements are actually implemented,
-    so even measurement in the X or Y basis still requires some pre-measurement gates.
-
-    To summarize, we start in a frame where a state is prepared somewhere in a plane P perpendicular
-    to the supplied axis of rotation. The rotation program is applied to this state depth many
-    times, spinning the state in this plane P of rotation. There is an intermediate rotation
-    which shifts the frame so that P coincides with the X-Y plane, the axis of rotation lies
-    along the Z axis, and the initial state prepared would have coincided with the +X state.
-    Finally, the state is measured in the X or Y basis, which itself involves some final gate
-    applied before a measurement in the Z basis.
-
-    Concretely, if the axis of rotation is the Z axis (0, 0) then the initial state is +X,
-    the plane of rotation is simply the X-Y plane, and the final measurement provides either the
-    X or Y expectation of the rotated state, which places the rotated state in the X-Y plane.
-
-    :param rotation: the program specifying the gate whose angle of rotation we wish to estimate.
-    :param axis: the axis of rotation corresponding to the rotation program, specified in
-        radians as (theta, phi) in typical spherical coordinates, with standard Bloch sphere
-        orientation (Z axis vertical with |0> at top, +X cross +Y = +Z using right-hand rule)
-    :param depth: the number of times we apply the rotation in the program
-    :param meas_dir: X or Y, specifying which operator to measure following the depth many
-        rotations and after the plane of rotation has been brought to the X-Y plane.
-    :param measurement_qubit:
-    :param custom_prep: an optional preparation program to run before the standard preparation
-    :return: a program implementing a single iteration of the RPE protocol in [RPE]
-    """
-    program = Program()
-
-    # if a custom preparation is supplied, do that first
-    if custom_prep is not None:
-        program += custom_prep
-
-    # prepare the measurement qubit in a state perpendicular to the axis of rotation
-    program += prepare_state_about_axis(measurement_qubit, axis)
-
-    # rotate the state depth many times
-    for _ in range(depth):
-        program.inst(rotation)
-
-    # return state to X-Y plane
-    program += RZ(-axis[1], measurement_qubit)
-    program += RY(-axis[0], measurement_qubit)
-
-    # measure either in either X or Y basis
-    program += local_pauli_eig_meas(meas_dir, measurement_qubit)
-
-    ro_bit = program.declare("ro", "BIT", 1)
-    program.measure(measurement_qubit, ro_bit[0])
-
-    return program
-
-
-def generate_rpe_experiment(rotation: Program, axis: Tuple[float, float],
-                            num_depths: int = 5, measurement_qubit: int = None,
-                            custom_prep: Program = None) -> DataFrame:
+def generate_rpe_experiment(state_prep: Program, rotation: Program,
+                            measurement_preps: Tuple[Program, Program],
+                            measure_qubits: Sequence[int] = None, num_depths: int = 5) -> DataFrame:
     """
     Generate a dataframe containing all the experiments needed to perform robust phase estimation
     to estimate the angle of rotation about the given axis performed by the given rotation program.
@@ -149,50 +108,45 @@ def generate_rpe_experiment(rotation: Program, axis: Tuple[float, float],
            https://doi.org/10.1103/PhysRevLett.118.190502
            https://arxiv.org/abs/1702.01763
 
+    :param state_prep:
     :param rotation: the program or gate whose angle of rotation is to be estimated. Note that
         this program will be run through forest_benchmarking.compilation.basic_compile().
-    :param axis: the axis of rotation corresponding to the rotation program, specified in
-        radians as (theta, phi) in typical spherical coordinates, with standard Bloch sphere
-        orientation (Z axis vertical with |0> at top, +X cross +Y = +Z using right-hand rule)
+    :param measurement_preps:
     :param num_depths: the number of depths in the protocol described in [RPE]. A depth is the
         number of consecutive applications of the rotation in a single iteration. The maximum
         depth is 2**(num_depths-1)
-    :param measurement_qubit: the qubit whose angle of rotation, as a result of the action of
-        the rotation program, RPE will attempt to estimate. This is the only qubit measured.
-    :param custom_prep: an optional prep program that will be run before the standard preparation
-        of the measurement qubit. This could, for example, be supplied to initialize the control
-        qubit of a CZ to |1>, with the target qubit as the measurement qubit.
+    :param measure_qubits: the qubits whose angle of rotation, as a result of the action of
+        the rotation program, RPE will attempt to estimate. These are the only qubits measured.
     :return: a dataframe populated with all of programs necessary for the RPE protocol in
         [RPE] with the necessary depth, measurement_direction, and program.
     """
     if isinstance(rotation, Gate):
         rotation = Program(rotation)
 
+    prep_qubits = state_prep.get_qubits()
     rotation_qubits = rotation.get_qubits()
-    if measurement_qubit is None:
-        if len(rotation_qubits) == 1:
-            measurement_qubit = list(rotation_qubits)[0]  # measure the only privileged qubit
-        else:
-            raise ValueError("A measurement qubit must be specified.")
+    qubits = prep_qubits.union(rotation_qubits)
 
-    custom_prep_qubits = set()
-    if custom_prep is not None:
-        custom_prep_qubits = custom_prep.get_qubits()
+    # assume that both measurements make use of the same qubits
+    measurement_qubits = measurement_preps[0].get_qubits()
+    qubits = qubits.union(measurement_qubits)
 
-    qubits = rotation_qubits.union(custom_prep_qubits)
-    qubits.add(measurement_qubit)
+    if measure_qubits is None:
+        measure_qubits = measurement_qubits
+
+    qubits = qubits.union(measure_qubits)
 
     def df_dict():
         for exponent in range(num_depths):
             depth = 2 ** exponent
-            for meas_dir in ['X', 'Y']:
+            for meas_dir in [0, 1]:
+                depth_rotations = sum([rotation for _ in range(depth)], Program())
                 yield {"Qubits": qubits,
+                       "Measure Qubits": measure_qubits,
                        "Depth": depth,
                        "Meas_Direction": meas_dir,
-                       "Program": generate_single_depth_rpe_program(rotation, axis, depth,
-                                                                          meas_dir,
-                                                                          measurement_qubit,
-                                                                          custom_prep)}
+                       "Program": sum([state_prep, depth_rotations, measurement_preps[meas_dir]],
+                                      Program())}
 
     # TODO: Put dtypes on this DataFrame in the right way
     return DataFrame(df_dict())
@@ -212,7 +166,7 @@ def get_additive_error_factor(M_j: float, max_additive_error: float) -> float:
     :return: A factor that multiplied by M_j yields a number of shots preserving Heisenberg Scaling
     """
     return np.log(.5 * (1 - np.sqrt(8) * max_additive_error) ** (1 / M_j)) \
-        / np.log(1 - .5 * (1 - np.sqrt(8) * max_additive_error) ** 2)
+           / np.log(1 - .5 * (1 - np.sqrt(8) * max_additive_error) ** 2)
 
 
 def num_trials(depth, max_depth, alpha, beta, multiplicative_factor: float = 1.0,
@@ -239,7 +193,8 @@ def num_trials(depth, max_depth, alpha, beta, multiplicative_factor: float = 1.0
     return int(np.ceil(Mj * multiplicative_factor))
 
 
-def _run_rpe_program(qc: QuantumComputer, prog: Program, num_shots: int) -> np.ndarray:
+def _run_rpe_program(qc: QuantumComputer, prog: Program, measure_qubits: Sequence[int],
+                     num_shots: int) -> np.ndarray:
     """
     Simple helper to run a program with appropriate number of shots and return result.
 
@@ -250,14 +205,17 @@ def _run_rpe_program(qc: QuantumComputer, prog: Program, num_shots: int) -> np.n
     :param num_shots: number of shots to repeat the program
     :return: the results of the program
     """
+    ro_bit = prog.declare("ro", "BIT", len(measure_qubits))
+    for idx, q in enumerate(measure_qubits):
+        prog.measure(q, ro_bit[idx])
     prog.wrap_in_numshots_loop(num_shots)
     executable = qc.compiler.native_quil_to_executable(basic_compile(prog))
     return qc.run(executable)
 
 
 def run_single_rpe_experiment(experiment: DataFrame, qc: QuantumComputer,
-                     multiplicative_factor: float = 1.0, additive_error: float = None,
-                     results_label="Results") -> DataFrame:
+                              multiplicative_factor: float = 1.0, additive_error: float = None,
+                              results_label="Results") -> DataFrame:
     """
     Run each program in the experiment data frame a number of times which is specified by
     num_trials().
@@ -325,12 +283,16 @@ def acquire_rpe_data(qc: QuantumComputer, experiments: Union[DataFrame, Sequence
         programs_df = pandas.concat([expt["Program"] for expt in grouped_expts], axis=1)
         programs = programs_df.apply(merge_programs, axis=1)
 
+        measure_qubits = [expt["Measure Qubits"] for expt in grouped_expts]
+        all_qubits = set().union(*measure_qubits)
+
         max_depth = max(depths[0])
         alpha = 5 / 2  # should be > 2
         beta = 1 / 2  # should be > 0
 
-        results = [_run_rpe_program(qc, program,
-                   num_trials(depth, max_depth, alpha, beta, multiplicative_factor, additive_error))
+        results = [_run_rpe_program(qc, program, all_qubits,
+                                    num_trials(depth, max_depth, alpha, beta, multiplicative_factor,
+                                               additive_error))
                    for (depth, program) in zip(depths[0], programs.values)]
 
     experiments = experiments.copy()
@@ -470,8 +432,8 @@ def find_expectation_values(experiment: DataFrame, results_label='Results') -> \
         p_x_std = group[group['Meas_Direction'] == 'X'][results_label].values[0].std() / np.sqrt(N)
         p_y_std = group[group['Meas_Direction'] == 'Y'][results_label].values[0].std() / np.sqrt(N)
         # convert probabilities to expectation values of X and Y
-        exp_x, var_x = transform_bit_moments_to_pauli(1-p_x, p_x_std**2)
-        exp_y, var_y = transform_bit_moments_to_pauli(1-p_y, p_y_std**2)
+        exp_x, var_x = transform_bit_moments_to_pauli(1 - p_x, p_x_std ** 2)
+        exp_y, var_y = transform_bit_moments_to_pauli(1 - p_y, p_y_std ** 2)
         xs.append(exp_x)
         ys.append(exp_y)
         # standard deviations need the scaling but not the shifting

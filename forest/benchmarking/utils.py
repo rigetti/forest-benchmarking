@@ -1,7 +1,7 @@
 import itertools
 from collections import OrderedDict
 from random import random, seed
-from typing import Sequence, List, Set
+from typing import Sequence, List, Set, Tuple
 from datetime import date, datetime
 from git import Repo
 import numpy as np
@@ -63,6 +63,44 @@ def determine_simultaneous_grouping(experiments: Sequence[DataFrame]) -> List[Se
     _, cliqs = clique_removal(g)
 
     return cliqs
+
+
+def standard_basis_to_bloch_vector(qubit_state: np.ndarray) -> Tuple[float, float]:
+    alpha, beta = qubit_state
+    phi = np.angle(beta)
+    if alpha.imag != 0:
+        # take out the global phase so that alpha is real
+        phi -= np.angle(alpha)
+        alpha = abs(alpha)
+    theta = np.arccos(alpha)*2
+    return theta, phi
+
+
+def prepare_state_on_bloch_sphere(qubit: int, theta: float, phi: float):
+    """
+    Returns a program which prepares the given qubit in the state (theta, phi) on the bloch sphere,
+    assuming the initial state |0> where (theta=0, phi=0).
+
+    Theta and phi are the usual polar coordinates, given in radians. Theta is the angle of the
+    state from the +Z axis, or zero state, and phi is the rotation angle from the XZ plane.
+    Equivalently, the state
+        alpha |0> + beta |1>
+    in these coordinates has alpha = cos(theta/2) and e^(i*phi) = beta.imag, modulo some global
+    phase.
+
+    See https://en.wikipedia.org/wiki/Qubit#Bloch_sphere_representation for more information.
+
+    :param qubit: the qubit to prepare in the given state
+    :param theta: azimuthal angle given in radians
+    :param phi: polar angle given in radians
+    :return: a program preparing the qubit in the specified state, implemented in native gates
+    """
+    prep = Program()
+    prep += RX(pi / 2, qubit)
+    prep += RZ(theta, qubit)
+    prep += RX(-pi / 2, qubit)
+    prep += RZ(phi, qubit)
+    return prep
 
 
 def pack_shot_data(shot_data):
