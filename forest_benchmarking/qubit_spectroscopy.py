@@ -144,17 +144,18 @@ def estimate_t1(df: pd.DataFrame):
                 'Fit_params_errs': None,
                 'Message': 'Could not fit to experimental data for qubit' + str(q),
             })
-
-    return results
+    return pd.DataFrame(results)
 
 
 def plot_t1_estimate_over_data(df: pd.DataFrame,
+                               df_est: pd.DataFrame,
                                qubits: list = None,
                                filename: str = None) -> None:
     """
     Plot T1 experimental data and estimated value of T1 as and exponential decay curve.
 
-    :param df: A pandas DataFrame experimental results to plot and fit exponential decay curve to.
+    :param df: A pandas DataFrame experimental results to plot
+    :param df_est: A pandas DataFrame with estimates of T1.
     :param qubits: A list of qubits that you actually want plotted. The default is all qubits.
     :param qc_type: String indicating whether QVM or QPU was used to collect data.
     :return: None
@@ -174,17 +175,18 @@ def plot_t1_estimate_over_data(df: pd.DataFrame,
 
         plt.plot(x_data / MICROSECOND, y_data, 'o-', label=f"QC{q} T1 data")
 
-        try:
-            fit_params, fit_params_errs = fit_to_exponential_decay_curve(x_data, y_data)
-        except RuntimeError:
-            print(f"Could not fit to experimental data for qubit {q}")
+        row = df_est[df_est['Qubit'] == q]
+
+        if row['Fit_params'].values[0] is None:
+            print(f"T1 estimte did not succeed for qubit {q}")
         else:
+            fit_params = (row['Fit_params'].values)[0]
             plt.plot(x_data / MICROSECOND, exponential_decay_curve(x_data, *fit_params),
                      label=f"QC{q} fit: T1={fit_params[1] / MICROSECOND:.2f}us")
 
     plt.xlabel("Time [us]")
-    plt.ylabel("Pr(measuring 1)")
-    plt.title("T1 decay")
+    plt.ylabel(r"Pr($|1\rangle$)")
+    plt.title("$T_1$ decay")
 
     plt.legend(loc='best')
     plt.tight_layout()
