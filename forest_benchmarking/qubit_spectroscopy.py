@@ -78,7 +78,7 @@ def generate_t1_experiments(qubits: Union[int, List[int]],
     return pd.DataFrame(time_and_programs)
 
 
-def acquire_data_t1(qc: QuantumComputer,
+def acquire_t1_data(qc: QuantumComputer,
                     t1_experiment: pd.DataFrame,
                     ) -> pd.DataFrame:
     """
@@ -323,7 +323,7 @@ def generate_t2_echo_experiments(qubits: Union[int, List[int]],
     return pd.DataFrame(time_and_programs)
 
 
-def acquire_data_t2(qc: QuantumComputer,
+def acquire_t2_data(qc: QuantumComputer,
                     t2_experiment: pd.DataFrame,
                     ) -> pd.DataFrame:
     """
@@ -521,7 +521,7 @@ def generate_rabi_experiments(qubits: Union[int, List[int]],
     return pd.DataFrame(angle_and_programs)
 
 
-def acquire_data_rabi(qc: QuantumComputer,
+def acquire_rabi_data(qc: QuantumComputer,
                       rabi_experiment: pd.DataFrame,
                       filename: str = None) -> pd.DataFrame:
     """
@@ -720,7 +720,7 @@ def generate_cz_phase_ramsey_experiment(edges: List[Tuple[int, int]],
     return pd.DataFrame(cz_expriment)
 
 
-def acquire_data_cz_phase_ramsey(qc: QuantumComputer,
+def acquire_cz_phase_ramsey_data(qc: QuantumComputer,
                                  cz_experiment: pd.DataFrame,
                                  filename: str = None) -> pd.DataFrame:
     """
