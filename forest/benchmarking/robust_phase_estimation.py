@@ -38,29 +38,6 @@ def eigenvector_superposition_prep(qubit, e1: np.ndarray, e2: np.ndarray):
     return prepare_state_on_bloch_sphere(qubit, theta, phi)
 
 
-def orthogonal_to_axis_measures(qubit: int, axis: Tuple[float, float]) -> Program:
-    """
-    Return the measure programs for the RPE experiment on a rotation about axis.
-
-    This method simply treats the state at axis as if it is the +Z state and returns
-    programs
-    that measure along the induced "X" and "Y" axes, where we follow the convention of
-    orthogonal_to_axis_prep that the +X state is pi/2 radians from axis in the theta direction.
-
-    :param qubit:
-    :param axis:
-    :return:
-    """
-    # the "X" measurement is simply in the direction of the initial preparation
-    x_measurment = orthogonal_to_axis_prep(qubit, axis).dagger()
-
-    # for "Y" measurement, first undo phi rotation
-    y_measurement = Program(RZ(-axis[1], qubit))
-    y_measurement += RX(pi / 2, qubit)  # then rotate +Y up to +Z
-
-    return x_measurment, y_measurement
-
-
 def orthogonal_to_axis_prep(qubit: int, axis: Tuple[float, float]) -> Program:
     """
     Generates a program that prepares a state perpendicular to the given (theta, phi) axis on
@@ -85,6 +62,70 @@ def orthogonal_to_axis_prep(qubit: int, axis: Tuple[float, float]) -> Program:
     :return: A preparation program that prepares the qubit in a state perpendicular to axis.
     """
     return prepare_state_on_bloch_sphere(qubit, axis[0] + pi / 2, axis[1])
+
+
+def orthogonal_to_axis_measures(qubit: int, axis: Tuple[float, float]) -> Program:
+    """
+    Return the measure programs for the RPE experiment on a rotation about axis.
+
+    This method simply treats the state at axis as if it is the +Z state and returns
+    programs
+    that measure along the induced "X" and "Y" axes, where we follow the convention of
+    orthogonal_to_axis_prep that the +X state is pi/2 radians from axis in the theta direction.
+
+    :param qubit:
+    :param axis:
+    :return:
+    """
+    # the "X" measurement is simply in the direction of the initial preparation
+    x_measurment = orthogonal_to_axis_prep(qubit, axis).dagger()
+
+    # for "Y" measurement, first undo phi rotation
+    y_measurement = Program(RZ(-axis[1], qubit))
+    y_measurement += RX(pi / 2, qubit)  # then rotate +Y up to +Z
+
+    return x_measurment, y_measurement
+
+
+def prep_and_measures_for_cz(q1: int, q2: int, e1: np.ndarray, e2: np.ndarray):
+    """
+
+    We consider the qubits to be ordered |q1 q2> and use the standard representation, for example
+        |0 1>  -->  [[0, 1, 0, 0]].T
+
+    :param q1:
+    :param q2:
+    :param e1:
+    :param e2:
+    :return:
+    """
+    # standardize as single row
+    e1 = np.asarray(e1).reshape(4,)
+    e2 = np.asarray(e2).reshape(4,)
+
+    if e1[0] == e2[3] == 1 or e1[1] == e2[2] == 1:
+        raise ValueError("Estimation of the relative phase between these particular eigenvectors "
+                         "is not supported, as the gates required for state prep and measurement "
+                         "are not local.")
+
+    sup = e1 + e2
+
+    alpha1 = sup[0] + sup[1]
+    beta1 = sup[2] + sup[3]
+    alpha2 = sup[0] + sup[2]
+    beta2 = sup[1] + sup[3]
+
+    q1_state = np.array([alpha1, beta1])
+    q2_state = np.array([alpha2, beta2])
+    q1_state = q1_state / np.linalg.norm(q1_state)
+    q2_state = q2_state / np.linalg.norm(q2_state)
+
+    prep1 = prepare_state_on_bloch_sphere(q1, standard_basis_to_bloch_vector(q1_state))
+    prep2 = prepare_state_on_bloch_sphere(q2, standard_basis_to_bloch_vector(q2_state))
+    prep = prep1 + prep2
+
+    x_meas = prep.dagger()
+    y_meas =
 
 
 def generate_rpe_experiment(state_prep: Program, rotation: Program,
@@ -193,7 +234,7 @@ def num_trials(depth, max_depth, alpha, beta, multiplicative_factor: float = 1.0
     return int(np.ceil(Mj * multiplicative_factor))
 
 
-def _run_rpe_program(qc: QuantumComputer, prog: Program, measure_qubits: Sequence[int],
+def _run_rpe_program(qc: QuantumComputer, prog: Program, measure_qubits: Sequence[Sequence[int]],
                      num_shots: int) -> np.ndarray:
     """
     Simple helper to run a program with appropriate number of shots and return result.
@@ -205,8 +246,9 @@ def _run_rpe_program(qc: QuantumComputer, prog: Program, measure_qubits: Sequenc
     :param num_shots: number of shots to repeat the program
     :return: the results of the program
     """
-    ro_bit = prog.declare("ro", "BIT", len(measure_qubits))
-    for idx, q in enumerate(measure_qubits):
+    meas_qubits = [qubit for qubits in measure_qubits for qubit in qubits]
+    ro_bit = prog.declare("ro", "BIT", len(meas_qubits))
+    for idx, q in enumerate(meas_qubits):
         prog.measure(q, ro_bit[idx])
     prog.wrap_in_numshots_loop(num_shots)
     executable = qc.compiler.native_quil_to_executable(basic_compile(prog))
@@ -283,14 +325,13 @@ def acquire_rpe_data(qc: QuantumComputer, experiments: Union[DataFrame, Sequence
         programs_df = pandas.concat([expt["Program"] for expt in grouped_expts], axis=1)
         programs = programs_df.apply(merge_programs, axis=1)
 
-        measure_qubits = [expt["Measure Qubits"] for expt in grouped_expts]
-        all_qubits = set().union(*measure_qubits)
+        measure_qubits = [list(expt["Measure Qubits"].values[0]) for expt in grouped_expts]
 
         max_depth = max(depths[0])
         alpha = 5 / 2  # should be > 2
         beta = 1 / 2  # should be > 0
 
-        results = [_run_rpe_program(qc, program, all_qubits,
+        results = [_run_rpe_program(qc, program, measure_qubits,
                                     num_trials(depth, max_depth, alpha, beta, multiplicative_factor,
                                                additive_error))
                    for (depth, program) in zip(depths[0], programs.values)]
@@ -453,8 +494,8 @@ def robust_phase_estimate(xs: List, ys: List, x_stds: List, y_stds: List,
 
     :param xs: expectation value <X> operator for each iteration
     :param ys: expectation value <Y> operator for each iteration
-    :param x_std: standard deviation of the mean for 'xs'
-    :param y_std: standard deviation of the mean for 'ys'
+    :param x_stds: standard deviation of the mean for 'xs'
+    :param y_stds: standard deviation of the mean for 'ys'
     :param bloch_data: if provided, list is mutated to store the radius and angle of each iteration
     :return: An estimate of the phase of the rotation program passed into generate_rpe_experiments
     """
