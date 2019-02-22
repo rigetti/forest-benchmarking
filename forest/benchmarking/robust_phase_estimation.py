@@ -4,132 +4,77 @@ import numpy as np
 from numpy import pi
 from pandas import DataFrame, Series
 import pandas
+from functools import partial
 
-from pyquil.quil import Program, merge_programs
-from pyquil.gates import RZ, RX
+from pyquil.quil import Program, merge_programs, DefGate, Pragma
 from pyquil.quilbase import Gate
 from pyquil.api import QuantumComputer
 from forest.benchmarking.compilation import basic_compile
-from forest.benchmarking.utils import transform_bit_moments_to_pauli, local_pauli_eig_meas, \
-    determine_simultaneous_grouping, prepare_state_on_bloch_sphere, standard_basis_to_bloch_vector
+from forest.benchmarking.utils import transform_bit_moments_to_pauli, local_pauli_eig_prep, \
+    local_pauli_eig_meas, determine_simultaneous_grouping, bloch_vector_to_standard_basis
+
 
 import matplotlib.pyplot as plt
 
 
-def eigenvector_superposition_prep(qubit, e1: np.ndarray, e2: np.ndarray):
+def bloch_rotation_to_eigenvectors(theta: float, phi: float) -> Sequence[np.ndarray]:
     """
-    Provides a program which, from the |0> state, prepares the equal superposition of the given
-    orthogonal vectors.
+    Provides convenient conversion from a 1q rotation about some Bloch vector to the two
+    eigenvectors of rotation that lay along the rotation axis.
 
-    Note that for a single qubit Hilbert space, specifying a single eigenvector e1 of an operator A
-    necessarily determines the other eigenvector e2 since these vectors are necessarily
-    orthogonal and span the Hilbert space. However, each eigenvector in isolation is only defined
-    up to some global phase. Hence, for the superposition to be un-ambiguously determined,
-    we require both eigenvectors be supplied, which specifies a specific relative phase.
+    The standard right-hand convention would dictate that the Bloch vector is such that the
+    rotation about this vector is counter-clockwise for a clock facing in the direction of
+    the vector. In this case, the order of returned eigenvectors when passed through
+    get_change_of_basis_from_eigvecs to an RPE experiment will result in a positive phase.
 
-    :param qubit: the qubit to prepare in the given state.
-    :param e1: a vector [alpha, beta]
-    :param e2: a vector [alpha2, beta2] specifying a vector orthogonal to e1
-    :return: a program preparing the state (e1 + e2)/sqrt(2)
+    :param theta: azimuthal angle given in radians
+    :param phi:  polar angle given in radians
+    :return: the eigenvectors of the rotation, listed in order consistent with the right-hand-rule
+        and the conventions taken by get_change_of_basis_from_eigvecs and the RPE experiment
     """
-    superposition = (e1 + e2) / np.sqrt(2)
-    theta, phi = standard_basis_to_bloch_vector(superposition)
+    eig1 = np.array([bloch_vector_to_standard_basis(theta, phi)]).T
+    eig2 = np.array([bloch_vector_to_standard_basis(pi - theta, pi + phi)]).T
+    return eig1, eig2
 
-    return prepare_state_on_bloch_sphere(qubit, theta, phi)
 
-
-def orthogonal_to_axis_prep(qubit: int, axis: Tuple[float, float]) -> Program:
+def get_change_of_basis_from_eigvecs(eigenvectors: Sequence[np.ndarray]):
     """
-    Generates a program that prepares a state perpendicular to the given (theta, phi) axis on
-    the Bloch sphere.
+    Generates a unitary matrix that sends each computational basis state to the corresponding
+    eigenvector.
 
-    In the context of an RPE experiment, the supplied axis is the axis of rotation of the gate
-    whose magnitude of rotation the experimenter is trying to estimate. Equivalently, axis is the
-    plus eigenvector of the rotation. The prepared state is a point on the sphere whose radial
-    line is perpendicular to the supplied axis; the state is pi radians in the theta direction
-    from axis. Equivalently, the final state is simply some equal magnitude (perhaps with a
-    relative phase) superposition of the two eigenstates operator which rotates about the given
-    rotation axis.
-
-    For example, the axis (0, 0) corresponds to an RPE experiment estimating the angle parameter
-    of the rotation RZ(angle). The initial state of this experiment would be the plus one
-    eigenstate of X, or |+> = RY(pi/2) |0> since this state is perpendicular to the axis of
-    rotation of RZ. For rotation about an arbitrary axis=(theta, phi), the initial state is
-    equivalently RZ(phi)RY(theta + pi/2)|0>
-
-    :param qubit: the qubit whose state is being prepared
-    :param axis: axis of rotation specified as (theta, phi) in typical spherical coordinates.
-    :return: A preparation program that prepares the qubit in a state perpendicular to axis.
-    """
-    return prepare_state_on_bloch_sphere(qubit, axis[0] + pi / 2, axis[1])
-
-
-def orthogonal_to_axis_measures(qubit: int, axis: Tuple[float, float]) -> Program:
-    """
-    Return the measure programs for the RPE experiment on a rotation about axis.
-
-    This method simply treats the state at axis as if it is the +Z state and returns
-    programs
-    that measure along the induced "X" and "Y" axes, where we follow the convention of
-    orthogonal_to_axis_prep that the +X state is pi/2 radians from axis in the theta direction.
-
-    :param qubit:
-    :param axis:
+    :param eigenvectors: a sequence of dim-many length-dim eigenvectors. In the context of an RPE
+        experiment, these should be eigenvectors of the rotation. For convenience, the function
+        bloch_rotation_to_eigenvectors() will provide the appropriate list of eigenvectors for a
+        rotation about a particular axis in the 1q Bloch sphere. Note that RPE experiment follows
+        the convention of the right-hand rule. E.g. for a 1q rotation lets say eigenvectors {e1, e2}
+        have eigenvalues with phase {p1, p2}. If the relative phase {p1-p2} is positive,
+        then the rotation happens about e1 in the counter-clockwise direction for a clock with
+        its face toward the e1 vector.
     :return:
     """
-    # the "X" measurement is simply in the direction of the initial preparation
-    x_measurment = orthogonal_to_axis_prep(qubit, axis).dagger()
 
-    # for "Y" measurement, first undo phi rotation
-    y_measurement = Program(RZ(-axis[1], qubit))
-    y_measurement += RX(pi / 2, qubit)  # then rotate +Y up to +Z
+    assert len(eigenvectors) >=2, "Specification of all d many eigenvectors is required."
 
-    return x_measurment, y_measurement
+    # standardize the possible list, 1d or 2d-row-vector ndarray inputs to column vectors
+    eigs = []
+    for eig in eigenvectors:
+        eig = np.asarray(eig)
+        shape = eig.shape()
+        if len(shape) == 1:
+            eig = eig[np.newaxis]
+        eigs.append(eig.reshape(max(shape),1))
 
+    dim = eigs[0].shape[0]
+    id_dim = np.eye(dim)
+    comp_basis = [row[np.newaxis] for row in id_dim]  # get computational basis in row vectors
 
-def prep_and_measures_for_cz(q1: int, q2: int, e1: np.ndarray, e2: np.ndarray):
-    """
+    # this unitary will take the computational basis to a basis where our rotation is diagonal
+    basis_change = sum([np.kron(ev, cb) for ev, cb in zip(eigs, comp_basis)])
 
-    We consider the qubits to be ordered |q1 q2> and use the standard representation, for example
-        |0 1>  -->  [[0, 1, 0, 0]].T
-
-    :param q1:
-    :param q2:
-    :param e1:
-    :param e2:
-    :return:
-    """
-    # standardize as single row
-    e1 = np.asarray(e1).reshape(4,)
-    e2 = np.asarray(e2).reshape(4,)
-
-    if e1[0] == e2[3] == 1 or e1[1] == e2[2] == 1:
-        raise ValueError("Estimation of the relative phase between these particular eigenvectors "
-                         "is not supported, as the gates required for state prep and measurement "
-                         "are not local.")
-
-    sup = e1 + e2
-
-    alpha1 = sup[0] + sup[1]
-    beta1 = sup[2] + sup[3]
-    alpha2 = sup[0] + sup[2]
-    beta2 = sup[1] + sup[3]
-
-    q1_state = np.array([alpha1, beta1])
-    q2_state = np.array([alpha2, beta2])
-    q1_state = q1_state / np.linalg.norm(q1_state)
-    q2_state = q2_state / np.linalg.norm(q2_state)
-
-    prep1 = prepare_state_on_bloch_sphere(q1, standard_basis_to_bloch_vector(q1_state))
-    prep2 = prepare_state_on_bloch_sphere(q2, standard_basis_to_bloch_vector(q2_state))
-    prep = prep1 + prep2
-
-    x_meas = prep.dagger()
-    y_meas =
+    return basis_change
 
 
-def generate_rpe_experiment(state_prep: Program, rotation: Program,
-                            measurement_preps: Tuple[Program, Program],
+def generate_rpe_experiment(rotation: Program, change_of_basis: Union[np.ndarray, Program],
                             measure_qubits: Sequence[int] = None, num_depths: int = 5) -> DataFrame:
     """
     Generate a dataframe containing all the experiments needed to perform robust phase estimation
@@ -149,10 +94,9 @@ def generate_rpe_experiment(state_prep: Program, rotation: Program,
            https://doi.org/10.1103/PhysRevLett.118.190502
            https://arxiv.org/abs/1702.01763
 
-    :param state_prep:
     :param rotation: the program or gate whose angle of rotation is to be estimated. Note that
         this program will be run through forest_benchmarking.compilation.basic_compile().
-    :param measurement_preps:
+    :param change_of_basis:
     :param num_depths: the number of depths in the protocol described in [RPE]. A depth is the
         number of consecutive applications of the rotation in a single iteration. The maximum
         depth is 2**(num_depths-1)
@@ -164,33 +108,92 @@ def generate_rpe_experiment(state_prep: Program, rotation: Program,
     if isinstance(rotation, Gate):
         rotation = Program(rotation)
 
-    prep_qubits = state_prep.get_qubits()
     rotation_qubits = rotation.get_qubits()
-    qubits = prep_qubits.union(rotation_qubits)
-
-    # assume that both measurements make use of the same qubits
-    measurement_qubits = measurement_preps[0].get_qubits()
-    qubits = qubits.union(measurement_qubits)
 
     if measure_qubits is None:
-        measure_qubits = measurement_qubits
+        measure_qubits = rotation_qubits  # assume interest in qubits being rotated.
+        # If you wish to measure multiple single qubit phases e.g. induced by cross-talk from the
+        # operation of a gate on other qubits, consider creating multiple "dummy" experiments
+        # that implement the identity and measure the qubits of interest. Subsequently run these
+        # "dummies" simultaneously with an experiment whose rotation is the cross-talky program.
 
-    qubits = qubits.union(measure_qubits)
+    qubits = rotation_qubits.union(measure_qubits)
 
     def df_dict():
         for exponent in range(num_depths):
             depth = 2 ** exponent
-            for meas_dir in [0, 1]:
-                depth_rotations = sum([rotation for _ in range(depth)], Program())
-                yield {"Qubits": qubits,
-                       "Measure Qubits": measure_qubits,
-                       "Depth": depth,
-                       "Meas_Direction": meas_dir,
-                       "Program": sum([state_prep, depth_rotations, measurement_preps[meas_dir]],
-                                      Program())}
+            for meas_dir in ["X", "Y"]:
+                for meas_qubit in measure_qubits:
+                    yield {"Qubits": qubits,
+                           "Measure Qubits": list(measure_qubits),
+                           "Depth": depth,
+                           "Meas Direction": meas_dir,
+                           "Non-Z-Basis Meas Qubit": meas_qubit,
+                           "Change of Basis": change_of_basis,
+                           "Rotation": rotation}
 
     # TODO: Put dtypes on this DataFrame in the right way
     return DataFrame(df_dict())
+
+#     """
+#     Generates a program that prepares a state perpendicular to the given (theta, phi) axis on
+#     the Bloch sphere.
+#
+#     In the context of an RPE experiment, the supplied axis is the axis of rotation of the gate
+#     whose magnitude of rotation the experimenter is trying to estimate. Equivalently, axis is the
+#     plus eigenvector of the rotation. The prepared state is a point on the sphere whose radial
+#     line is perpendicular to the supplied axis; the state is pi radians in the theta direction
+#     from axis. Equivalently, the final state is simply some equal magnitude (perhaps with a
+#     relative phase) superposition of the two eigenstates operator which rotates about the given
+#     rotation axis.
+#
+#     For example, the axis (0, 0) corresponds to an RPE experiment estimating the angle parameter
+#     of the rotation RZ(angle). The initial state of this experiment would be the plus one
+#     eigenstate of X, or |+> = RY(pi/2) |0> since this state is perpendicular to the axis of
+#     rotation of RZ. For rotation about an arbitrary axis=(theta, phi), the initial state is
+#     equivalently RZ(phi)RY(theta + pi/2)|0>
+
+#
+# def prep_and_measures_for_cz(q1: int, q2: int, e1: np.ndarray, e2: np.ndarray):
+#     """
+#
+#     We consider the qubits to be ordered |q1 q2> and use the standard representation, for example
+#         |0 1>  -->  [[0, 1, 0, 0]].T
+#
+#     :param q1:
+#     :param q2:
+#     :param e1:
+#     :param e2:
+#     :return:
+#     """
+#     # standardize as single row
+#     e1 = np.asarray(e1).reshape(4,)
+#     e2 = np.asarray(e2).reshape(4,)
+#
+#     if e1[0] == e2[3] == 1 or e1[1] == e2[2] == 1:
+#         raise ValueError("Estimation of the relative phase between these particular eigenvectors "
+#                          "is not supported, as the gates required for state prep and measurement "
+#                          "are not local.")
+#
+#     sup = e1 + e2
+#
+#     alpha1 = sup[0] + sup[1]
+#     beta1 = sup[2] + sup[3]
+#     alpha2 = sup[0] + sup[2]
+#     beta2 = sup[1] + sup[3]
+#
+#     q1_state = np.array([alpha1, beta1])
+#     q2_state = np.array([alpha2, beta2])
+#     q1_state = q1_state / np.linalg.norm(q1_state)
+#     q2_state = q2_state / np.linalg.norm(q2_state)
+#
+#     prep1 = prepare_state_on_bloch_sphere(q1, standard_basis_to_bloch_vector(q1_state))
+#     prep2 = prepare_state_on_bloch_sphere(q2, standard_basis_to_bloch_vector(q2_state))
+#     prep = prep1 + prep2
+#
+#     x_meas = prep.dagger()
+#     y_meas =
+#
 
 
 def get_additive_error_factor(M_j: float, max_additive_error: float) -> float:
@@ -207,7 +210,7 @@ def get_additive_error_factor(M_j: float, max_additive_error: float) -> float:
     :return: A factor that multiplied by M_j yields a number of shots preserving Heisenberg Scaling
     """
     return np.log(.5 * (1 - np.sqrt(8) * max_additive_error) ** (1 / M_j)) \
-           / np.log(1 - .5 * (1 - np.sqrt(8) * max_additive_error) ** 2)
+        / np.log(1 - .5 * (1 - np.sqrt(8) * max_additive_error) ** 2)
 
 
 def num_trials(depth, max_depth, alpha, beta, multiplicative_factor: float = 1.0,
@@ -232,6 +235,32 @@ def num_trials(depth, max_depth, alpha, beta, multiplicative_factor: float = 1.0
     if additive_error:
         multiplicative_factor *= get_additive_error_factor(Mj, additive_error)
     return int(np.ceil(Mj * multiplicative_factor))
+
+
+def change_of_basis_matrix_to_quil(qc: QuantumComputer, qubits: Sequence[int],
+                                   change_of_basis: np.ndarray) -> Program:
+    """
+    Helper to return a native quil program for the given qc to implement the change_of_basis matrix.
+
+    :param qc: Quantum Computer that will need to use the change of basis
+    :param qubits: the qubits the program should act on
+    :param change_of_basis: a unitary matrix acting on len(qubits)
+    :return: a native quil program that implements change_of_basis on the qubits of qc.
+    """
+    prog = Program()
+    # ensure the program is compiled onto the proper qubits
+    prog += Pragma('INITIAL_REWIRING', ['"NAIVE"'])
+    g_definition = DefGate("COB", change_of_basis)
+    # get the gate constructor
+    COB = g_definition.get_constructor()
+    # add definition to program
+    prog += g_definition
+    # add gate to program
+    prog += COB(*qubits)
+    # compile to native quil
+    nquil = qc.compiler.quil_to_native_quil(prog)
+
+    return nquil
 
 
 def _run_rpe_program(qc: QuantumComputer, prog: Program, measure_qubits: Sequence[Sequence[int]],
@@ -287,6 +316,31 @@ def run_single_rpe_experiment(experiment: DataFrame, qc: QuantumComputer,
     return exp_with_results
 
 
+def _make_prog_from_df(qc: QuantumComputer, qubits, measure_qubits, depth, meas_dir, meas_qubit,
+                       change_of_basis, rotation):
+    """
+
+    :param qc:
+    :param qubits:
+    :param measure_qubits:
+    :param depth:
+    :param meas_dir:
+    :param meas_qubit:
+    :param change_of_basis:
+    :param rotation:
+    :return:
+    """
+    # start in equal superposition of basis states, i.e. put each qubit in plus state
+    prog = sum([local_pauli_eig_prep('X', q) for q in measure_qubits], Program())
+    # using change_of_basis, transform to equal superposition of rotation eigenvectors
+    prog += change_of_basis_matrix_to_quil(qc, rotation.get_qubits, change_of_basis)
+    # perform the rotation depth many times
+    prog += sum([rotation for _ in range(depth)], Program())
+    # prepare the meas_qubit in the appropriate meas_direction
+    prog += local_pauli_eig_meas(meas_dir, meas_qubit)
+    return prog
+
+
 def acquire_rpe_data(qc: QuantumComputer, experiments: Union[DataFrame, Sequence[DataFrame]],
                      multiplicative_factor: float = 1.0, additive_error: float = None,
                      grouping: Sequence[Tuple[int]] = None,
@@ -311,34 +365,44 @@ def acquire_rpe_data(qc: QuantumComputer, experiments: Union[DataFrame, Sequence
         return run_single_rpe_experiment(qc, experiments, multiplicative_factor, additive_error,
                                          results_label)
 
+    expts = [expt.copy() for expt in experiments]
+
+    # check that each experiment has programs generated for this qc, and make them if not
+    for expt in expts:
+        if "Program" not in expt.columns.values:
+            # pass the qc and arguments from dataframe columns into helper to make programs
+            expt["Program"] = expt.apply(partial(_make_prog_from_df, qc), axis=1)
+
+    # try to group experiments to run simultaneously
     if grouping is None:
-        grouping = determine_simultaneous_grouping(experiments)
+        grouping = determine_simultaneous_grouping(expts, "Depth")
 
     results = []
     for group in grouping:
-        grouped_expts = [experiments[idx] for idx in group]
-
-        depths = [expt["Depth"] for expt in grouped_expts]
-        for d1, d2 in zip(depths[:-1], depths[1:]):
-            assert d1.equals(d2), "Depths must be equivalent to run experiments simultaneously."
+        grouped_expts = [expts[idx] for idx in group]
 
         programs_df = pandas.concat([expt["Program"] for expt in grouped_expts], axis=1)
-        programs = programs_df.apply(merge_programs, axis=1)
+        merged = programs_df.apply(merge_programs, axis=1)
 
-        measure_qubits = [list(expt["Measure Qubits"].values[0]) for expt in grouped_expts]
+        measure_qubits = [expt["Measure Qubits"].values[0] for expt in grouped_expts]
 
-        max_depth = max(depths[0])
+        depths = grouped_expts[0]["Depth"].values
+        max_depth = max(depths)
         alpha = 5 / 2  # should be > 2
         beta = 1 / 2  # should be > 0
 
-        results = [_run_rpe_program(qc, program, measure_qubits,
+        results = np.array([_run_rpe_program(qc, program, measure_qubits,
                                     num_trials(depth, max_depth, alpha, beta, multiplicative_factor,
                                                additive_error))
-                   for (depth, program) in zip(depths[0], programs.values)]
+                   for (depth, program) in zip(depths, merged.values)])
+        offset = 0
+        for idx, meas_qs in enumerate(measure_qubits):
+            expt = grouped_expts[idx]
+            expt[results_label] = Series(results[:][:][offset: offset + len(meas_qs)])
+            offset += len(meas_qs)
+            expt["Simultaneous Group"] = Series([group for _ in range(depths)])
 
-    experiments = experiments.copy()
-    experiments[results_label] = Series(results)
-    return experiments
+    return expts
 
 
 # def separate_rpe_results_by_id(df: DataFrame) -> Sequence[DataFrame]:
@@ -477,7 +541,6 @@ def find_expectation_values(experiment: DataFrame, results_label='Results') -> \
         exp_y, var_y = transform_bit_moments_to_pauli(1 - p_y, p_y_std ** 2)
         xs.append(exp_x)
         ys.append(exp_y)
-        # standard deviations need the scaling but not the shifting
         x_stds.append(np.sqrt(var_x))
         y_stds.append(np.sqrt(var_y))
 

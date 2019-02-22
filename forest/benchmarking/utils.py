@@ -41,7 +41,8 @@ def int_to_bit_array(num: int, n_bits: int) -> Sequence[int]:
     return [num >> bit & 1 for bit in range(n_bits - 1, -1, -1)]
 
 
-def determine_simultaneous_grouping(experiments: Sequence[DataFrame]) -> List[Set[int]]:
+def determine_simultaneous_grouping(experiments: Sequence[DataFrame],
+                                    equivalent_column_label: str = None) -> List[Set[int]]:
     """
     Determines a grouping of experiments acting on disjoint sets of qubits that can be run
     simultaneously.
@@ -53,19 +54,49 @@ def determine_simultaneous_grouping(experiments: Sequence[DataFrame]) -> List[Se
     g = nx.Graph()
     nodes = np.arange(len(experiments))
     g.add_nodes_from(nodes)
-    qubits = [experiment["Qubits"].values[0] for experiment in experiments]
+    qubits = [expt["Qubits"].values[0] for expt in experiments]
+
+    need_equiv = None
+    if equivalent_column_label is not None:
+        need_equiv = [expt[equivalent_column_label].values for expt in experiments]
+
     for node1 in nodes:
         qbs1 = qubits[node1]
         for node2 in nodes[node1+1:]:
             if len(qbs1.intersection(qubits[node2])) == 0:
+                # check that the requested columns are equivalent
+                if equivalent_column_label is not None:
+                    if not np.array_equal(need_equiv[node1], need_equiv[node2]):
+                        continue
+                # no shared qubits, and requested columns are identical, so add edge
                 g.add_edge(node1, node2)
 
+    # get the largest groups of nodes with shared edges, as each can be run simultaneously
     _, cliqs = clique_removal(g)
 
     return cliqs
 
 
-def standard_basis_to_bloch_vector(qubit_state: np.ndarray) -> Tuple[float, float]:
+def bloch_vector_to_standard_basis(theta: float, phi: float) -> Tuple[complex, complex]:
+    """
+    Converts the Bloch vector representation of a 1q state given in spherical coordinates to the
+    standard representation of that state in the computational basis.
+
+    :param theta: azimuthal angle given in radians
+    :param phi: polar angle given in radians
+    :return: tuple of the two coefficients a and b for the state a|0> + b|1> where a is real
+    """
+    return np.cos(theta / 2), np.exp(1j * phi) * np.sin(theta / 2)
+
+
+def standard_basis_to_bloch_vector(qubit_state: Sequence[complex]) -> Tuple[float, float]:
+    """
+    Converts a standard representation of a single qubit state in the computational basis to the
+    spherical coordinates theta, phi of its representation on the Bloch sphere.
+
+    :param qubit_state: a sequence of the two coefficients a and b for the state a|0> + b|1>
+    :return: the azimuthal and polar angle, theta and phi, representing a point on the Bloch sphere.
+    """
     alpha, beta = qubit_state
     phi = np.angle(beta)
     if alpha.imag != 0:
@@ -120,7 +151,7 @@ def str_to_pauli_term(pauli_str: str, qubit_labels=None):
     :rtype: pyquil.paulis.PauliTerm
     """
     if qubit_labels is None:
-        labels_list = [idx for idx in reversed(range(len(pauli_str)))]
+        labels_list = [qubit for qubit in reversed(range(len(pauli_str)))]
     else:
         labels_list = sorted(qubit_labels)[::-1]
     pauli_term = PauliTerm.from_list(list(zip(pauli_str, labels_list)))
@@ -196,48 +227,48 @@ def all_pauli_z_terms(qubit_count: int, qubit_labels=None):
     return list_of_terms
 
 
-def local_pauli_eig_prep(op, idx):
+def local_pauli_eig_prep(op, qubit):
     """
     Generate gate sequence to prepare a the +1 eigenstate of a Pauli operator, assuming
     we are starting from the ground state ( the +1 eigenstate of Z^{\\otimes n})
 
     :param str op: A string representation of the Pauli operator whose eigenstate we'd like to prepare.
-    :param int idx: The index of the qubit that the preparation is acting on
+    :param int qubit: The index of the qubit that the preparation is acting on
     :return: The preparation Program.
     """
     if op == 'X':
-        gate = RY(pi / 2, idx)
+        gate = RY(pi / 2, qubit)
     elif op == 'Y':
-        gate = RX(-pi / 2, idx)
+        gate = RX(-pi / 2, qubit)
     elif op == 'Z':
-        gate = I(idx)
+        gate = I(qubit)
     else:
         raise ValueError('Unknown gate operation')
     prog = Program(gate)
     return prog
 
 
-def local_pauli_eigs_prep(op, idx):
+def local_pauli_eigs_prep(op, qubit):
     """
     Generate all gate sequences to prepare all eigenstates of a (local) Pauli operator, assuming
     we are starting from the ground state.
 
     :param str op: A string representation of the Pauli operator whose eigenstate we'd like to prepare.
-    :param int idx: The index of the qubit that the preparation is acting on
+    :param int qubit: The index of the qubit that the preparation is acting on
     :rtype list: A list of programs
     """
     if op == 'X':
-        gates = [RY(pi / 2, idx), RY(-pi / 2, idx)]
+        gates = [RY(pi / 2, qubit), RY(-pi / 2, qubit)]
     elif op == 'Y':
-        gates = [RX(-pi / 2, idx), RX(pi / 2, idx)]
+        gates = [RX(-pi / 2, qubit), RX(pi / 2, qubit)]
     elif op == 'Z':
-        gates = [I(idx), RX(pi, idx)]
+        gates = [I(qubit), RX(pi, qubit)]
     else:
         raise ValueError('Unknown gate operation')
     return [Program(gate) for gate in gates]
 
 
-def random_local_pauli_eig_prep(prog, op, idx, random_seed=None):
+def random_local_pauli_eig_prep(prog, op, qubit, random_seed=None):
     """
     Generate gate sequence to prepare a random local eigenstate of a Pauli operator, assuming
     we are starting from the ground state.
@@ -246,7 +277,7 @@ def random_local_pauli_eig_prep(prog, op, idx, random_seed=None):
      appended
     :param str op: Single character string representing the Pauli operator
      (one of 'I', 'X', 'Y', 'Z')
-    :param int idx: index of Qubit the preparation acts on
+    :param int qubit: index of Qubit the preparation acts on
     :param int random_seed: A seed to seed the RNG with.
     :return: A string description of the eigenstate prepared.
     """
@@ -258,24 +289,24 @@ def random_local_pauli_eig_prep(prog, op, idx, random_seed=None):
         seed(random_seed)
     if op == 'X':
         if random() > 0.5:
-            gate = RY(pi / 2, idx)
+            gate = RY(pi / 2, qubit)
             descr = '+X'
         else:
-            gate = RY(-pi / 2, idx)
+            gate = RY(-pi / 2, qubit)
             descr = '-X'
     elif op == 'Y':
         if random() > 0.5:
-            gate = RX(-pi / 2, idx)
+            gate = RX(-pi / 2, qubit)
             descr = '+Y'
         else:
-            gate = RX(pi / 2, idx)
+            gate = RX(pi / 2, qubit)
             descr = '-Y'
     elif op == 'Z':
         if random() > 0.5:
-            gate = I(idx)
+            gate = I(qubit)
             descr = '+Z'
         else:
-            gate = RX(pi, idx)
+            gate = RX(pi, qubit)
             descr = '-Z'
     else:
         raise ValueError('Unknown gate operation')
@@ -283,17 +314,17 @@ def random_local_pauli_eig_prep(prog, op, idx, random_seed=None):
     return descr
 
 
-def local_pauli_eig_meas(op, idx):
+def local_pauli_eig_meas(op, qubit):
     """
     Generate gate sequence to measure in the eigenbasis of a Pauli operator, assuming
     we are only able to measure in the Z eigenbasis.
     """
     if op == 'X':
-        gate = RY(-pi / 2, idx)
+        gate = RY(-pi / 2, qubit)
     elif op == 'Y':
-        gate = RX(pi / 2, idx)
+        gate = RX(pi / 2, qubit)
     elif op == 'Z':
-        gate = I(idx)
+        gate = I(qubit)
     else:
         raise ValueError('Unknown gate operation')
     prog = Program(gate)
@@ -307,29 +338,29 @@ def prepare_prod_pauli_eigenstate(pauli_term: PauliTerm):
     :return: A program corresponding to the correct rotation into the eigenbasis for pauli_term."""
     opset = pauli_term.operations_as_set()
     prog = Program()
-    for (idx, op) in opset:
-        prog += local_pauli_eig_prep(op, idx)
+    for (qubit, op) in opset:
+        prog += local_pauli_eig_prep(op, qubit)
     return prog
 
 
 def measure_prod_pauli_eigenstate(pauli_term: PauliTerm):
     opset = pauli_term.operations_as_set()
     prog = Program()
-    for (idx, op) in opset:
-        prog += local_pauli_eig_meas(op, idx)
+    for (qubit, op) in opset:
+        prog += local_pauli_eig_meas(op, qubit)
     return prog
 
 
 def prepare_random_prod_pauli_eigenstate(pauli_term: PauliTerm):
     opset = pauli_term.operations_as_set()
     prog = Program()
-    s = ''.join([random_local_pauli_eig_prep(prog, op, idx) for (idx, op) in opset])
+    s = ''.join([random_local_pauli_eig_prep(prog, op, qubit) for (qubit, op) in opset])
     return prog
 
 
 def prepare_all_prod_pauli_eigenstates(pauli_term: PauliTerm):
     opset = pauli_term.operations_as_set()
-    prod_preps = itertools.product(*[local_pauli_eigs_prep(op, idx) for (idx, op) in opset])
+    prod_preps = itertools.product(*[local_pauli_eigs_prep(op, qubit) for (qubit, op) in opset])
     return [Program().inst(list(prod)) for prod in prod_preps]
 
 
