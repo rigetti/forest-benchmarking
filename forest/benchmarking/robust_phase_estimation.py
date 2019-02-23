@@ -76,7 +76,7 @@ def get_change_of_basis_from_eigvecs(eigenvectors: Sequence[np.ndarray]):
 
 
 def generate_rpe_experiment(rotation: Program, change_of_basis: Union[np.ndarray, Program],
-                            measure_qubits: Sequence[int] = None, num_depths: int = 5,
+                            measure_qubits: Sequence[int] = None, num_depths: int = 6,
                             post_select_state: Sequence[int] = None) -> DataFrame:
     """
     Generate a dataframe containing all the experiments needed to perform robust phase estimation
@@ -128,20 +128,31 @@ def generate_rpe_experiment(rotation: Program, change_of_basis: Union[np.ndarray
         for exponent in range(num_depths):
             depth = 2 ** exponent
             for meas_dir in ["X", "Y"]:
-                for meas_qubit in measure_qubits:
+                if len(measure_qubits) > 1:
+                    # this is a >1q RPE experiment; the qubit being rotated need be specified
+                    for meas_qubit in measure_qubits:
+                        yield {"Qubits": qubits,
+                               "Rotation": rotation,
+                               "Depth": depth,
+                               "Measure Direction": meas_dir,
+                               "Measure Qubits": list(measure_qubits),
+                               "Non-Z-Basis Meas Qubit": meas_qubit,
+                               "Change of Basis": change_of_basis,
+                               }
+                else:
+                    # standard 1q experiment, no need for Non-Z-Basis Meas Qubit
                     yield {"Qubits": qubits,
                            "Rotation": rotation,
                            "Depth": depth,
-                           "Meas Direction": meas_dir,
+                           "Measure Direction": meas_dir,
                            "Measure Qubits": list(measure_qubits),
-                           "Non-Z-Basis Meas Qubit": meas_qubit,
                            "Change of Basis": change_of_basis,
                            }
     # TODO: Put dtypes on this DataFrame in the right way
     expt = DataFrame(df_dict())
 
     if post_select_state is not None:
-        expt["Post Select State"] = post_select_state
+        expt["Post Select State"] = [post_select_state for _ in range(expt.shape[0])]
 
     # change_of_basis is already specified as program, so add composed program column
     if isinstance(change_of_basis, Program):
@@ -166,48 +177,6 @@ def generate_rpe_experiment(rotation: Program, change_of_basis: Union[np.ndarray
 #     eigenstate of X, or |+> = RY(pi/2) |0> since this state is perpendicular to the axis of
 #     rotation of RZ. For rotation about an arbitrary axis=(theta, phi), the initial state is
 #     equivalently RZ(phi)RY(theta + pi/2)|0>
-
-#
-# def prep_and_measures_for_cz(q1: int, q2: int, e1: np.ndarray, e2: np.ndarray):
-#     """
-#
-#     We consider the qubits to be ordered |q1 q2> and use the standard representation, for example
-#         |0 1>  -->  [[0, 1, 0, 0]].T
-#
-#     :param q1:
-#     :param q2:
-#     :param e1:
-#     :param e2:
-#     :return:
-#     """
-#     # standardize as single row
-#     e1 = np.asarray(e1).reshape(4,)
-#     e2 = np.asarray(e2).reshape(4,)
-#
-#     if e1[0] == e2[3] == 1 or e1[1] == e2[2] == 1:
-#         raise ValueError("Estimation of the relative phase between these particular eigenvectors "
-#                          "is not supported, as the gates required for state prep and measurement "
-#                          "are not local.")
-#
-#     sup = e1 + e2
-#
-#     alpha1 = sup[0] + sup[1]
-#     beta1 = sup[2] + sup[3]
-#     alpha2 = sup[0] + sup[2]
-#     beta2 = sup[1] + sup[3]
-#
-#     q1_state = np.array([alpha1, beta1])
-#     q2_state = np.array([alpha2, beta2])
-#     q1_state = q1_state / np.linalg.norm(q1_state)
-#     q2_state = q2_state / np.linalg.norm(q2_state)
-#
-#     prep1 = prepare_state_on_bloch_sphere(q1, standard_basis_to_bloch_vector(q1_state))
-#     prep2 = prepare_state_on_bloch_sphere(q2, standard_basis_to_bloch_vector(q2_state))
-#     prep = prep1 + prep2
-#
-#     x_meas = prep.dagger()
-#     y_meas =
-#
 
 
 def get_additive_error_factor(M_j: float, max_additive_error: float) -> float:
@@ -336,8 +305,7 @@ def run_single_rpe_experiment(experiment: DataFrame, qc: QuantumComputer,
     return exp_with_results
 
 
-def _make_prog_from_df(qubits, rotation, depth, meas_dir, measure_qubits, meas_qubit,
-                       change_of_basis, post_select_state = None, qc: QuantumComputer = None):
+def _make_prog_from_df(row: Series, qc: QuantumComputer = None):
     """
 
     :param qc:
@@ -350,28 +318,39 @@ def _make_prog_from_df(qubits, rotation, depth, meas_dir, measure_qubits, meas_q
     :param rotation:
     :return:
     """
-    if not isinstance(change_of_basis, Program) and qc is not None:
-        change_of_basis = change_of_basis_matrix_to_quil(qc, rotation.get_qubits(), change_of_basis)
+    cob = row["Change of Basis"]
+    rotation = row["Rotation"]
+    meas_qubits = row["Measure Qubits"]
+    if len(meas_qubits) > 1:
+        meas_qubit = row["Non-Z-Basis Meas Qubit"]
+    else:
+        meas_qubit = meas_qubits[0]
+    post_select_state = None
+    if "Post Select State" in row.index:
+        post_select_state = row["Post Select State"]
+
+    if not isinstance(cob, Program) and qc is not None:
+        cob = change_of_basis_matrix_to_quil(qc, rotation.get_qubits(), cob)
 
     prog = Program()
 
     if post_select_state is None:
         # start in equal superposition of basis states, i.e. put each qubit in plus state
-        prog = sum([local_pauli_eig_prep('X', q) for q in measure_qubits], Program())
+        prog = sum([local_pauli_eig_prep('X', q) for q in meas_qubits], Program())
     else:
         # only start the non-z-basis measurement qubit in the superposition
         prog += local_pauli_eig_prep('X', meas_qubit)
         # put all other qubits in the post-selection-state
-        prog += sum([RX(q) for idx, q in enumerate(measure_qubits) if q != meas_qubit and
+        prog += sum([RX(pi, q) for idx, q in enumerate(meas_qubits) if q != meas_qubit and
                      post_select_state[idx] == 1], Program())
     # using change_of_basis, transform to equal superposition of rotation eigenvectors
-    prog += change_of_basis
+    prog += cob
     # perform the rotation depth many times
-    prog += sum([rotation for _ in range(depth)], Program())
+    prog += sum([rotation for _ in range(row["Depth"])], Program())
     # return to computational basis before measurements
-    prog += change_of_basis.dagger()
+    prog += cob.dagger()
     # prepare the meas_qubit in the appropriate meas_direction
-    prog += local_pauli_eig_meas(meas_dir, meas_qubit)
+    prog += local_pauli_eig_meas(row["Measure Direction"], meas_qubit)
     return prog
 
 
@@ -424,16 +403,16 @@ def acquire_rpe_data(qc: QuantumComputer, experiments: Union[DataFrame, Sequence
         alpha = 5 / 2  # should be > 2
         beta = 1 / 2  # should be > 0
 
-        results = np.array([_run_rpe_program(qc, program, measure_qubits,
+        results = [_run_rpe_program(qc, program, measure_qubits,
                                     num_trials(depth, max_depth, alpha, beta, multiplicative_factor,
                                                additive_error))
-                   for (depth, program) in zip(depths, merged.values)])
+                   for (depth, program) in zip(depths, merged.values)]
         offset = 0
         for idx, meas_qs in enumerate(measure_qubits):
             expt = grouped_expts[idx]
-            expt[results_label] = Series(results[:][:][offset: offset + len(meas_qs)])
+            expt[results_label] = [row[:, offset: offset + len(meas_qs)] for row in results]
             offset += len(meas_qs)
-            expt["Simultaneous Group"] = group
+            expt["Simultaneous Group"] = [group for _ in range(expt.shape[0])]
 
     return expts
 
@@ -483,7 +462,7 @@ def get_variance_upper_bound(experiment: DataFrame, results_label='Results') -> 
     # 1 <= j <= K, where j is the one-indexed iteration number
     for j in range(1, K + 1):
         single_depth = experiment.groupby(["Depth"]).get_group(2 ** (j - 1)).set_index(
-            'Meas_Direction')
+            'Measure Direction')
         M_j = len(single_depth.loc['X', results_label])
         M_js += [M_j]
 
@@ -507,13 +486,13 @@ def find_expectation_values(experiment: DataFrame, results_label='Results') -> \
     y_stds = []
 
     for depth, group in experiment.groupby(["Depth"]):
-        N = len(group[group['Meas_Direction'] == 'X'][results_label].values[0])
+        N = len(group[group['Measure Direction'] == 'X'][results_label].values[0])
 
-        p_x = group[group['Meas_Direction'] == 'X'][results_label].values[0].mean()
-        p_y = group[group['Meas_Direction'] == 'Y'][results_label].values[0].mean()
+        p_x = group[group['Measure Direction'] == 'X'][results_label].values[0].mean()
+        p_y = group[group['Measure Direction'] == 'Y'][results_label].values[0].mean()
         # standard deviation of the mean of the probabilities
-        p_x_std = group[group['Meas_Direction'] == 'X'][results_label].values[0].std() / np.sqrt(N)
-        p_y_std = group[group['Meas_Direction'] == 'Y'][results_label].values[0].std() / np.sqrt(N)
+        p_x_std = group[group['Measure Direction'] == 'X'][results_label].values[0].std() / np.sqrt(N)
+        p_y_std = group[group['Measure Direction'] == 'Y'][results_label].values[0].std() / np.sqrt(N)
         # convert probabilities to expectation values of X and Y
         exp_x, var_x = transform_bit_moments_to_pauli(1 - p_x, p_x_std ** 2)
         exp_y, var_y = transform_bit_moments_to_pauli(1 - p_y, p_y_std ** 2)
