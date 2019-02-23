@@ -8,6 +8,7 @@ from functools import partial
 
 from pyquil.quil import Program, merge_programs, DefGate, Pragma
 from pyquil.quilbase import Gate
+from pyquil.gates import RX
 from pyquil.api import QuantumComputer
 from forest.benchmarking.compilation import basic_compile
 from forest.benchmarking.utils import transform_bit_moments_to_pauli, local_pauli_eig_prep, \
@@ -53,7 +54,7 @@ def get_change_of_basis_from_eigvecs(eigenvectors: Sequence[np.ndarray]):
     :return:
     """
 
-    assert len(eigenvectors) >=2, "Specification of all d many eigenvectors is required."
+    assert len(eigenvectors) >= 2, "Specification of all d many eigenvectors is required."
 
     # standardize the possible list, 1d or 2d-row-vector ndarray inputs to column vectors
     eigs = []
@@ -75,12 +76,13 @@ def get_change_of_basis_from_eigvecs(eigenvectors: Sequence[np.ndarray]):
 
 
 def generate_rpe_experiment(rotation: Program, change_of_basis: Union[np.ndarray, Program],
-                            measure_qubits: Sequence[int] = None, num_depths: int = 5) -> DataFrame:
+                            measure_qubits: Sequence[int] = None, num_depths: int = 5,
+                            post_select_state: Sequence[int] = None) -> DataFrame:
     """
     Generate a dataframe containing all the experiments needed to perform robust phase estimation
     to estimate the angle of rotation about the given axis performed by the given rotation program.
 
-    The algorithm is due to:
+    The single qubit algorithm is due to:
 
     [RPE]  Robust Calibration of a Universal Single-Qubit Gate-Set via Robust Phase Estimation
            Kimmel et al.,
@@ -108,6 +110,9 @@ def generate_rpe_experiment(rotation: Program, change_of_basis: Union[np.ndarray
     if isinstance(rotation, Gate):
         rotation = Program(rotation)
 
+    if isinstance(change_of_basis, Gate):
+        change_of_basis = Program(change_of_basis)
+
     rotation_qubits = rotation.get_qubits()
 
     if measure_qubits is None:
@@ -125,15 +130,24 @@ def generate_rpe_experiment(rotation: Program, change_of_basis: Union[np.ndarray
             for meas_dir in ["X", "Y"]:
                 for meas_qubit in measure_qubits:
                     yield {"Qubits": qubits,
-                           "Measure Qubits": list(measure_qubits),
+                           "Rotation": rotation,
                            "Depth": depth,
                            "Meas Direction": meas_dir,
+                           "Measure Qubits": list(measure_qubits),
                            "Non-Z-Basis Meas Qubit": meas_qubit,
                            "Change of Basis": change_of_basis,
-                           "Rotation": rotation}
-
+                           }
     # TODO: Put dtypes on this DataFrame in the right way
-    return DataFrame(df_dict())
+    expt = DataFrame(df_dict())
+
+    if post_select_state is not None:
+        expt["Post Select State"] = post_select_state
+
+    # change_of_basis is already specified as program, so add composed program column
+    if isinstance(change_of_basis, Program):
+        expt["Program"] = expt.apply(_make_prog_from_df, axis=1)
+
+    return expt
 
 #     """
 #     Generates a program that prepares a state perpendicular to the given (theta, phi) axis on
@@ -263,6 +277,12 @@ def change_of_basis_matrix_to_quil(qc: QuantumComputer, qubits: Sequence[int],
     return nquil
 
 
+def add_program_to_df(qc: QuantumComputer, experiment: DataFrame):
+    expt = experiment.copy()
+    expt["Program"] = expt.apply(_make_prog_from_df, axis=1, args=qc)
+    return expt
+
+
 def _run_rpe_program(qc: QuantumComputer, prog: Program, measure_qubits: Sequence[Sequence[int]],
                      num_shots: int) -> np.ndarray:
     """
@@ -316,8 +336,8 @@ def run_single_rpe_experiment(experiment: DataFrame, qc: QuantumComputer,
     return exp_with_results
 
 
-def _make_prog_from_df(qc: QuantumComputer, qubits, measure_qubits, depth, meas_dir, meas_qubit,
-                       change_of_basis, rotation):
+def _make_prog_from_df(qubits, rotation, depth, meas_dir, measure_qubits, meas_qubit,
+                       change_of_basis, post_select_state = None, qc: QuantumComputer = None):
     """
 
     :param qc:
@@ -330,12 +350,26 @@ def _make_prog_from_df(qc: QuantumComputer, qubits, measure_qubits, depth, meas_
     :param rotation:
     :return:
     """
-    # start in equal superposition of basis states, i.e. put each qubit in plus state
-    prog = sum([local_pauli_eig_prep('X', q) for q in measure_qubits], Program())
+    if not isinstance(change_of_basis, Program) and qc is not None:
+        change_of_basis = change_of_basis_matrix_to_quil(qc, rotation.get_qubits(), change_of_basis)
+
+    prog = Program()
+
+    if post_select_state is None:
+        # start in equal superposition of basis states, i.e. put each qubit in plus state
+        prog = sum([local_pauli_eig_prep('X', q) for q in measure_qubits], Program())
+    else:
+        # only start the non-z-basis measurement qubit in the superposition
+        prog += local_pauli_eig_prep('X', meas_qubit)
+        # put all other qubits in the post-selection-state
+        prog += sum([RX(q) for idx, q in enumerate(measure_qubits) if q != meas_qubit and
+                     post_select_state[idx] == 1], Program())
     # using change_of_basis, transform to equal superposition of rotation eigenvectors
-    prog += change_of_basis_matrix_to_quil(qc, rotation.get_qubits, change_of_basis)
+    prog += change_of_basis
     # perform the rotation depth many times
     prog += sum([rotation for _ in range(depth)], Program())
+    # return to computational basis before measurements
+    prog += change_of_basis.dagger()
     # prepare the meas_qubit in the appropriate meas_direction
     prog += local_pauli_eig_meas(meas_dir, meas_qubit)
     return prog
@@ -371,13 +405,12 @@ def acquire_rpe_data(qc: QuantumComputer, experiments: Union[DataFrame, Sequence
     for expt in expts:
         if "Program" not in expt.columns.values:
             # pass the qc and arguments from dataframe columns into helper to make programs
-            expt["Program"] = expt.apply(partial(_make_prog_from_df, qc), axis=1)
+            expt["Program"] = expt.apply(partial(_make_prog_from_df, qc=qc), axis=1)
 
     # try to group experiments to run simultaneously
     if grouping is None:
         grouping = determine_simultaneous_grouping(expts, "Depth")
 
-    results = []
     for group in grouping:
         grouped_expts = [expts[idx] for idx in group]
 
@@ -400,64 +433,9 @@ def acquire_rpe_data(qc: QuantumComputer, experiments: Union[DataFrame, Sequence
             expt = grouped_expts[idx]
             expt[results_label] = Series(results[:][:][offset: offset + len(meas_qs)])
             offset += len(meas_qs)
-            expt["Simultaneous Group"] = Series([group for _ in range(depths)])
+            expt["Simultaneous Group"] = group
 
     return expts
-
-
-# def separate_rpe_results_by_id(df: DataFrame) -> Sequence[DataFrame]:
-#     """
-#     Takes a single DataFrame with a number of different RPE experiments which were run
-#     simultaneously and returns a list of separate data frames for each experiment.
-#
-#     :param df: a data frame output by a run of acquire_rpe_data on a list of experiments.
-#     :return: a list of separate experiment data frames with results.
-#     """
-#     ids = df["Exp. ID"].unique()
-#
-#     experiments = []
-#     for id in ids:
-#         single_experiment = df.loc[df["Exp. ID"] == id]
-#         experiments.append(single_experiment)
-#
-#
-#     return experiments
-
-
-# def acquire_rpe_data(experiments: DataFrame, qc: QuantumComputer,
-#                      multiplicative_factor: float = 1.0, additive_error: float = None,
-#                      results_label="Results") -> DataFrame:
-#     """
-#     Run each experiment in the experiments data frame a number of times which is specified by
-#     num_trials().
-#
-#     The experiments df is copied, and raw shot outputs are stored in a column labeled by
-#     results_label, which defaults to "Results". The number of shots run at each depth can be
-#     modified indirectly by adjusting multiplicative_factor and additive_error.
-#
-#     :param experiments: dataframe containing experiments, generated by generate_rpe_experiments()
-#     :param qc: a quantum computer, e.g. QVM or QPU, that runs the experiments
-#     :param multiplicative_factor: ad-hoc factor to multiply the number of shots per iteration. See
-#         num_trials() which computes the optimal number of shots per iteration.
-#     :param additive_error: estimate of the max additive error in the experiment, see num_trials()
-#     :param results_label: label for the column of the returned df to be populated with results
-#     :return: A copy of the experiments data frame with the raw shot results in a new column.
-#     """
-#
-#     def run(qc: QuantumComputer, exp: Program, n_trials: int) -> np.ndarray:
-#         exp.wrap_in_numshots_loop(n_trials)
-#         executable = qc.compiler.native_quil_to_executable(basic_compile(exp))
-#         return qc.run(executable)
-#
-#     alpha = 5 / 2  # should be > 2
-#     beta = 1 / 2  # should be > 0
-#     max_depth = max(experiments["Depth"].values)
-#     results = [run(qc, experiment,
-#                    num_trials(depth, max_depth, alpha, beta, multiplicative_factor, additive_error))
-#                for (depth, experiment) in zip(experiments["Depth"].values, experiments["Experiment"].values)]
-#     experiments = experiments.copy()
-#     experiments[results_label] = Series(results)
-#     return experiments
 
 
 #########
