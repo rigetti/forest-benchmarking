@@ -1,4 +1,4 @@
-pyquil
+pyquil>=2.4.0
 numpy
 networkx
 pandas

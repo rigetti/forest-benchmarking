@@ -54,6 +54,7 @@ setup(
         'sympy',
         'python-rapidjson',
         'cvxpy',
-        'tqdm'
+        'tqdm',
+        'gitpython'
     ],
 )
