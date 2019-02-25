@@ -50,7 +50,7 @@ def _is_pos_pow_two(x: int) -> bool:
     return x == 1
 
 
-def get_change_of_basis_from_eigvecs(eigenvectors: Sequence[np.ndarray]):
+def get_change_of_basis_from_eigvecs(eigenvectors: Sequence[np.ndarray]) -> np.ndarray:
     """
     Generates a unitary matrix that sends each computational basis state to the corresponding
     eigenvector.
@@ -63,7 +63,9 @@ def get_change_of_basis_from_eigvecs(eigenvectors: Sequence[np.ndarray]):
         have eigenvalues with phase {p1, p2}. If the relative phase {p1-p2} is positive,
         then the rotation happens about e1 in the counter-clockwise direction for a clock facing
         the e1 direction.
-    :return:
+    :return: a matrix for the change of basis transformation which maps computational basis
+        states to the given eigenvectors. Necessary for generate_rpe_experiments called on a 
+        rotation with the given eigenvectors.
     """
     assert len(eigenvectors) > 1 and _is_pos_pow_two(len(eigenvectors)), \
         "Specification of all dim-many eigenvectors is required."
@@ -92,7 +94,24 @@ def generate_rpe_experiment(rotation: Program, change_of_basis: Union[np.ndarray
                             post_select_state: Sequence[int] = None) -> DataFrame:
     """
     Generate a dataframe containing all the experiments needed to perform robust phase estimation
-    to estimate the angle of rotation about the given axis performed by the given rotation program.
+    to estimate the angle of rotation of the given rotation program.
+
+    In general, this experiment consists of multiple iterations of the following steps performed for
+    different depths and measurement in different "directions":
+        1) Prepare the equal superposition between computational basis states (i.e. the
+            eigenvectors of a rotation about the Z axis)
+        2) Perform a change of basis which maps the computational basis to eigenvectors of the
+            rotation.
+        3) Perform the rotation depth-many times, where depth=2^iteration number. Each
+            eigenvector component picks up a phase from the rotation. In the 1-qubit case this
+            means that the state rotates about the axis formed by the eigenvectors at a rate
+            which is given by the relative phase between the two eigenvector components.
+        4) Invert the change of basis to return to the computational basis.
+        5) Prepare (one of) the qubit(s) for measurement along either the X or Y axis.
+        6) Measure this qubit, and in the multi-qubit case other qubits participating in rotation.
+    Measure_qubits can be used e.g. in the case of noisy cross-talk to measure the effective
+    action of some "rotation program" that acts on completely different qubits but nonetheless
+    rotates each measure_qubit.
 
     The single qubit algorithm is due to:
 
@@ -110,16 +129,27 @@ def generate_rpe_experiment(rotation: Program, change_of_basis: Union[np.ndarray
 
     :param rotation: the program or gate whose angle of rotation is to be estimated. Note that
         this program will be run through forest_benchmarking.compilation.basic_compile().
-    :param change_of_basis:
+    :param change_of_basis: a matrix, gate, or program for the unitary change of basis
+        transformation which maps the computational basis into the basis formed by eigenvectors
+        of the rotation. The sign of the estimate will be determined by which computational basis
+        states are mapped to which eigenvectors. Following the right-hand-rule convention,
+        a rotation of RX(phi) for phi>0 about the +X axis should be paired with a change of basis
+        maps |0> --> |+> and |1> --> |-> . This is achieved by the gate RY(pi/2, qubit).
     :param num_depths: the number of depths in the protocol described in [RPE]. A depth is the
         number of consecutive applications of the rotation in a single iteration. The maximum
         depth is 2**(num_depths-1)
     :param measure_qubits: the qubits whose angle of rotation, as a result of the action of
         the rotation program, RPE will attempt to estimate. These are the only qubits measured.
-        In the case of a two qubit experiment this should include both qubits.
-    :param post_select_state:
-    :return: a dataframe populated with all of programs necessary for the RPE protocol in
-        [RPE] with the necessary depth, measurement_direction, and program.
+    :param post_select_state: is a bitstring used only in the multi-qubit case where one wishes to
+        prepare the classical post_select_state on any qubits NOT being measured in the X or Y
+        basis. When the measurements are analyzed, any results where these qubits do not match
+        their designated post_select_state bits are discarded. Thus for a given post_select_state
+        and a given measure_qubit being measured in the X or Y basis, the phase being estimated
+        is the relative phase between the eigenvectors mapped to by the computational basis
+        states consistent with the post_select_state for all bits but the measure_qubit. For two
+        qubits, this yields estimates of two separate relative phases; without post_select_state
+        specified four relative phases are estimated.
+    :return: a dataframe populated with all of data necessary for the RPE protocol in [RPE]
     """
     if isinstance(rotation, Gate):
         rotation = Program(rotation)
@@ -174,26 +204,8 @@ def generate_rpe_experiment(rotation: Program, change_of_basis: Union[np.ndarray
 
     return expt
 
-#     """
-#     Generates a program that prepares a state perpendicular to the given (theta, phi) axis on
-#     the Bloch sphere.
-#
-#     In the context of an RPE experiment, the supplied axis is the axis of rotation of the gate
-#     whose magnitude of rotation the experimenter is trying to estimate. Equivalently, axis is the
-#     plus eigenvector of the rotation. The prepared state is a point on the sphere whose radial
-#     line is perpendicular to the supplied axis; the state is pi radians in the theta direction
-#     from axis. Equivalently, the final state is simply some equal magnitude (perhaps with a
-#     relative phase) superposition of the two eigenstates operator which rotates about the given
-#     rotation axis.
-#
-#     For example, the axis (0, 0) corresponds to an RPE experiment estimating the angle parameter
-#     of the rotation RZ(angle). The initial state of this experiment would be the plus one
-#     eigenstate of X, or |+> = RY(pi/2) |0> since this state is perpendicular to the axis of
-#     rotation of RZ. For rotation about an arbitrary axis=(theta, phi), the initial state is
-#     equivalently RZ(phi)RY(theta + pi/2)|0>
 
-
-def add_program_to_df(qc: QuantumComputer, experiment: DataFrame):
+def add_programs_to_rpe_dataframe(qc: QuantumComputer, experiment: DataFrame) -> DataFrame:
     expt = experiment.copy()
     expt["Program"] = expt.apply(_make_prog_from_df, axis=1,  args=(qc,))
     return expt
@@ -248,9 +260,10 @@ def _run_rpe_program(qc: QuantumComputer, program: Program, measure_qubits: Sequ
     Note that the program is first compiled with basic_compile.
 
     :param qc: quantum computer to run program on
-    :param prog: program to run
-    :param num_shots: number of shots to repeat the program
-    :return: the results of the program
+    :param program: program to run
+    :param measure_qubits: all of the qubits to be measured after the program is run
+    :param num_shots: number of shots of results to collect for the program
+    :return: the results for all of the measure_qubits after running the program
     """
     prog = Program() + program  # make a copy of program
     meas_qubits = [qubit for qubits in measure_qubits for qubit in qubits]
@@ -273,8 +286,8 @@ def run_single_rpe_experiment(qc: QuantumComputer, experiment: DataFrame,
     results_label, which defaults to "Results". The number of shots run at each depth can be
     modified indirectly by adjusting multiplicative_factor and additive_error.
 
-    :param experiment: dataframe generated by generate_rpe_experiment()
     :param qc: a quantum computer, e.g. QVM or QPU, that runs each program in the experiment
+    :param experiment: dataframe generated by generate_rpe_experiment()
     :param multiplicative_factor: ad-hoc factor to multiply the number of shots per iteration. See
         num_trials() which computes the optimal number of shots per iteration.
     :param additive_error: estimate of the max additive error in the experiment, see num_trials()
@@ -306,7 +319,7 @@ def change_of_basis_matrix_to_quil(qc: QuantumComputer, qubits: Sequence[int],
 
     :param qc: Quantum Computer that will need to use the change of basis
     :param qubits: the qubits the program should act on
-    :param change_of_basis: a unitary matrix acting on len(qubits)
+    :param change_of_basis: a unitary matrix acting on len(qubits) many qubits
     :return: a native quil program that implements change_of_basis on the qubits of qc.
     """
     prog = Program()
@@ -328,18 +341,16 @@ def change_of_basis_matrix_to_quil(qc: QuantumComputer, qubits: Sequence[int],
     return only_gates
 
 
-def _make_prog_from_df(row: Series, qc: QuantumComputer = None):
+def _make_prog_from_df(row: Series, qc: QuantumComputer = None) -> Program:
     """
+    Synthesizes all of the information in a single row of an RPE experiment to generate a single
+    program.
 
-    :param qc:
-    :param qubits:
-    :param measure_qubits:
-    :param depth:
-    :param meas_dir:
-    :param meas_qubit:
-    :param change_of_basis:
-    :param rotation:
-    :return:
+    :param row: a row of an rpe experiment generated by generate_rpe_experiment
+    :param qc: a quantum computer that the program will be run on, only necessary if
+        generate_rpe_experiment was given a Change of Basis specified by a matrix (not gate or
+        program), and there was no intermediate call to add_programs_to_rpe_dataframe
+    :return: program
     """
     cob = row["Change of Basis"]
     rotation = row["Rotation"]

@@ -72,7 +72,7 @@ def test_noisy_RPE(qvm):
         evecs = rpe.bloch_rotation_to_eigenvectors(pi / 4, 0)
         cob = rpe.get_change_of_basis_from_eigvecs(evecs)
         expt = rpe.generate_rpe_experiment(RH, cob, num_depths=7)
-        expt = rpe.add_program_to_df(qvm, expt)
+        expt = rpe.add_programs_to_rpe_dataframe(qvm, expt)
         add_noise_to_experiments(expt, 25 * 10 ** (-6.), 20 * 10 ** (-6.), .92, .87)
         expt = rpe.acquire_rpe_data(qvm, expt, multiplicative_factor=5., additive_error=add_error)
         phase_estimate = rpe.robust_phase_estimate(expt)
