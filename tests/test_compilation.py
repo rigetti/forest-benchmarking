@@ -1,5 +1,6 @@
 import inspect
 import random
+import itertools
 from math import pi
 
 import numpy as np
@@ -7,8 +8,8 @@ import pytest
 
 from pyquil.gates import *
 from pyquil.quil import Program
-from pyquil.gates import RX, RZ
-from forest_benchmarking.compilation import _RY, basic_compile, _CNOT, _H, _X, match_global_phase
+from forest_benchmarking.compilation import _RY, basic_compile, _CNOT, _CCNOT, _T, _H, _X, _SWAP, \
+    match_global_phase
 
 try:
     from pyquil.unitary_tools import program_unitary
@@ -56,6 +57,13 @@ def test_H():
 
 
 @pytest.mark.skipif(not unitary_tools, reason='Requires unitary_tools')
+def test_T():
+    u1 = program_unitary(Program(T(0)), n_qubits=1)
+    u2 = program_unitary(_T(0), n_qubits=1)
+    assert_all_close_up_to_global_phase(u1, u2, atol=1e-12)
+
+
+@pytest.mark.skipif(not unitary_tools, reason='Requires unitary_tools')
 def test_CNOT():
     u1 = program_unitary(Program(CNOT(0, 1)), n_qubits=2)
     u2 = program_unitary(_CNOT(0, 1), n_qubits=2)
@@ -66,6 +74,25 @@ def test_CNOT():
     assert_all_close_up_to_global_phase(u1, u2, atol=1e-12)
 
 
+@pytest.mark.skipif(not unitary_tools, reason='Requires unitary_tools')
+def test_SWAP():
+    u1 = program_unitary(Program(SWAP(0, 1)), n_qubits=2)
+    u2 = program_unitary(_SWAP(0, 1), n_qubits=2)
+    assert_all_close_up_to_global_phase(u1, u2, atol=1e-12)
+
+    u1 = program_unitary(Program(SWAP(1, 0)), n_qubits=2)
+    u2 = program_unitary(_SWAP(1, 0), n_qubits=2)
+    assert_all_close_up_to_global_phase(u1, u2, atol=1e-12)
+
+
+@pytest.mark.skipif(not unitary_tools, reason='Requires unitary_tools')
+def test_CCNOT():
+    for perm in itertools.permutations([0, 1, 2]):
+        u1 = program_unitary(Program(CCNOT(*perm)), n_qubits=3)
+        u2 = program_unitary(_CCNOT(*perm), n_qubits=3)
+        assert_all_close_up_to_global_phase(u1, u2, atol=1e-12)
+
+
 # Note to developers: unsupported gates are commented out.
 QUANTUM_GATES = {'I': I,
                  'X': X,
@@ -73,7 +100,7 @@ QUANTUM_GATES = {'I': I,
                  # 'Z': Z,
                  'H': H,
                  # 'S': S,
-                 # 'T': T,
+                 'T': T,
                  # 'PHASE': PHASE,
                  'RX': RX,
                  'RY': RY,
@@ -85,7 +112,7 @@ QUANTUM_GATES = {'I': I,
                  # 'CPHASE01': CPHASE01,
                  # 'CPHASE10': CPHASE10,
                  # 'CPHASE': CPHASE,
-                 # 'SWAP': SWAP,
+                 'SWAP': SWAP,
                  # 'CSWAP': CSWAP,
                  # 'ISWAP': ISWAP,
                  # 'PSWAP': PSWAP
