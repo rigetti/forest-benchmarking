@@ -23,9 +23,9 @@ contributors:
 * Documentation. Public functions *must* have docstrings. Documentation 
   should also be provided as comments to your code. Finally please include 
   references to to the relavent papers and equations in those papers.
-  The recomended referernce style guide is:
+  The recomended reference style guide is:
   
-  [TopX]  Cool title about topic X
+  [TOPX]  Cool title about topic X
           first author lastname, journal name, volume, firstpage (year)
           DOI Link
           arXiv Link
