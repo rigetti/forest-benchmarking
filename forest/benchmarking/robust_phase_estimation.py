@@ -1,4 +1,4 @@
-from typing import Tuple, List, Sequence, Union
+from typing import Tuple, List, Sequence, Union, Dict
 
 import numpy as np
 from numpy import pi
@@ -9,6 +9,7 @@ from pyquil.quil import Program, merge_programs, DefGate, Pragma
 from pyquil.quilbase import Gate
 from pyquil.gates import RX
 from pyquil.api import QuantumComputer
+from pyquil.unitary_tools import all_bitstrings
 from forest.benchmarking.compilation import basic_compile
 from forest.benchmarking.utils import transform_bit_moments_to_pauli, local_pauli_eig_prep, \
     local_pauli_eig_meas, determine_simultaneous_grouping, bloch_vector_to_standard_basis
@@ -91,7 +92,7 @@ def get_change_of_basis_from_eigvecs(eigenvectors: Sequence[np.ndarray]) -> np.n
 
 def generate_rpe_experiment(rotation: Program, change_of_basis: Union[np.ndarray, Program],
                             measure_qubits: Sequence[int] = None, num_depths: int = 6,
-                            post_select_state: Sequence[int] = None) -> DataFrame:
+                            prepare_and_post_select: Dict[int, int] = None) -> DataFrame:
     """
     Generate a dataframe containing all the experiments needed to perform robust phase estimation
     to estimate the angle of rotation of the given rotation program.
@@ -140,7 +141,7 @@ def generate_rpe_experiment(rotation: Program, change_of_basis: Union[np.ndarray
         depth is 2**(num_depths-1)
     :param measure_qubits: the qubits whose angle of rotation, as a result of the action of
         the rotation program, RPE will attempt to estimate. These are the only qubits measured.
-    :param post_select_state: is a bitstring used only in the multi-qubit case where one wishes to
+    :param prepare_and_post_select: is a bitstring used only in the multi-qubit case where one wishes to
         prepare the classical post_select_state on any qubits NOT being measured in the X or Y
         basis. When the measurements are analyzed, any results where these qubits do not match
         their designated post_select_state bits are discarded. Thus for a given post_select_state
@@ -167,20 +168,26 @@ def generate_rpe_experiment(rotation: Program, change_of_basis: Union[np.ndarray
         # "dummies" simultaneously with an experiment whose rotation is the cross-talky program.
 
     qubits = rotation_qubits.union(measure_qubits)
+    measure_qubits = sorted(measure_qubits)
 
     def df_dict():
         for exponent in range(num_depths):
             depth = 2 ** exponent
             for meas_dir in ["X", "Y"]:
                 if len(measure_qubits) > 1:
-                    # this is a >1q RPE experiment; the qubit being rotated need be specified
-                    for meas_qubit in measure_qubits:
+                    # this is a >1q RPE experiment; the qubit being rotated and measured in X or
+                    # Y direction need be indicated from among the available measure qubits.
+                    for non_z_meas_qubit in measure_qubits:
+                        if prepare_and_post_select and \
+                                non_z_meas_qubit in prepare_and_post_select.keys():
+                            # post-selected qubits are measured only in z-basis.
+                            continue
                         yield {"Qubits": qubits,
                                "Rotation": rotation,
                                "Depth": depth,
                                "Measure Direction": meas_dir,
-                               "Measure Qubits": list(measure_qubits),
-                               "Non-Z-Basis Meas Qubit": meas_qubit,
+                               "Measure Qubits": measure_qubits,
+                               "Non-Z-Basis Meas Qubit": non_z_meas_qubit,
                                "Change of Basis": change_of_basis,
                                }
                 else:
@@ -189,14 +196,19 @@ def generate_rpe_experiment(rotation: Program, change_of_basis: Union[np.ndarray
                            "Rotation": rotation,
                            "Depth": depth,
                            "Measure Direction": meas_dir,
-                           "Measure Qubits": list(measure_qubits),
+                           "Measure Qubits": measure_qubits,
                            "Change of Basis": change_of_basis,
                            }
     # TODO: Put dtypes on this DataFrame in the right way
     expt = DataFrame(df_dict())
 
-    if post_select_state is not None:
-        expt["Post Select State"] = [post_select_state for _ in range(expt.shape[0])]
+    if prepare_and_post_select is not None:
+        # construct and store a post-selection state assuming the order of measure_qubits
+        state = [None] * len(measure_qubits)
+        for idx, q in enumerate(measure_qubits):
+            if q in prepare_and_post_select.keys():
+                state[idx] = prepare_and_post_select[q]
+        expt["Post Select State"] = [state for _ in range(expt.shape[0])]
 
     # change_of_basis is already specified as program, so add composed program column
     if isinstance(change_of_basis, Program):
@@ -390,7 +402,7 @@ def _make_prog_from_df(row: Series, qc: QuantumComputer = None) -> Program:
 
 def acquire_rpe_data(qc: QuantumComputer, experiments: Union[DataFrame, Sequence[DataFrame]],
                      multiplicative_factor: float = 1.0, additive_error: float = None,
-                     grouping: Sequence[Tuple[int]] = None, results_label="Results") \
+                     grouping: Sequence[Sequence[int]] = None, results_label="Results") \
         -> Union[DataFrame, Sequence[DataFrame]]:
     """
     Run each experiment in the sequence of experiments.
@@ -519,11 +531,13 @@ def get_variance_upper_bound(experiment: DataFrame, multiplicative_factor: float
         [_xci(i + 1) ** 2 * _p_max(M_j) for i, M_j in enumerate(M_js)])
 
 
-def get_moments(experiment: DataFrame, results_label='Results') -> Tuple[List, List, List, List]:
+def get_moments(experiment: DataFrame, post_select_state: Sequence[int] = None,
+                results_label='Results') -> Tuple[List, List, List, List]:
     """
     Calculate expectation values and standard deviation for each row of the experiment.
 
     :param experiment: a dataframe with RPE results populated by a call to acquire_rpe_data
+    :param post_select_state: only collect the resulst consistent with this bitstring
     :param results_label: label for the column with results from which the moments are estimated
     """
     xs = []
@@ -531,28 +545,69 @@ def get_moments(experiment: DataFrame, results_label='Results') -> Tuple[List, L
     x_stds = []
     y_stds = []
 
-    for depth, group in experiment.groupby(["Depth"]):
-        N = len(group[group['Measure Direction'] == 'X'][results_label].values[0])
+    if post_select_state is None:
+        for depth, group in experiment.groupby(["Depth"]):
+            N = len(group[group['Measure Direction'] == 'X'][results_label].values[0])
 
-        p_x = group[group['Measure Direction'] == 'X'][results_label].values[0].mean()
-        p_y = group[group['Measure Direction'] == 'Y'][results_label].values[0].mean()
-        # standard deviation of the mean of the probabilities
-        p_x_std = group[group['Measure Direction'] == 'X'][results_label].values[0].std() / np.sqrt(N)
-        p_y_std = group[group['Measure Direction'] == 'Y'][results_label].values[0].std() / np.sqrt(N)
-        # convert probabilities to expectation values of X and Y
-        exp_x, var_x = transform_bit_moments_to_pauli(1 - p_x, p_x_std ** 2)
-        exp_y, var_y = transform_bit_moments_to_pauli(1 - p_y, p_y_std ** 2)
-        xs.append(exp_x)
-        ys.append(exp_y)
-        x_stds.append(np.sqrt(var_x))
-        y_stds.append(np.sqrt(var_y))
+            p_x = group[group['Measure Direction'] == 'X'][results_label].values[0].mean()
+            p_y = group[group['Measure Direction'] == 'Y'][results_label].values[0].mean()
+            # standard deviation of the mean of the probabilities
+            p_x_std = group[group['Measure Direction'] == 'X'][results_label].values[0].std() / np.sqrt(N)
+            p_y_std = group[group['Measure Direction'] == 'Y'][results_label].values[0].std() / np.sqrt(N)
+            # convert probabilities to expectation values of X and Y
+            exp_x, var_x = transform_bit_moments_to_pauli(1 - p_x, p_x_std ** 2)
+            exp_y, var_y = transform_bit_moments_to_pauli(1 - p_y, p_y_std ** 2)
+            xs.append(exp_x)
+            ys.append(exp_y)
+            x_stds.append(np.sqrt(var_x))
+            y_stds.append(np.sqrt(var_y))
+    else:
+        meas_q = experiment["Non-Z-Basis Meas Qubit"].unique()
+        assert len(meas_q) == 1, "Get moments should be called only for a particular non-z-basis " \
+                                 "measurement qubit."
+        meas_q = meas_q[0]
+        meas_qubits = experiment["Measure Qubits"].values[0]
+        post_state_indices = [idx for idx, q in enumerate(meas_qubits) if q != meas_q]
+
+        for depth, group in experiment.groupby(["Depth"]):
+            x_results = group[group['Measure Direction'] == 'X'][results_label].values[0]
+            y_results = group[group['Measure Direction'] == 'Y'][results_label].values[0]
+
+            selected_xs = []
+            for result in x_results:
+                if np.array_equal(result[post_state_indices], post_select_state):
+                    selected_xs.append(result)
+            selected_xs = np.asarray(selected_xs)
+
+            selected_ys = []
+            for result in y_results:
+                if np.array_equal(result[post_state_indices], post_select_state):
+                    selected_ys.append(result)
+            selected_ys = np.asarray(selected_ys)
+
+            n_x = len(selected_xs)
+            n_y = len(selected_ys)
+
+            p_x = selected_xs.mean()
+            p_y = selected_ys.mean()
+            # standard deviation of the mean of the probabilities
+            p_x_std = selected_xs.std() / np.sqrt(n_x)
+            p_y_std = selected_ys.std() / np.sqrt(n_y)
+            # convert probabilities to expectation values of X and Y
+            exp_x, var_x = transform_bit_moments_to_pauli(1 - p_x, p_x_std ** 2)
+            exp_y, var_y = transform_bit_moments_to_pauli(1 - p_y, p_y_std ** 2)
+            xs.append(exp_x)
+            ys.append(exp_y)
+            x_stds.append(np.sqrt(var_x))
+            y_stds.append(np.sqrt(var_y))
 
     return xs, ys, x_stds, y_stds
 
 
 def add_moments_to_dataframe(experiment: DataFrame, results_label='Results'):
     """
-    Adds the calculated expected value and standard deviation for each row of results.
+    Adds new columns storing calculated expected value and standard deviation for each row of
+    results.
 
     This method is provided only to store moments in the dataframe for the interested user;
     calling this method is not necessary for getting an estimate of the phase, since the moments
@@ -562,9 +617,9 @@ def add_moments_to_dataframe(experiment: DataFrame, results_label='Results'):
     :param results_label: label for the column with results from which the moments are estimated
     :return: a copy of the experiment with Expectation and Std Deviation for results_label.
     """
-    xs, ys, x_stds, y_stds = get_moments(experiment, results_label)
-
     expt = experiment.copy()
+
+    xs, ys, x_stds, y_stds = get_moments(expt, results_label=results_label)
 
     expectations = [None for _ in range(len(xs) + len(ys))]
     expectations[::2] = xs
@@ -618,7 +673,8 @@ def estimate_phase_from_moments(xs: List, ys: List, x_stds: List, y_stds: List,
     return theta_est % (2 * pi)  # return value between 0 and 2pi
 
 
-def robust_phase_estimate(experiment: DataFrame, results_label="Results"):
+def robust_phase_estimate(experiment: DataFrame, results_label="Results") -> Union[float,
+                                                                                   Sequence[float]]:
     """
     Provides the estimate of the phase for an RPE experiment with results.
 
@@ -629,9 +685,38 @@ def robust_phase_estimate(experiment: DataFrame, results_label="Results"):
     :param results_label: label for the column with results from which the moments are estimated
     :return: an estimate of the phase of the rotation program passed into generate_rpe_experiments
     """
-    xs, ys, x_stds, y_stds = get_moments(experiment, results_label)
-    phase = estimate_phase_from_moments(xs, ys, x_stds, y_stds)
-    return phase
+    meas_qubits = experiment["Measure Qubits"].values[0]
+    if len(meas_qubits) == 1:
+        moments = get_moments(experiment, results_label=results_label)
+        phase = estimate_phase_from_moments(*moments)
+        return phase
+    else:
+        state = [None] * len(meas_qubits)
+        if "Post Select State" in experiment.columns.values:
+            state = experiment["Post Select State"].values[0]
+
+        relative_phases = []
+        for idx, meas_q in enumerate(meas_qubits):
+            if state[idx] is not None:
+                # qubit is never measured in X/Y basis and is only used for post-selection
+                continue
+
+            # get only the rows where the meas_q is actually the qubit being measured in X/Y basis
+            expt = experiment[experiment["Non-Z-Basis Meas Qubit"] == meas_q]
+
+            # Each distinct outcome on {qubits - meas_q} corresponds to the estimation of the
+            # relative phase between different pairs of eigenvectors. Here we iterate over each
+            # unique outcome, discard outcomes that don't match the post-selected state,
+            # and estimate the phase corresponding to this outcome.
+            for outcome in all_bitstrings(len(meas_qubits) - 1):
+                full = np.insert(outcome, idx, 0)  # fill in the meas_q for comparison to state
+                mismatches = [bit == full[j] for j, bit in enumerate(state) if bit is not None]
+                if not all(mismatches):
+                    # the outcome violates a post-selection
+                    continue
+                moments = get_moments(expt, outcome, results_label)
+                relative_phases.append(estimate_phase_from_moments(*moments))
+    return relative_phases
 
 
 #########
