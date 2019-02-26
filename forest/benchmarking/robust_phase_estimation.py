@@ -141,15 +141,15 @@ def generate_rpe_experiment(rotation: Program, change_of_basis: Union[np.ndarray
         depth is 2**(num_depths-1)
     :param measure_qubits: the qubits whose angle of rotation, as a result of the action of
         the rotation program, RPE will attempt to estimate. These are the only qubits measured.
-    :param prepare_and_post_select: is a bitstring used only in the multi-qubit case where one wishes to
-        prepare the classical post_select_state on any qubits NOT being measured in the X or Y
-        basis. When the measurements are analyzed, any results where these qubits do not match
-        their designated post_select_state bits are discarded. Thus for a given post_select_state
-        and a given measure_qubit being measured in the X or Y basis, the phase being estimated
-        is the relative phase between the eigenvectors mapped to by the computational basis
-        states consistent with the post_select_state for all bits but the measure_qubit. For two
-        qubits, this yields estimates of two separate relative phases; without post_select_state
-        specified four relative phases are estimated.
+    :param prepare_and_post_select: is a bitstring used only in the multi-qubit case where one
+        wishes to prepare the given qubits in the given classical state, and in analysis
+        discard any results where those qubits are not observed in that state. Thus for a given
+        prepare_and_post_select and a given measure_qubit being measured in the X or Y basis,
+        the phase being estimated is the relative phase between the eigenvectors mapped to by the
+        computational basis states consistent with the post_select_state and the equal
+        superposition of the measure_qubit. For two qubits, one of the qubits may be assigned a
+        bit, which will yield an estimate of one of the four possible phases typically
+        estimated without post_select_state specified.
     :return: a dataframe populated with all of data necessary for the RPE protocol in [RPE]
     """
     if isinstance(rotation, Gate):
@@ -218,6 +218,23 @@ def generate_rpe_experiment(rotation: Program, change_of_basis: Union[np.ndarray
 
 
 def add_programs_to_rpe_dataframe(qc: QuantumComputer, experiment: DataFrame) -> DataFrame:
+    """
+    This is a helper to populate the dataframe with the program implementing each row of the
+    dataframe.
+
+    A user need not call this method. If the experiment was originally supplied with a change of
+    basis in the form of rotation or program then it will automatically be populated with the
+    overall program for each row; meanwhile, if change_of_basis is specified as a matrix then the
+    translation to a gate can be done automatically by the qc object supplied at run-time to
+    acquire_rpe_data. This method is intended only to provide a preview of the programs that
+    will be run on the qc before the call to acquire_rpe_data is made. Note that none of the
+    programs will contain the measurement instructions.
+
+    :param qc: a quantum computer on which the experiment will be run.
+    :param experiment: the experiment dataframe that will be populated with pyquil programs
+        implementing each iteration of the experiment
+    :return: a copy of the experiment dataframe with newly populated "Program" column.
+    """
     expt = experiment.copy()
     expt["Program"] = expt.apply(_make_prog_from_df, axis=1,  args=(qc,))
     return expt
@@ -678,12 +695,21 @@ def robust_phase_estimate(experiment: DataFrame, results_label="Results") -> Uni
     """
     Provides the estimate of the phase for an RPE experiment with results.
 
-    This is simply a convenient wrapper around get_moments() and estimate_phase_from_moments()
-    which do all of the analysis. See those methods above for details.
+    In the 1q case this is simply a convenient wrapper around get_moments() and
+    estimate_phase_from_moments() which do all of the analysis; see those methods above for details.
+    For multiple qubits this method determines which possible outputs are consistent with the
+    post-selection-state and the possible non-z-basis measurement qubit. For each choice of the
+    latter, all such possible outcomes correspond to measurement of a different relative phase.
+    get_moments() is called on a dataframe with rows consistent with the particular non-z-basis
+    measurement qubit and each outcome. If there is no post-select state then the number of
+    relative phases estimated is equal to the dimension of the Hilbert space.
 
     :param experiment: an RPE experiment with results.
     :param results_label: label for the column with results from which the moments are estimated
     :return: an estimate of the phase of the rotation program passed into generate_rpe_experiments
+        If the rotation program is multi-qubit then there will be
+            2**(len(meas_qubits) - len(post_select_state) - 1)
+        different relative phases estimated and returned.
     """
     meas_qubits = experiment["Measure Qubits"].values[0]
     if len(meas_qubits) == 1:
@@ -710,8 +736,8 @@ def robust_phase_estimate(experiment: DataFrame, results_label="Results") -> Uni
             # and estimate the phase corresponding to this outcome.
             for outcome in all_bitstrings(len(meas_qubits) - 1):
                 full = np.insert(outcome, idx, 0)  # fill in the meas_q for comparison to state
-                mismatches = [bit == full[j] for j, bit in enumerate(state) if bit is not None]
-                if not all(mismatches):
+                matches = [bit == full[j] for j, bit in enumerate(state) if bit is not None]
+                if not all(matches):
                     # the outcome violates a post-selection
                     continue
                 moments = get_moments(expt, outcome, results_label)
