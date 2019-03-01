@@ -465,7 +465,7 @@ def acquire_rpe_data(qc: QuantumComputer, experiments: Union[DataFrame, Sequence
 
         depths = grouped_expts[0]["Depth"].values
         max_depth = max(depths)
-        alpha = 5 / 2  # should be > 2
+        alpha = 5 / 2  # should be > 2 for Heisenberg scaling. See eq. V.11 in [RPE]
         beta = 1 / 2  # should be > 0
 
         results = [_run_rpe_program(qc, program, measure_qubits,
