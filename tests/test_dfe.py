@@ -1,51 +1,64 @@
-from forest_benchmarking.dfe import exhaustive_state_dfe, exhaustive_process_dfe, ratio_variance, \
-    monte_carlo_process_dfe
+from math import pi
+
+import numpy as np
+
 from pyquil import Program
-from pyquil.gates import *
-from pyquil.numpy_simulator import NumpyWavefunctionSimulator
-from pyquil.operator_estimation import _one_q_state_prep
+from pyquil.gates import CZ, RX, CNOT, H
+from forest_benchmarking.dfe import generate_process_dfe_experiment, acquire_dfe_data, \
+    direct_fidelity_estimate, generate_state_dfe_experiment, ratio_variance
+
+def test_exhaustive_gate_dfe_noiseless_qvm(qvm, benchmarker):
+    qvm.qam.random_seed = 1
+    process_exp = generate_process_dfe_experiment(Program([RX(pi / 2, 0)]), compiler=benchmarker)
+    data, cal = acquire_dfe_data(process_exp, qvm, var=0.01,)
+    est = direct_fidelity_estimate(data, cal, 'process')
+    assert est.fid_point_est == 1.0
+    assert est.fid_var_est == 0.0
+    assert all([exp == 1.0 for exp in data.expectation])
+    assert all(np.abs(cal) == 1.0 for cal in cal.expectation)
+
+    process_exp = generate_process_dfe_experiment(Program([CZ(0, 1)]), compiler=benchmarker)
+    data, cal = acquire_dfe_data(process_exp, qvm, var=0.01, )
+    est = direct_fidelity_estimate(data, cal, 'process')
+    assert est.fid_point_est == 1.0
+    assert est.fid_var_est == 0.0
+    assert all([exp == 1.0 for exp in data.expectation])
+    assert all(np.abs(cal) == 1.0 for cal in cal.expectation)
+
+    process_exp = generate_process_dfe_experiment(Program([CNOT(0, 1)]), compiler=benchmarker)
+    data, cal = acquire_dfe_data(process_exp, qvm, var=0.01, )
+    est = direct_fidelity_estimate(data, cal, 'process')
+    assert est.fid_point_est == 1.0
+    assert est.fid_var_est == 0.0
+    assert all([exp == 1.0 for exp in data.expectation])
+    assert all(np.abs(cal) == 1.0 for cal in cal.expectation)
 
 
-def test_exhaustive_state_dfe():
-    texpt = exhaustive_state_dfe(program=Program(X(0), X(1)), qubits=[0, 1])
-    assert len(texpt) == 3 ** 2 - 1
+def test_exhaustive_state_dfe_noiseless_qvm(qvm, benchmarker):
+    qvm.qam.random_seed = 1
+    state_exp = generate_state_dfe_experiment(Program([RX(pi / 2, 0)]), compiler=benchmarker)
+    data, cal = acquire_dfe_data(state_exp, qvm, var=0.01,)
+    est = direct_fidelity_estimate(data, cal, 'state')
+    assert est.fid_point_est == 1.0
+    assert est.fid_var_est == 0.0
+    assert all([exp == 1.0 for exp in data.expectation])
+    assert all(np.abs(cal) == 1.0 for cal in cal.expectation)
 
+    state_exp = generate_state_dfe_experiment(Program([H(0), H(1), CZ(0, 1)]), compiler=benchmarker)
+    data, cal = acquire_dfe_data(state_exp, qvm, var=0.01,)
+    est = direct_fidelity_estimate(data, cal, 'state')
+    assert est.fid_point_est == 1.0
+    assert est.fid_var_est == 0.0
+    assert all([exp == 1.0 for exp in data.expectation])
+    assert all(np.abs(cal) == 1.0 for cal in cal.expectation)
 
-def test_exhaustive_dfe():
-    texpt = exhaustive_process_dfe(program=Program(Z(0)), qubits=[0])
-    assert len(texpt) == 7 ** 1 - 1
-
-
-def test_exhaustive_dfe_run():
-    wfnsim = NumpyWavefunctionSimulator(n_qubits=1)
-    process = Program(Z(0))
-    texpt = exhaustive_process_dfe(program=process, qubits=[0])
-    for setting in texpt:
-        setting = setting[0]
-        prog = Program()
-        for oneq_state in setting.in_state.states:
-            prog += _one_q_state_prep(oneq_state)
-        prog += process
-
-        expectation = wfnsim.reset().do_program(prog).expectation(setting.out_operator)
-        assert expectation == 1.
-
-
-def test_monte_carlo_dfe():
-    process = Program(CNOT(0, 1))
-    texpt = monte_carlo_process_dfe(program=process, qubits=[0, 1], n_terms=10)
-    assert len(texpt) == 10
-
-    wfnsim = NumpyWavefunctionSimulator(n_qubits=2)
-    for setting in texpt:
-        setting = setting[0]
-        prog = Program()
-        for oneq_state in setting.in_state.states:
-            prog += _one_q_state_prep(oneq_state)
-        prog += process
-
-        expectation = wfnsim.reset().do_program(prog).expectation(setting.out_operator)
-        assert expectation == 1.
+    state_exp = generate_state_dfe_experiment(Program([H(0), CNOT(0, 1)]), compiler=benchmarker)
+    data, cal = acquire_dfe_data(state_exp, qvm, var=0.01,)
+    est = direct_fidelity_estimate(data, cal, 'state')
+    assert est.fid_point_est == 1.0
+    assert est.fid_var_est == 0.0
+    assert all([exp == 1.0 for exp in data.expectation])
+    assert all(np.abs(cal) == 1.0 for cal in cal.expectation)
 
 
 def test_ratio_variance():
