@@ -1,9 +1,9 @@
 from math import pi
-
+import pytest
 import numpy as np
-
+from pyquil.api import get_benchmarker
 from pyquil import Program
-from pyquil.gates import CZ, RX, CNOT, H
+from pyquil.gates import CZ, RX, CNOT, H, I, X
 from forest_benchmarking.dfe import generate_process_dfe_experiment, acquire_dfe_data, \
     direct_fidelity_estimate, generate_state_dfe_experiment, ratio_variance
 
@@ -69,3 +69,169 @@ def test_ratio_variance():
     assert ratio_variance(1, 1, 1, 0) == 1
     # It shouldn't depend on the value in the numerator.
     assert ratio_variance(2, 1, 1, 0) == 1
+
+
+def _random_unitary():
+    """
+    :return: array of shape (2, 2) representing random unitary matrix drawn from Haar measure
+    """
+    # draw complex matrix from Ginibre ensemble
+    z = np.random.randn(2, 2) + 1j * np.random.randn(2, 2)
+    # QR decompose this complex matrix
+    q, r = np.linalg.qr(z)
+    # make this decomposition unique
+    d = np.diagonal(r)
+    l = np.diag(d) / np.abs(d)
+    return np.matmul(q, l)
+
+
+def _kraus_ops_bit_flip(prob):
+    """
+    :param prob: probability of bit-flip
+    :return: list of Kraus operators
+    """
+    # define flip (X) and not flip (I) Kraus operators
+    I_ = np.sqrt(1 - prob) * np.array([[1, 0], [0, 1]])
+    X_ = np.sqrt(prob) * np.array([[0, 1], [1, 0]])
+    return [I_, X_]
+
+
+def _kraus_ops_amp_damping(prob):
+    """
+    :param prob: probability of |1> to |0> decay
+    :return: list of Kraus operators
+    """
+    # define imperfect identity (I_) and decay (D_) Kraus operators
+    I_ = np.array([[1, 0], [0, np.sqrt(1 - prob)]])
+    D_ = np.array([[0, np.sqrt(prob)], [0, 0]])
+    return [I_, D_]
+
+
+def _kraus_ops_dephasing(prob):
+    """
+    :param prob: probability of applying Z operator
+    :return: list of Kraus operators
+    """
+    # define probabilistic identity (I_) and Z (Z_) Kraus operators
+    I_ = np.sqrt(1 - prob) * np.array([[1, 0], [0, 1]])
+    Z_ = np.sqrt(prob) * np.array([[1, 0], [0, -1]])
+    return [I_, Z_]
+
+
+def _kraus_ops_depolarizing(prob):
+    """
+    :param prob: probability of being unchanged;
+        1 - this probability is the probability of transforming into random state I/2
+    :return: list of Kraus operators
+    """
+    # define Kraus operators
+    M0 = np.sqrt(3 * prob + 1) / 2 * np.array([[1, 0], [0, 1]])
+    M1 = np.sqrt(1 - prob) / 2 * np.array([[0, 1], [1, 0]])
+    M2 = np.sqrt(1 - prob) / 2 * np.array([[0, -1j], [1j, 0]])
+    M3 = np.sqrt(1 - prob) / 2 * np.array([[1, 0], [0, -1]])
+    return [M0, M1, M2, M3]
+
+
+def test_bit_flip_channel_fidelity(qvm):
+    """
+    We use Eqn (5) of https://arxiv.org/abs/quant-ph/0701138 to compare the fidelity
+    """
+    bm = get_benchmarker()
+    process_exp = generate_process_dfe_experiment(Program(I(0)), bm)
+    # pick probability of bit flip, and num_shots
+    prob = np.random.uniform(0.1, 0.5)
+    num_shots = 4000
+    # obtain Kraus operators associated with the channel
+    kraus_ops = _kraus_ops_bit_flip(prob)
+    # create Program with noisy gates
+    p = Program()
+    p.defgate("DummyGate", _random_unitary())
+    p.inst(("DummyGate", 0))
+    p.define_noisy_gate("DummyGate", [0], kraus_ops)
+    # define this (noisy) program as the one associated with process_exp
+    process_exp.program = p
+    # estimate fidelity
+    data, cal = acquire_dfe_data(process_exp, qvm, 0.01)
+    pest = direct_fidelity_estimate(data, cal, 'process')
+    # test if correct
+    expected_result = 1 - (2/3 * prob)
+    assert np.isclose(pest.fid_point_est, expected_result, atol=1.e-2)
+
+
+@pytest.mark.skip(reason="Figure out why this is failing")
+def test_amplitude_damping_channel_fidelity(qvm):
+    """
+    We use Eqn (5) of https://arxiv.org/abs/quant-ph/0701138 to compare the fidelity
+    """
+    bm = get_benchmarker()
+    process_exp = generate_process_dfe_experiment(Program(I(0)), bm)
+    # pick probability of amplitude damping, and num_shots
+    prob = 0.3
+    num_shots = 4000
+    # obtain Kraus operators associated with the channel
+    kraus_ops = _kraus_ops_amp_damping(prob)
+    # create Program with noisy gates
+    p = Program()
+    p.defgate("DummyGate", _random_unitary())
+    p.inst(("DummyGate", 0))
+    p.define_noisy_gate("DummyGate", [0], kraus_ops)
+    # define this (noisy) program as the one associated with process_exp
+    process_exp.program = p
+    # estimate fidelity
+    data, cal = acquire_dfe_data(process_exp, qvm, 0.01)
+    pest = direct_fidelity_estimate(data, cal, 'process')
+    # test if correct
+    expected_result = 2/3 + np.sqrt(1-prob)/3 - prob/6
+    assert np.isclose(pest.fid_point_est, expected_result, atol=1.e-2)
+
+
+def test_dephasing_channel_fidelity(qvm):
+    """
+    We use Eqn (5) of https://arxiv.org/abs/quant-ph/0701138 to compare the fidelity
+    """
+    bm = get_benchmarker()
+    process_exp = generate_process_dfe_experiment(Program(I(0)), bm)
+    # pick probability of amplitude damping, and num_shots
+    prob = np.random.uniform(0.1, 0.5)
+    num_shots = 4000
+    # obtain Kraus operators associated with the channel
+    kraus_ops = _kraus_ops_dephasing(prob)
+    # create Program with noisy gates
+    p = Program()
+    p.defgate("DummyGate", _random_unitary())
+    p.inst(("DummyGate", 0))
+    p.define_noisy_gate("DummyGate", [0], kraus_ops)
+    # define this (noisy) program as the one associated with process_exp
+    process_exp.program = p
+    # estimate fidelity
+    data, cal = acquire_dfe_data(process_exp, qvm, 0.01)
+    pest = direct_fidelity_estimate(data, cal, 'process')
+    # test if correct
+    expected_result = 1 - (2/3 * prob)
+    assert np.isclose(pest.fid_point_est, expected_result, atol=1.e-2)
+
+
+def test_depolarizing_channel_fidelity(qvm):
+    """
+    We use Eqn (5) of https://arxiv.org/abs/quant-ph/0701138 to compare the fidelity
+    """
+    bm = get_benchmarker()
+    process_exp = generate_process_dfe_experiment(Program(I(0)), bm)
+    # pick probability of amplitude damping, and num_shots
+    prob = np.random.uniform(0.1, 0.5)
+    num_shots = 4000
+    # obtain Kraus operators associated with the channel
+    kraus_ops = _kraus_ops_depolarizing(prob)
+    # create Program with noisy gates
+    p = Program()
+    p.defgate("DummyGate", _random_unitary())
+    p.inst(("DummyGate", 0))
+    p.define_noisy_gate("DummyGate", [0], kraus_ops)
+    # define this (noisy) program as the one associated with process_exp
+    process_exp.program = p
+    # estimate fidelity
+    data, cal = acquire_dfe_data(process_exp, qvm, 0.01)
+    pest = direct_fidelity_estimate(data, cal, 'process')
+    # test if correct
+    expected_result = (1 + prob) / 2
+    assert np.isclose(pest.fid_point_est, expected_result, atol=1.e-2)
