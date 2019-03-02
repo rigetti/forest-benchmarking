@@ -134,6 +134,18 @@ def _kraus_ops_depolarizing(prob):
     return [M0, M1, M2, M3]
 
 
+def _noisy_program(kraus_operations):
+    """
+    :param kraus_operations: list of Kraus operators
+    :return: Program with Kraus operators applied to the |0> state
+    """
+    p = Program()
+    p.defgate("DummyGate", _random_unitary())
+    p.inst(("DummyGate", 0))
+    p.define_noisy_gate("DummyGate", [0], kraus_operations)
+    return p
+
+
 def test_bit_flip_channel_fidelity(qvm, benchmarker):
     """
     We use Eqn (5) of https://arxiv.org/abs/quant-ph/0701138 to compare the fidelity
@@ -146,10 +158,7 @@ def test_bit_flip_channel_fidelity(qvm, benchmarker):
     # obtain Kraus operators associated with the channel
     kraus_ops = _kraus_ops_bit_flip(prob)
     # create Program with noisy gates
-    p = Program()
-    p.defgate("DummyGate", _random_unitary())
-    p.inst(("DummyGate", 0))
-    p.define_noisy_gate("DummyGate", [0], kraus_ops)
+    p = _noisy_program(kraus_ops)
     # define this (noisy) program as the one associated with process_exp
     process_exp.program = p
     # estimate fidelity
@@ -172,10 +181,7 @@ def test_amplitude_damping_channel_fidelity(qvm, benchmarker):
     # obtain Kraus operators associated with the channel
     kraus_ops = _kraus_ops_amp_damping(prob)
     # create Program with noisy gates
-    p = Program()
-    p.defgate("DummyGate", _random_unitary())
-    p.inst(("DummyGate", 0))
-    p.define_noisy_gate("DummyGate", [0], kraus_ops)
+    p = _noisy_program(kraus_ops)
     # define this (noisy) program as the one associated with process_exp
     process_exp.program = p
     # estimate fidelity
@@ -197,10 +203,7 @@ def test_dephasing_channel_fidelity(qvm, benchmarker):
     # obtain Kraus operators associated with the channel
     kraus_ops = _kraus_ops_dephasing(prob)
     # create Program with noisy gates
-    p = Program()
-    p.defgate("DummyGate", _random_unitary())
-    p.inst(("DummyGate", 0))
-    p.define_noisy_gate("DummyGate", [0], kraus_ops)
+    p = _noisy_program(kraus_ops)
     # define this (noisy) program as the one associated with process_exp
     process_exp.program = p
     # estimate fidelity
@@ -222,10 +225,7 @@ def test_depolarizing_channel_fidelity(qvm, benchmarker):
     # obtain Kraus operators associated with the channel
     kraus_ops = _kraus_ops_depolarizing(prob)
     # create Program with noisy gates
-    p = Program()
-    p.defgate("DummyGate", _random_unitary())
-    p.inst(("DummyGate", 0))
-    p.define_noisy_gate("DummyGate", [0], kraus_ops)
+    p = _noisy_program(kraus_ops)
     # define this (noisy) program as the one associated with process_exp
     process_exp.program = p
     # estimate fidelity
