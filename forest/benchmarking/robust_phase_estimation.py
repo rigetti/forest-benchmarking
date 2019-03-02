@@ -743,15 +743,11 @@ def robust_phase_estimate(experiment: DataFrame, results_label="Results") -> Uni
             # and estimate the phase corresponding to this outcome.
             for outcome in all_bitstrings(len(meas_qubits) - 1):
                 full = np.insert(outcome, idx, 0)  # fill in the meas_q for comparison to state
-                print(full)
                 matches = [bit == full[j] for j, bit in enumerate(state) if bit is not None]
-                print(matches)
                 if not all(matches):
                     # the outcome violates a post-selection
                     continue
                 moments = get_moments(expt, outcome, results_label)
-                print(moments)
-                print(estimate_phase_from_moments(*moments))
                 relative_phases.append(estimate_phase_from_moments(*moments))
     return relative_phases
 
