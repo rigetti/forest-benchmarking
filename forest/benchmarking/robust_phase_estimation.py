@@ -584,7 +584,8 @@ def get_moments(experiment: DataFrame, post_select_state: Sequence[int] = None,
                                  "measurement qubit."
         meas_q = meas_q[0]
         meas_qubits = experiment["Measure Qubits"].values[0]
-        post_state_indices = [idx for idx, q in enumerate(meas_qubits) if q != meas_q]
+        meas_q_index = meas_qubits.index(meas_q)
+        post_state_indices = [idx for idx in range(len(meas_qubits)) if idx != meas_q_index]
 
         for depth, group in experiment.groupby(["Depth"]):
             x_results = group[group['Measure Direction'] == 'X'][results_label].values[0]
@@ -593,13 +594,13 @@ def get_moments(experiment: DataFrame, post_select_state: Sequence[int] = None,
             selected_xs = []
             for result in x_results:
                 if np.array_equal(result[post_state_indices], post_select_state):
-                    selected_xs.append(result)
+                    selected_xs.append(result[meas_q_index])
             selected_xs = np.asarray(selected_xs)
 
             selected_ys = []
             for result in y_results:
                 if np.array_equal(result[post_state_indices], post_select_state):
-                    selected_ys.append(result)
+                    selected_ys.append(result[meas_q_index])
             selected_ys = np.asarray(selected_ys)
 
             n_x = len(selected_xs)
@@ -679,10 +680,14 @@ def estimate_phase_from_moments(xs: List, ys: List, x_stds: List, y_stds: List,
 
         # get back an estimate between -pi and pi
         theta_j_est = np.arctan2(y, x) / k
+
         plus_or_minus = pi / k  # the principal range bound from previous estimate
-        # update the estimate given that it falls within plus_or_minus of the last estimate
-        offset = (theta_j_est - (theta_est - plus_or_minus)) % (2 * plus_or_minus)
-        theta_est += offset - plus_or_minus
+        restricted_range = [theta_est - plus_or_minus, theta_est + plus_or_minus]
+        # get the offset of the new estimate from within the restricted range
+        offset = (theta_j_est - restricted_range[0]) % (2 * plus_or_minus)
+        # update the estimate
+        theta_est = offset + restricted_range[0]
+        assert restricted_range[0] <= theta_est < restricted_range[1]
 
         if bloch_data is not None:
             bloch_data.append((r, theta_est * k))
@@ -727,6 +732,8 @@ def robust_phase_estimate(experiment: DataFrame, results_label="Results") -> Uni
                 # qubit is never measured in X/Y basis and is only used for post-selection
                 continue
 
+            # idx is 0
+
             # get only the rows where the meas_q is actually the qubit being measured in X/Y basis
             expt = experiment[experiment["Non-Z-Basis Meas Qubit"] == meas_q]
 
@@ -736,11 +743,15 @@ def robust_phase_estimate(experiment: DataFrame, results_label="Results") -> Uni
             # and estimate the phase corresponding to this outcome.
             for outcome in all_bitstrings(len(meas_qubits) - 1):
                 full = np.insert(outcome, idx, 0)  # fill in the meas_q for comparison to state
+                print(full)
                 matches = [bit == full[j] for j, bit in enumerate(state) if bit is not None]
+                print(matches)
                 if not all(matches):
                     # the outcome violates a post-selection
                     continue
                 moments = get_moments(expt, outcome, results_label)
+                print(moments)
+                print(estimate_phase_from_moments(*moments))
                 relative_phases.append(estimate_phase_from_moments(*moments))
     return relative_phases
 
