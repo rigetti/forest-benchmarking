@@ -160,7 +160,7 @@ def test_bit_flip_channel_fidelity(qvm, benchmarker):
     assert np.isclose(pest.fid_point_est, expected_result, atol=1.e1)
 
 
-@pytest.mark.skip(reason="Figure out why this is failing")
+@pytest.mark.skip(reason="TODO: Figure out why this is failing")
 def test_amplitude_damping_channel_fidelity(qvm, benchmarker):
     """
     We use Eqn (5) of https://arxiv.org/abs/quant-ph/0701138 to compare the fidelity
@@ -182,8 +182,8 @@ def test_amplitude_damping_channel_fidelity(qvm, benchmarker):
     data, cal = acquire_dfe_data(process_exp, qvm, 0.01)
     pest = direct_fidelity_estimate(data, cal, 'process')
     # test if correct
-    expected_result = 2/3 + np.sqrt(1-prob)/3 - prob/6
-    assert np.isclose(pest.fid_point_est, expected_result, atol=1.e-1)
+    expected_result = (1/6) * (4 - prob + 2 * np.sqrt(1 - prob))
+    assert np.isclose(pest.fid_point_est, expected_result, atol=5.e-2)
 
 
 def test_dephasing_channel_fidelity(qvm, benchmarker):
