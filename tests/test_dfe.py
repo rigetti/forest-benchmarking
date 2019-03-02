@@ -3,7 +3,7 @@ import pytest
 import numpy as np
 from pyquil.api import get_benchmarker
 from pyquil import Program
-from pyquil.gates import CZ, RX, CNOT, H, I, X
+from pyquil.gates import CZ, RX, RY, CNOT, H, I, X
 from forest_benchmarking.dfe import generate_process_dfe_experiment, acquire_dfe_data, \
     direct_fidelity_estimate, generate_state_dfe_experiment, ratio_variance
 
@@ -234,3 +234,32 @@ def test_depolarizing_channel_fidelity(qvm, benchmarker):
     # test if correct
     expected_result = (1 + prob) / 2
     assert np.isclose(pest.fid_point_est, expected_result, atol=1.e-1)
+
+
+@pytest.mark.skip(reason="TODO: Figure out why this is failing")
+def test_unitary_channel(qvm, benchmarker):
+    """
+    We use Eqn (5) of https://arxiv.org/abs/quant-ph/0701138 to compare the fidelity,
+    this time for a channel composed of a single (unitary) operator
+    """
+    process_exp = generate_process_dfe_experiment(Program(I(0)), benchmarker)
+    # pick probability of amplitude damping, and num_shots
+    prob = np.random.uniform(0.1, 0.5)
+    num_shots = 4000
+    # obtain Kraus operators associated with the channel
+    kraus_ops = _kraus_ops_dephasing(prob)
+    # create Program with single RY rotation for various angles
+    for theta in np.linspace(0.0, 2 * np.pi, 20):
+        p = Program(RY(theta, 0))
+        # define this (noisy) program as the one associated with process_exp
+        process_exp.program = p
+        # estimate fidelity
+        data, cal = acquire_dfe_data(process_exp, qvm, 0.01)
+        pest = direct_fidelity_estimate(data, cal, 'process')
+        # test if correct
+        expected_result = (np.cos(theta/2))**2
+        print (f"theta: {theta}")
+        print (f"expected_result: {expected_result}")
+        print (f"pest.fid_point_est: {pest.fid_point_est}")
+        print ("*" * 30)
+        assert np.isclose(pest.fid_point_est, expected_result, atol=1.e-1)
