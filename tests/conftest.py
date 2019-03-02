@@ -6,7 +6,7 @@ from unittest.mock import create_autospec, Mock
 
 from pyquil.api import WavefunctionSimulator, ForestConnection, QVMConnection, get_benchmarker
 from pyquil.api._errors import UnknownApiError
-from pyquil.paulis import sI
+from pyquil.paulis import sZ
 from pyquil import Program, get_qc
 from pyquil.gates import I, MEASURE
 from pyquil.device import ISA, Device
@@ -57,7 +57,7 @@ def cxn():
 def benchmarker():
     try:
         bm = get_benchmarker()
-        bm.apply_clifford_to_pauli(Program(I(0)), sI(0))
+        bm.apply_clifford_to_pauli(Program(I(0)), sZ(0))
         return bm
     except RequestException as e:
         return pytest.skip("This test requires a running local benchmarker endpoint (ie quilc): {}"
