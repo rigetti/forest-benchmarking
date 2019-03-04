@@ -244,12 +244,10 @@ def test_unitary_channel(qvm, benchmarker):
     # pick probability of amplitude damping, and num_shots
     prob = np.random.uniform(0.1, 0.5)
     num_shots = 4000
-    # obtain Kraus operators associated with the channel
-    kraus_ops = _kraus_ops_dephasing(prob)
     # create Program with single RY rotation for various angles
     for theta in np.linspace(0.0, 2 * np.pi, 20):
         p = Program(RY(theta, 0))
-        # define this (noisy) program as the one associated with process_exp
+        # define this program as the one associated with process_exp
         process_exp.program = p
         # estimate fidelity
         data, cal = acquire_dfe_data(process_exp, qvm, 0.01)
@@ -304,3 +302,24 @@ def test_1q_bit_flip_2q_channel_fidelity(qvm, benchmarker):
     # test if correct
     expected_result = 1 - (4/5 * prob)
     assert np.isclose(pest.fid_point_est, expected_result, atol=1.e1)
+
+
+def test_2q_unitary_channel_fidelity(qvm, benchmarker):
+    """
+    We use Eqn (5) of https://arxiv.org/abs/quant-ph/0701138 to compare the fidelity
+    """
+    process_exp = generate_process_dfe_experiment(Program(I(0), I(1)), benchmarker)
+    # pick probability of bit flip, and num_shots
+    prob = np.random.uniform(0.1, 0.5)
+    num_shots = 4000
+    # create Program with two RY rotations for various angles
+    theta1, theta2 = np.random.uniform(0.0, 2 * np.pi, size=2)
+    p = Program(RY(theta1, 0), RY(theta2, 1))
+    # define this program as the one associated with process_exp
+    process_exp.program = p
+    # estimate fidelity
+    data, cal = acquire_dfe_data(process_exp, qvm, 0.01)
+    pest = direct_fidelity_estimate(data, cal, 'process')
+    # test if correct
+    expected_result = (1/5) * ((2 * np.cos(theta1/2) * np.cos(theta2/2))**2 + 1)
+    assert np.isclose(pest.fid_point_est, expected_result, atol=1.e-1)
