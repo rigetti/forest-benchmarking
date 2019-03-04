@@ -73,12 +73,12 @@ def test_ratio_variance():
     assert ratio_variance(2, 1, 1, 0) == 1
 
 
-def _random_unitary():
+def _random_unitary(n):
     """
-    :return: array of shape (2, 2) representing random unitary matrix drawn from Haar measure
+    :return: array of shape (N, N) representing random unitary matrix drawn from Haar measure
     """
     # draw complex matrix from Ginibre ensemble
-    z = np.random.randn(2, 2) + 1j * np.random.randn(2, 2)
+    z = np.random.randn(n, n) + 1j * np.random.randn(n, n)
     # QR decompose this complex matrix
     q, r = np.linalg.qr(z)
     # make this decomposition unique
@@ -134,15 +134,15 @@ def _kraus_ops_depolarizing(prob):
     return [M0, M1, M2, M3]
 
 
-def _noisy_program(kraus_operations):
+def _noisy_program(kraus_operations, qubits=[0]):
     """
     :param kraus_operations: list of Kraus operators
     :return: Program with Kraus operators applied to the |0> state
     """
     p = Program()
-    p.defgate("DummyGate", _random_unitary())
-    p.inst(("DummyGate", 0))
-    p.define_noisy_gate("DummyGate", [0], kraus_operations)
+    p.defgate("DummyGate", _random_unitary(2**len(qubits)))
+    p.inst(("DummyGate", *qubits))
+    p.define_noisy_gate("DummyGate", qubits, kraus_operations)
     return p
 
 
@@ -152,7 +152,6 @@ def test_bit_flip_channel_fidelity(qvm, benchmarker):
     """
     process_exp = generate_process_dfe_experiment(Program(I(0)), benchmarker)
     # pick probability of bit flip, and num_shots
-    np.random.seed(42)
     prob = np.random.uniform(0.1, 0.5)
     num_shots = 4000
     # obtain Kraus operators associated with the channel
@@ -236,7 +235,6 @@ def test_depolarizing_channel_fidelity(qvm, benchmarker):
     assert np.isclose(pest.fid_point_est, expected_result, atol=1.e-1)
 
 
-@pytest.mark.skip(reason="TODO: Figure out why this is failing")
 def test_unitary_channel(qvm, benchmarker):
     """
     We use Eqn (5) of https://arxiv.org/abs/quant-ph/0701138 to compare the fidelity,
@@ -257,9 +255,52 @@ def test_unitary_channel(qvm, benchmarker):
         data, cal = acquire_dfe_data(process_exp, qvm, 0.01)
         pest = direct_fidelity_estimate(data, cal, 'process')
         # test if correct
-        expected_result = (np.cos(theta/2))**2
-        print (f"theta: {theta}")
-        print (f"expected_result: {expected_result}")
-        print (f"pest.fid_point_est: {pest.fid_point_est}")
-        print ("*" * 30)
+        expected_result = (1/6) * ((2 * np.cos(theta/2))**2 + 2)
         assert np.isclose(pest.fid_point_est, expected_result, atol=1.e-1)
+
+
+@pytest.mark.skip(reason="TODO: Figure out why this is failing")
+def test_1q_amplitude_damping_2q_channel_fidelity(qvm, benchmarker):
+    """
+    We use Eqn (5) of https://arxiv.org/abs/quant-ph/0701138 to compare the fidelity
+    """
+    process_exp = generate_process_dfe_experiment(Program(I(0), I(1)), benchmarker)
+    # pick probability of bit flip, and num_shots
+    prob = np.random.uniform(0.1, 0.5)
+    num_shots = 4000
+    # obtain Kraus operators associated with the channel
+    kraus_ops_1q = _kraus_ops_amp_damping(prob)
+    kraus_ops = [np.kron(k, np.eye(2)) for k in kraus_ops_1q]
+    # create Program with noisy gates
+    p = _noisy_program(kraus_ops, qubits=[0, 1])
+    # define this (noisy) program as the one associated with process_exp
+    process_exp.program = p
+    # estimate fidelity
+    data, cal = acquire_dfe_data(process_exp, qvm, 0.01)
+    pest = direct_fidelity_estimate(data, cal, 'process')
+    # test if correct
+    expected_result = (1/5) * (3 - prob + 2 * np.sqrt(1 - prob))
+    assert np.isclose(pest.fid_point_est, expected_result, atol=1.e1)
+
+
+def test_1q_bit_flip_2q_channel_fidelity(qvm, benchmarker):
+    """
+    We use Eqn (5) of https://arxiv.org/abs/quant-ph/0701138 to compare the fidelity
+    """
+    process_exp = generate_process_dfe_experiment(Program(I(0), I(1)), benchmarker)
+    # pick probability of bit flip, and num_shots
+    prob = np.random.uniform(0.1, 0.5)
+    num_shots = 4000
+    # obtain Kraus operators associated with the channel
+    kraus_ops_1q = _kraus_ops_bit_flip(prob)
+    kraus_ops = [np.kron(k, np.eye(2)) for k in kraus_ops_1q]
+    # create Program with noisy gates
+    p = _noisy_program(kraus_ops, qubits=[0, 1])
+    # define this (noisy) program as the one associated with process_exp
+    process_exp.program = p
+    # estimate fidelity
+    data, cal = acquire_dfe_data(process_exp, qvm, 0.01)
+    pest = direct_fidelity_estimate(data, cal, 'process')
+    # test if correct
+    expected_result = 1 - (4/5 * prob)
+    assert np.isclose(pest.fid_point_est, expected_result, atol=1.e1)
