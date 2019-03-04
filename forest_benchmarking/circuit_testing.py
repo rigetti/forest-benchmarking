@@ -161,8 +161,8 @@ def layer_1q_and_2q_rand_gates(graph: nx.Graph,
 # ==================================================================================================
 def circuit_sandwich_rand_gates(graph: nx.Graph,
                                 depth: int,
-                                one_q_gates,
-                                two_q_gates,
+                                one_q_gates: list,
+                                two_q_gates: list,
                                 layer_dagger: bool = False,
                                 sandwich_dagger: bool = False):
     '''
