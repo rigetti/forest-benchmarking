@@ -157,7 +157,7 @@ def layer_1q_and_2q_rand_gates(graph: nx.Graph,
     return prog
 
 # ==================================================================================================
-# Sandwitch tools
+# Sandwich tools
 # ==================================================================================================
 def circuit_sandwich_rand_gates(graph: nx.Graph,
                                 depth: int,
@@ -243,4 +243,4 @@ def generate_connected_subgraphs(G: nx.Graph, n_vert: int):
         subg = G.subgraph(sub_nodes)
         if nx.is_connected(subg):
             subgraph_list.append(subg)
-    return subgraph_list
+    return  subgraph_list
