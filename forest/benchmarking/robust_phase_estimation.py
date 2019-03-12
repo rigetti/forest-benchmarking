@@ -1,4 +1,5 @@
 from typing import Tuple, List, Sequence, Union, Dict
+import warnings
 
 import numpy as np
 from numpy import pi
@@ -676,6 +677,9 @@ def estimate_phase_from_moments(xs: List, ys: List, x_stds: List, y_stds: List,
         r_std = np.sqrt(x_std ** 2 + y_std ** 2)
         if r < r_std:
             # cannot reliably place the vector an any quadrant of the circle, so terminate
+            warnings.warn("Decoherence limited estimate of phase {0:.3f} to depth {1:d}. You may "
+                          "want to increase the additive_error and/or multiplicative_factor and "
+                          "try again.".format(theta_est % (2 * pi), k//2))
             break
 
         # get back an estimate between -pi and pi
