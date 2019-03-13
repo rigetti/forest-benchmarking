@@ -34,7 +34,7 @@ def find_version(*file_paths):
 
 
 setup(
-    name='forest_benchmarking',
+    name='forest-benchmarking',
     version=find_version('forest/benchmarking', '__init__.py'),
     description='QCVV and Benchmarking',
     url='http://rigetti.com',
