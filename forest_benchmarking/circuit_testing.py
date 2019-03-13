@@ -22,7 +22,8 @@ from forest_benchmarking.distance_measures import total_variation_distance as tv
 # Gate Sets
 # ==================================================================================================
 def random_single_qubit_gates(graph: nx.Graph, gates: list):
-    """Create a program comprised of single qubit gates randomly placed on the nodes of the
+    """
+    Create a program comprised of single qubit gates randomly placed on the nodes of the
     specified graph. The gates are chosen uniformly from the list provided.
 
     :param graph: The graph. Nodes are used as arguments to gates, so they should be qubit-like.
@@ -37,7 +38,8 @@ def random_single_qubit_gates(graph: nx.Graph, gates: list):
 
 
 def random_two_qubit_gates(graph: nx.Graph, gates: list):
-    """Write a program to randomly place two qubit gates on edges of the specified graph.
+    """
+    Write a program to randomly place two qubit gates on edges of the specified graph.
 
     :param graph: The graph. Nodes are used as arguments to gates, so they should be qubit-like.
     :param gates: A list of gates e.g. [I otimes I, CZ] or [CZ, SWAP, CNOT]
@@ -53,8 +55,10 @@ def random_two_qubit_gates(graph: nx.Graph, gates: list):
 
 
 def random_single_qubit_cliffords(bm: BenchmarkConnection, graph: nx.Graph):
-    """Create a program comprised of single qubit Cliffords gates randomly placed on the nodes of
-    the specified graph. The gates are chosen uniformly from the list provided.
+    """
+    Create a program comprised of single qubit Cliffords gates randomly placed on the nodes of
+    the specified graph. Each uniformly random choice of Clifford is implemented in the native 
+    gateset.
 
     :param bm: A benchmark connection that will do the grunt work of generating the Cliffords
     :param graph: The graph. Nodes are used as arguments to gates, so they should be qubit-like.
@@ -75,7 +79,8 @@ def random_single_qubit_cliffords(bm: BenchmarkConnection, graph: nx.Graph):
 
 
 def random_two_qubit_cliffords(bm: BenchmarkConnection, graph: nx.Graph):
-    """Write a program to place random two qubit Cliffords gates on edges of the graph.
+    """
+    Write a program to place random two qubit Cliffords gates on edges of the graph.
 
     :param bm: A benchmark connection that will do the grunt work of generating the Cliffords
     :param graph: The graph. Nodes are used as arguments to gates, so they should be qubit-like.
@@ -112,6 +117,7 @@ def pre_trival(graph: nx.Graph):
     prog += [prep_gate(qubit) for qubit in list(graph.nodes)]
     return prog
 
+
 def post_trival():
     prog = Program()
     return prog
@@ -124,7 +130,7 @@ def post_trival():
 def layer_1q_and_2q_rand_cliff(bm: BenchmarkConnection,
                                graph: nx.Graph,
                                layer_dagger: bool = False):
-    '''
+    """
     Creates a layer of random one qubit Cliffords followed by random two qubit Cliffords.
 
     :param bm: A benchmark connection that will do the grunt work of generating the Cliffords
@@ -132,7 +138,7 @@ def layer_1q_and_2q_rand_cliff(bm: BenchmarkConnection,
     :param layer_dagger: Bool if true will add the dagger to the layer, making the layer
     efectivley the identity
     :return: program
-    '''
+    """
     prog = Program()
     prog += random_single_qubit_cliffords(bm, graph)
     prog += random_two_qubit_cliffords(bm, graph)
@@ -140,11 +146,12 @@ def layer_1q_and_2q_rand_cliff(bm: BenchmarkConnection,
         prog += prog.dagger()
     return prog
 
+
 def layer_1q_and_2q_rand_gates(graph: nx.Graph,
                                one_q_gates,
                                two_q_gates,
                                layer_dagger: bool = False):
-    '''
+    """
     You pass in two lists of one and two qubit gates. This function creates a layer of random one
     qubit gates followed by random two qubit gates
 
@@ -154,13 +161,14 @@ def layer_1q_and_2q_rand_gates(graph: nx.Graph,
     :param layer_dagger: Bool if true will add the dagger to the layer, making the layer
     efectivley the identity
     :return: program
-    '''
+    """
     prog = Program()
     prog += random_single_qubit_gates(graph, one_q_gates)
     prog += random_two_qubit_gates(graph, two_q_gates)
     if layer_dagger:
         prog += prog.dagger()
     return prog
+
 
 # ==================================================================================================
 # Sandwich tools
@@ -171,7 +179,7 @@ def circuit_sandwich_rand_gates(graph: nx.Graph,
                                 two_q_gates: list,
                                 layer_dagger: bool = False,
                                 sandwich_dagger: bool = False):
-    '''
+    """
     Create a sandwich circuit by adding layers.
 
     :param graph: The graph. Nodes are used as arguments to gates, so they should be qubit-like.
@@ -182,7 +190,7 @@ def circuit_sandwich_rand_gates(graph: nx.Graph,
     :param sandwich_dagger: Bool if true the second half of the circuit will be the inverse of
     the first.
     :return: program
-    '''
+    """
     total_prog = Program()
     total_prog += pre_trival(graph)
 
@@ -190,7 +198,7 @@ def circuit_sandwich_rand_gates(graph: nx.Graph,
         circuit_depth = int(np.floor(circuit_depth / 2))
 
     layer_progs = Program()
-    for ddx in range(1, circuit_depth + 1):
+    for _ in range(circuit_depth):
         layer_progs += layer_1q_and_2q_rand_gates(graph,
                                                   one_q_gates,
                                                   two_q_gates,
@@ -208,7 +216,7 @@ def circuit_sandwich_clifford(bm: BenchmarkConnection,
                               circuit_depth: int,
                               layer_dagger: bool = False,
                               sandwich_dagger: bool = False):
-    '''
+    """
 
     :param bm: A benchmark connection that will do the grunt work of generating the Cliffords
     :param graph: The graph. Nodes are used as arguments to gates, so they should be qubit-like.
@@ -217,16 +225,16 @@ def circuit_sandwich_clifford(bm: BenchmarkConnection,
     :param sandwich_dagger: Bool if true the second half of the circuit will be the inverse of
     the first.
     :return: program
-    '''
+    """
     total_prog = Program()
 
     total_prog += pre_trival(graph)
 
     if sandwich_dagger:
-        depth = int(np.floor(circuit_depth / 2))
+        circuit_depth = int(np.floor(circuit_depth / 2))
 
     layer_progs = Program()
-    for ddx in range(1, circuit_depth + 1):
+    for _ in range(circuit_depth):
         layer_progs += layer_1q_and_2q_rand_cliff(bm, graph, layer_dagger)
     if sandwich_dagger:
         layer_progs += layer_progs.dagger()
@@ -249,7 +257,7 @@ def generate_sandwich_circuits_experiments(qc_noisy: QuantumComputer,
                                            # peter claims that no speed diff 800 shots
                                            num_shots_per_circuit: int = 100,
                                            use_active_reset: bool = False) -> pd.DataFrame:
-    '''
+    """
     Return a DataFrame where the rows contain all the information needed to run random circuits
     of a certain width and depth on a particular lattice.
 
@@ -262,42 +270,43 @@ def generate_sandwich_circuits_experiments(qc_noisy: QuantumComputer,
     :param num_shots_per_circuit: number of shots per random circuit
     :param use_active_reset: if True uses active reset. Doing so will speed up execution on a QPU.
     :return: pandas DataFrame
-    '''
+    """
     # get the networkx graph of the lattice
     G = qc_noisy.qubit_topology()
 
     if circuit_width > len(G.nodes):
-        raise ValueError("You must have circuit widths less than or equal to the number of qubits on a lattice.")
+        raise ValueError("You must have circuit widths less than or equal to the number of qubits "
+                         "on a lattice.")
 
     experiment = []
     # loop over different graph sizes
-    for depth, subgraph_size in itertools.product(range(1, circuit_depth+1),
-                                                  range(1, circuit_width+1)):
-
+    for subgraph_size in range(1, circuit_width + 1):
         list_of_graphs = generate_connected_subgraphs(G, subgraph_size)
-        for kdx in range(1, num_rand_subgraphs+1):
-            # randomly choose a lattice from list
-            lattice = random.choice(list_of_graphs)
-            prog = circuit_sandwich(graph=lattice,
-                                    circuit_depth=depth,
-                                    layer_dagger=layer_dagger,
-                                    sandwich_dagger=sandwich_dagger)
 
-            experiment.append({'Depth': depth,
-                               'Width': subgraph_size,
-                               'Lattice':lattice,
-                               'Layer Dagger': layer_dagger,
-                               'Sandwich Dagger': sandwich_dagger,
-                               'Active Reset': use_active_reset,
-                               'Program': prog,
-                               'Trials': num_shots_per_circuit,
-                               })
+        for depth in range(1, circuit_depth + 1):
+            for _ in range(num_rand_subgraphs):
+                # randomly choose a lattice from list
+                lattice = random.choice(list_of_graphs)
+                prog = circuit_sandwich(graph=lattice,
+                                        circuit_depth=depth,
+                                        layer_dagger=layer_dagger,
+                                        sandwich_dagger=sandwich_dagger)
+
+                experiment.append({'Depth': depth,
+                                   'Width': subgraph_size,
+                                   'Lattice': lattice,
+                                   'Layer Dagger': layer_dagger,
+                                   'Sandwich Dagger': sandwich_dagger,
+                                   'Active Reset': use_active_reset,
+                                   'Program': prog,
+                                   'Trials': num_shots_per_circuit,
+                                   })
     return pd.DataFrame(experiment)
 
 
 def acquire_circuit_sandwich_data(qc_noisy: QuantumComputer,
                                   circ_sand_expt: pd.DataFrame) -> pd.DataFrame:
-    '''
+    """
     Convenient wrapper for collecting the results of running circuits sandwiches on a
     particular lattice.
 
@@ -308,13 +317,10 @@ def acquire_circuit_sandwich_data(qc_noisy: QuantumComputer,
     :param qc_noisy: the noisy quantum resource (QPU or QVM) to
     :param circ_sand_expt: pandas DataFrame where the rows contain experiments
     :return: pandas DataFrame
-    '''
+    """
     #:param qc_perfect: the "perfect" quantum resource (QVM) to determine the true outcome.
     # if qc_perfect.name == qc_noisy.name:
     #    raise ValueError("The noisy and perfect device can't be the same device.")
-
-    # get the networkx graph of the lattice
-    G = qc_noisy.qubit_topology()
 
     data = []
     for index, row in circ_sand_expt.iterrows():
@@ -355,12 +361,12 @@ def acquire_circuit_sandwich_data(qc_noisy: QuantumComputer,
 # ==================================================================================================
 def estimate_random_classical_circuit_errors(qc_perfect: QuantumComputer,
                                              df: pd.DataFrame) -> pd.DataFrame:
-    '''
+    """
     asdf
 
     :param df: pandas DataFrame containing experimental results
     :return: pandas DataFrame containing estiamted errors and experimental results
-    '''
+    """
 
     results = []
     for _, row in df.iterrows():
@@ -420,6 +426,7 @@ def estimate_random_classical_circuit_errors(qc_perfect: QuantumComputer,
                         })
     return pd.DataFrame(results)
 
+
 def get_error_hamming_distance_from_results(perfect_bit_string, results):
     """Get the hamming weight of the error vector (number of bits flipped between output and
     expected answer).
@@ -452,7 +459,6 @@ def get_error_hamming_distributions_from_list(wt_list, n_bits):
     if n_bits < max(wt_list):
         raise ValueError("Hamming weight can't be larger than the number of bits in a string.")
 
-    hamming_wt_distrs = []
     hamming_wt_distr = [0. for _ in range(n_bits + 1)]
     # record the fraction of shots that resulted in an error of the given weight
     for wdx in range(n_bits):
@@ -461,69 +467,69 @@ def get_error_hamming_distributions_from_list(wt_list, n_bits):
 
 
 def hamming_dist_rand(num_bits: int, pad: int = 0):
-    '''Return a list representing the Hamming distribution of
+    """Return a list representing the Hamming distribution of
     a particular bit string, of length num_bits, to randomly drawn bits.
 
     :param num_bits: number of bits in string
     :param pad: number of zero elements to pad
     returns: list of hamming weights with zero padding
-    '''
+    """
     N = 2 ** num_bits
     pr = [comb(num_bits, ndx) / (2 ** num_bits) for ndx in range(0, num_bits + 1)]
-    padding = [0 for pdx in range(0, pad)]
+    padding = [0 for _ in range(pad)]
     return flatten_list([pr, padding])
 
 
 def flatten_list(xlist):
-    '''Flattens a list of lists.
+    """Flattens a list of lists.
 
     :param xlist: list of lists
     :returns: a flattened list
-    '''
+    """
     return [item for sublist in xlist for item in sublist]
 
 
 # helper functions to manipulate the dataframes
 def get_hamming_dist(df: pd.DataFrame, depth_val: int, width_val: int):
-    '''
+    """
     Get  Hamming distance from a dataframe for a particular depth and width.
 
     :param df: dataframe generated from data from 'get_random_classical_circuit_results'
     :param depth_val: depth of quantum circuit
     :param width_val: width of quantum circuit
     :return: smaller dataframe
-    '''
+    """
     idx = df.Depth == depth_val
     jdx = df.Width == width_val
     return df[idx & jdx].reset_index(drop=True)
 
 
 def get_hamming_dists_fn_width(df: pd.DataFrame, depth_val: int):
-    '''
+    """
     Get  Hamming distance from a dataframe for a particular depth.
 
     :param df: dataframe generated from data from 'get_random_classical_circuit_results'
     :param depth_val: depth of quantum circuit
     :return: smaller dataframe
-    '''
+    """
     idx = df.Depth == depth_val
     return df[idx].reset_index(drop=True)
 
 
 def get_hamming_dists_fn_depth(df: pd.DataFrame, width_val: int):
-    '''
+    """
     Get  Hamming distance from a dataframe for a particular width.
 
     :param df: dataframe generated from data from 'get_random_classical_circuit_results'
     :param width_val: width of quantum circuit
     :return: smaller dataframe
-    '''
+    """
     jdx = df.Width == width_val
     return df[jdx].reset_index(drop=True)
 
 
 def basement_function(number: float):
-    '''
+    """
     Once you are in the basement you can't go lower. Defined as
 
     basement_function(number) = |floor(number)*heaviside(number,0)|,
@@ -533,7 +539,7 @@ def basement_function(number: float):
 
     :param number: the basement function is applied to this number.
     :returns: basement of the number
-    '''
+    """
     basement_of_number = np.abs(np.floor(number) * np.heaviside(number, 0))
     return basement_of_number
 
@@ -556,21 +562,24 @@ def CNOT_X_basis(control, target) -> Program:
     prog += H(control)
     return prog
 
+
 # ==================================================================================================
 # Graph tools
 # ==================================================================================================
+
+
 def generate_connected_subgraphs(G: nx.Graph, n_vert: int):
-    '''
+    """
     Given a lattice on the QPU or QVM, specified by a networkx graph, return a list of all
     subgraphs with n_vert connect vertices.
 
     :params n_vert: number of vertices of connected subgraph.
     :params G: networkx Graph
     :returns: list of subgraphs with n_vert connected vertices
-    '''
+    """
     subgraph_list = []
     for sub_nodes in itertools.combinations(G.nodes(), n_vert):
         subg = G.subgraph(sub_nodes)
         if nx.is_connected(subg):
             subgraph_list.append(subg)
-    return  subgraph_list
+    return subgraph_list
