@@ -1,12 +1,9 @@
 import networkx as nx
 import numpy as np
 import pytest
-from rpcq.messages import PyQuilExecutableResponse
-
-from forest_benchmarking import distance_measures as dm
-from forest_benchmarking.compilation import basic_compile
-from forest_benchmarking.random_operators import haar_rand_unitary
-from forest_benchmarking.tomography import generate_state_tomography_experiment, _R, \
+from forest.benchmarking.compilation import basic_compile
+from forest.benchmarking.random_operators import haar_rand_unitary
+from forest.benchmarking.tomography import generate_state_tomography_experiment, _R, \
     iterative_mle_state_estimate, project_density_matrix, estimate_variance, \
     linear_inv_state_estimate
 from pyquil.api import QuantumComputer
@@ -18,6 +15,9 @@ from pyquil.numpy_simulator import NumpyWavefunctionSimulator
 from pyquil.operator_estimation import measure_observables
 from pyquil.pyqvm import PyQVM
 from pyquil.quil import Program
+from rpcq.messages import PyQuilExecutableResponse
+
+from forest.benchmarking import distance_measures as dm
 
 # Single qubit defs
 PROJ_ZERO = np.array([[1, 0], [0, 0]])

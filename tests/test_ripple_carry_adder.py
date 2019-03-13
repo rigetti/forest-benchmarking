@@ -1,4 +1,4 @@
-from forest_benchmarking.classical_logic.ripple_carry_adder import adder
+from forest.benchmarking.classical_logic.ripple_carry_adder import adder
 
 
 def test_one_bit_addition(qvm):

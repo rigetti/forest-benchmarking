@@ -9,10 +9,10 @@ import numpy as np
 from matplotlib.colors import LinearSegmentedColormap
 from scipy.linalg import logm, pinv, eigh
 
-import forest_benchmarking.distance_measures as dm
-import forest_benchmarking.operator_estimation as est
-from forest_benchmarking.superop_conversion import vec, unvec
-from forest_benchmarking.utils import prepare_prod_sic_state, n_qubit_pauli_basis, partial_trace
+import forest.benchmarking.distance_measures as dm
+import forest.benchmarking.operator_estimation as est
+from forest.benchmarking.superop_conversion import vec, unvec
+from forest.benchmarking.utils import prepare_prod_sic_state, n_qubit_pauli_basis, partial_trace
 from pyquil import Program
 from pyquil.api import QuantumComputer
 from pyquil.operator_estimation import ExperimentSetting, \

@@ -1,7 +1,7 @@
-import forest_benchmarking.random_operators as rand_ops
+import forest.benchmarking.random_operators as rand_ops
 import numpy.random
 from scipy.linalg import fractional_matrix_power as matpow
-import forest_benchmarking.distance_measures as dm
+import forest.benchmarking.distance_measures as dm
 import numpy as np
 
 numpy.random.seed(7)  # seed random number generation for all calls to rand_ops
@@ -228,7 +228,7 @@ def test_diamon_norm():
 
 def test_process_fidelity():
     # test single qubit fidelity of identical gates
-    from forest_benchmarking.superop_conversion import kraus2pauli_liouville
+    from forest.benchmarking.superop_conversion import kraus2pauli_liouville
     _X = np.asarray([[0, 1], [1, 0]])
     X_pauli_rep = kraus2pauli_liouville([_X])
     assert np.isclose( dm.process_fidelity(X_pauli_rep, X_pauli_rep), 1, rtol=0.01)

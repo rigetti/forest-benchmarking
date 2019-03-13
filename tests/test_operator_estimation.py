@@ -9,7 +9,7 @@ from pyquil.paulis import sX, sY, sZ, sI, PauliSum, PauliTerm
 from pyquil.quil import Program
 from pyquil.gates import RY, RX, I
 from pyquil.api import QVMConnection
-from forest_benchmarking.operator_estimation import (remove_imaginary,
+from forest.benchmarking.operator_estimation import (remove_imaginary,
                                                      get_rotation_program,
                                                      get_parity,
                                                      estimate_pauli_sum,

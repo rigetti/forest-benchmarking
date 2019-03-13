@@ -1,4 +1,4 @@
-from forest_benchmarking.dfe import exhaustive_state_dfe, exhaustive_process_dfe, ratio_variance, \
+from forest.benchmarking.dfe import exhaustive_state_dfe, exhaustive_process_dfe, ratio_variance, \
     monte_carlo_process_dfe
 from pyquil import Program
 from pyquil.gates import *

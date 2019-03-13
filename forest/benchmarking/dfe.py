@@ -9,7 +9,7 @@ import numpy as np
 from dataclasses import dataclass
 
 import pyrethrum.operator_estimation as est
-from forest_benchmarking.utils import prepare_prod_pauli_eigenstate
+from forest.benchmarking.utils import prepare_prod_pauli_eigenstate
 from pyquil import Program
 from pyquil.api import QuantumComputer, get_benchmarker
 from pyquil.operator_estimation import ExperimentSetting, TomographyExperiment, \

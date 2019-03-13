@@ -3,7 +3,7 @@ Test over all inputs
 """
 from pyquil.quil import Program
 from pyquil.gates import X, I, CNOT, CCNOT, H, MEASURE
-from forest_benchmarking.classical_logic.primitives import *
+from forest.benchmarking.classical_logic.primitives import *
 
 
 def test_majority_gate(qvm):

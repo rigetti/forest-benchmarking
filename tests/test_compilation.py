@@ -8,7 +8,7 @@ import pytest
 
 from pyquil.gates import *
 from pyquil.quil import Program
-from forest_benchmarking.compilation import _RY, basic_compile, _CNOT, _CCNOT, _T, _H, _X, _SWAP, \
+from forest.benchmarking.compilation import _RY, basic_compile, _CNOT, _CCNOT, _T, _H, _X, _SWAP, \
     match_global_phase
 
 try:

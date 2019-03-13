@@ -3,12 +3,12 @@ import numpy as np
 import pytest
 from rpcq.messages import PyQuilExecutableResponse
 
-from forest_benchmarking.compilation import basic_compile
-from forest_benchmarking.random_operators import haar_rand_unitary
-from forest_benchmarking.superop_conversion import vec, unvec, kraus2choi
-from forest_benchmarking.tomography import proj_to_cp, proj_to_tni, \
+from forest.benchmarking.compilation import basic_compile
+from forest.benchmarking.random_operators import haar_rand_unitary
+from forest.benchmarking.superop_conversion import vec, unvec, kraus2choi
+from forest.benchmarking.tomography import proj_to_cp, proj_to_tni, \
     generate_process_tomography_experiment, pgdb_process_estimate, proj_to_tp, _constraint_project
-from forest_benchmarking.utils import sigma_x, partial_trace
+from forest.benchmarking.utils import sigma_x, partial_trace
 from pyquil import Program
 from pyquil import gate_matrices as mat
 from pyquil.gates import CNOT, X
