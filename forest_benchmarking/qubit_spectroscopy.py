@@ -78,7 +78,7 @@ def generate_t1_experiments(qubits: Union[int, List[int]],
     return pd.DataFrame(time_and_programs)
 
 
-def acquire_data_t1(qc: QuantumComputer,
+def acquire_t1_data(qc: QuantumComputer,
                     t1_experiment: pd.DataFrame,
                     ) -> pd.DataFrame:
     """
@@ -144,17 +144,18 @@ def estimate_t1(df: pd.DataFrame):
                 'Fit_params_errs': None,
                 'Message': 'Could not fit to experimental data for qubit' + str(q),
             })
-
-    return results
+    return pd.DataFrame(results)
 
 
 def plot_t1_estimate_over_data(df: pd.DataFrame,
+                               df_est: pd.DataFrame,
                                qubits: list = None,
                                filename: str = None) -> None:
     """
     Plot T1 experimental data and estimated value of T1 as and exponential decay curve.
 
-    :param df: A pandas DataFrame experimental results to plot and fit exponential decay curve to.
+    :param df: A pandas DataFrame experimental results to plot
+    :param df_est: A pandas DataFrame with estimates of T1.
     :param qubits: A list of qubits that you actually want plotted. The default is all qubits.
     :param qc_type: String indicating whether QVM or QPU was used to collect data.
     :return: None
@@ -174,17 +175,18 @@ def plot_t1_estimate_over_data(df: pd.DataFrame,
 
         plt.plot(x_data / MICROSECOND, y_data, 'o-', label=f"QC{q} T1 data")
 
-        try:
-            fit_params, fit_params_errs = fit_to_exponential_decay_curve(x_data, y_data)
-        except RuntimeError:
-            print(f"Could not fit to experimental data for qubit {q}")
+        row = df_est[df_est['Qubit'] == q]
+
+        if row['Fit_params'].values[0] is None:
+            print(f"T1 estimate did not succeed for qubit {q}")
         else:
+            fit_params = (row['Fit_params'].values)[0]
             plt.plot(x_data / MICROSECOND, exponential_decay_curve(x_data, *fit_params),
                      label=f"QC{q} fit: T1={fit_params[1] / MICROSECOND:.2f}us")
 
     plt.xlabel("Time [us]")
-    plt.ylabel("Pr(measuring 1)")
-    plt.title("T1 decay")
+    plt.ylabel(r"Pr($|1\rangle$)")
+    plt.title("$T_1$ decay")
 
     plt.legend(loc='best')
     plt.tight_layout()
@@ -323,7 +325,7 @@ def generate_t2_echo_experiments(qubits: Union[int, List[int]],
     return pd.DataFrame(time_and_programs)
 
 
-def acquire_data_t2(qc: QuantumComputer,
+def acquire_t2_data(qc: QuantumComputer,
                     t2_experiment: pd.DataFrame,
                     ) -> pd.DataFrame:
     """
@@ -400,6 +402,7 @@ def estimate_t2(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def plot_t2_estimate_over_data(df: pd.DataFrame,
+                               df_est: pd.DataFrame,
                                qubits: list = None,
                                t2_type: str = 'unknown',
                                filename: str = None) -> None:
@@ -408,6 +411,7 @@ def plot_t2_estimate_over_data(df: pd.DataFrame,
     curve.
 
     :param df: A pandas DataFrame containing experimental results to plot.
+    :param df_est: A pandas DataFrame containing estimates of T2.
     :param qubits: A list of qubits that you actually want plotted. The default is all qubits.
     :param detuning: Detuning frequency used in experiment creation.
     :param type: String either 'star' or 'echo'.
@@ -430,20 +434,19 @@ def plot_t2_estimate_over_data(df: pd.DataFrame,
 
         plt.plot(x_data / MICROSECOND, y_data, 'o-', label=f"Qubit {q} T2 data")
 
-        try:
-            fit_params, fit_params_errs = fit_to_exponentially_decaying_sinusoidal_curve(x_data,
-                                                                                         y_data,
-                                                                                         detuning)
-        except RuntimeError:
-            print(f"Could not fit to experimental data for qubit {q}")
+        row = df_est[df_est['Qubit'] == q]
+
+        if row['Fit_params'].values[0] is None:
+            print(f"T2 estimate did not succeed for qubit {q}")
         else:
+            fit_params = (row['Fit_params'].values)[0]
             plt.plot(x_data / MICROSECOND,
                      exponentially_decaying_sinusoidal_curve(x_data, *fit_params),
                      label=f"QC{q} fit: freq={fit_params[2] / MHZ:.2f}MHz, "
                            f""f"T2={fit_params[1] / MICROSECOND:.2f}us")
 
     plt.xlabel("Time [µs]")
-    plt.ylabel("Pr(measuring 1)")
+    plt.ylabel("Pr(1)")
     if t2_type.lower() == 'star':
         plt.title("$T_2^*$ (Ramsey) decay")
     elif t2_type.lower() == 'echo':
@@ -521,7 +524,7 @@ def generate_rabi_experiments(qubits: Union[int, List[int]],
     return pd.DataFrame(angle_and_programs)
 
 
-def acquire_data_rabi(qc: QuantumComputer,
+def acquire_rabi_data(qc: QuantumComputer,
                       rabi_experiment: pd.DataFrame,
                       filename: str = None) -> pd.DataFrame:
     """
@@ -593,12 +596,14 @@ def estimate_rabi(df: pd.DataFrame):
 
 
 def plot_rabi_estimate_over_data(df: pd.DataFrame,
+                                 df_est: pd.DataFrame,
                                  qubits: list = None,
                                  filename: str = None) -> None:
     """
     Plot Rabi oscillation experimental data and estimated curve.
 
     :param df: Experimental results to plot and fit curve to.
+    :param df_est: Estimates of Rabi oscillation.
     :param qubits: A list of qubits that you actually want plotted. The default is all qubits.
     :param filename: String.
     :return: None
@@ -619,13 +624,12 @@ def plot_rabi_estimate_over_data(df: pd.DataFrame,
         # plot raw data
         plt.plot(angles, prob_of_one, 'o-', label=f"qubit {q} Rabi data")
 
-        try:
-            # fit to sinusoid
-            fit_params, fit_params_errs = fit_to_sinusoidal_waveform(angles, prob_of_one)
+        row = df_est[df_est['Qubit'] == q]
 
-        except RuntimeError:
-            print(f"Could not fit to experimental data for qubit {q}")
+        if row['Fit_params'].values[0] is None:
+            print(f"Rabi estimate did not succeed for qubit {q}")
         else:
+            fit_params = (row['Fit_params'].values)[0]
             # overlay fitted sinusoidal curve
             plt.plot(angles, sinusoidal_waveform(angles, *fit_params),
                      label=f"qubit {q} fitted line")
@@ -720,7 +724,7 @@ def generate_cz_phase_ramsey_experiment(edges: List[Tuple[int, int]],
     return pd.DataFrame(cz_expriment)
 
 
-def acquire_data_cz_phase_ramsey(qc: QuantumComputer,
+def acquire_cz_phase_ramsey_data(qc: QuantumComputer,
                                  cz_experiment: pd.DataFrame,
                                  filename: str = None) -> pd.DataFrame:
     """
@@ -788,6 +792,9 @@ def estimate_cz_phase_ramsey(df: pd.DataFrame) -> pd.DataFrame:
             try:
                 # fit to sinusoid
                 fit_params, fit_params_errs = fit_to_sinusoidal_waveform(phases, prob_of_one)
+                # find max excited state visibility (ESV) and propagate error from fit params
+                max_ESV, max_ESV_err = get_peak_from_fit_params(fit_params, fit_params_errs)
+
                 results.append({
                     'Edge': edge,
                     'Rz_qubit': rz_qb,
@@ -795,6 +802,8 @@ def estimate_cz_phase_ramsey(df: pd.DataFrame) -> pd.DataFrame:
                     'Prob_of_one': fit_params[2],
                     'Fit_params': fit_params,
                     'Fit_params_errs': fit_params_errs,
+                    'max_ESV': max_ESV,
+                    'max_ESV_err': max_ESV_err,
                     'Message': None,
                 })
             except RuntimeError:
@@ -806,17 +815,21 @@ def estimate_cz_phase_ramsey(df: pd.DataFrame) -> pd.DataFrame:
                     'Prob_of_one': None,
                     'Fit_params': None,
                     'Fit_params_errs': None,
+                    'max_ESV': None,
+                    'max_ESV_err': None,
                     'Message': 'Could not fit to experimental data for edge' + str(edge),
                 })
     return pd.DataFrame(results)
 
 
 def plot_cz_phase_estimate_over_data(df: pd.DataFrame,
+                                     df_est: pd.DataFrame,
                                      filename: str = None) -> None:
     """
     Plot Ramsey experimental data, the fitted sinusoid, and the maximum of that sinusoid.
 
     :param df: Experimental results to plot and fit exponential decay curve to.
+    :param df_est: estimates of CZ Ramsey experiments
     :return: None
     """
     edges = df['Edge'].unique()
@@ -838,15 +851,14 @@ def plot_cz_phase_estimate_over_data(df: pd.DataFrame,
             axes[id_row, id_col].plot(phases, prob_of_one, 'o',
                                       label=f"qubit{qubit} CZ Ramsey data")
 
-            try:
-                # fit to sinusoid
-                fit_params, fit_params_errs = fit_to_sinusoidal_waveform(phases,
-                                                                         prob_of_one)
-            except RuntimeError:
-                print(f"Could not fit to experimental data for qubit {qubit}")
+            row = df_est[df_est['Rz_qubit'] == qubit]
+
+            if row['Fit_params'].values[0] is None:
+                print(f"Rabi estimate did not succeed for qubit {q}")
             else:
-                # find max excited state visibility (ESV) and propagate error from fit params
-                max_ESV, max_ESV_err = get_peak_from_fit_params(fit_params, fit_params_errs)
+                fit_params = (row['Fit_params'].values)[0]
+                max_ESV = (row['max_ESV'].values)[0]
+                max_ESV_err = (row['max_ESV_err'].values)[0]
 
                 # overlay fitted curve and vertical line at maximum ESV
                 axes[id_row, id_col].plot(phases, sinusoidal_waveform(phases, *fit_params),
