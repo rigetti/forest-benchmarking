@@ -134,7 +134,7 @@ def exhaustive_state_dfe(program, qubits):
         used in ``program``.
     """
     return TomographyExperiment(list(
-        _exhaustive_dfe(program=program, qubits=qubits, in_states=[None, plusZ, minusZ])),
+        _exhaustive_dfe(program=program, qubits=qubits, in_states=[None, plusZ])),
         program=program, qubits=qubits)
 
 
