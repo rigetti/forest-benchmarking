@@ -104,7 +104,7 @@ def exhaustive_process_dfe(program: Program, qubits: list,
             https://doi.org/10.1103/PhysRevLett.106.230501
             https://arxiv.org/abs/1104.4695
 
-    :param program: A program comprised of clifford gates that defines the process for
+    :param program: A program comprised of Clifford group gates that defines the process for
         which we estimate the fidelity.
     :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
         used in ``program``.
@@ -139,7 +139,7 @@ def exhaustive_state_dfe(program: Program, qubits: list,
             https://doi.org/10.1103/PhysRevLett.106.230501
             https://arxiv.org/abs/1104.4695
 
-    :param program: A program comprised of clifford gates that constructs a state
+    :param program: A program comprised of Clifford group gates that constructs a state
         for which we estimate the fidelity.
     :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
         used in ``program``.
@@ -171,9 +171,60 @@ def _monte_carlo_dfe(program: Program, qubits: Sequence[int], in_states: list, n
             out_operator=benchmarker.apply_clifford_to_pauli(program, _state_to_pauli(i_st)),
         )
 
+def monte_carlo_state_dfe(program: Program, qubits: List[int], n_terms=200):
+    """
+    Estimate state fidelity by sampled direct fidelity estimation.
+
+    This leads to constant overhead (w.r.t. number of qubits) fidelity estimation.
+
+    The algorithm is due to:
+
+    [DFE1]  Practical Characterization of Quantum Devices without Tomography
+            Silva et al., PRL 107, 210404 (2011)
+            https://doi.org/10.1103/PhysRevLett.107.210404
+
+    [DFE2]  Direct Fidelity Estimation from Few Pauli Measurements
+            Flammia and Liu, PRL 106, 230501 (2011)
+            https://doi.org/10.1103/PhysRevLett.106.230501
+
+    :param program: A program comprised of clifford gates that constructs a state
+        for which we estimate the fidelity.
+    :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
+        used in ``program``.
+    :param n_terms: Number of randomly chosen observables to measure. This number should be 
+        a constant less than ``2**len(qubits)``, otherwise ``exhaustive_state_dfe`` is more efficient.
+    """
+    return TomographyExperiment(list(
+        _monte_carlo_dfe(program=program, qubits=qubits,
+                         in_states=[None, plusZ],
+                         n_terms=n_terms)),
+        program=program, qubits=qubits)
 
 def monte_carlo_process_dfe(program: Program, qubits: List[int],benchmarker: BenchmarkConnection,
                             n_terms: int = 200) -> TomographyExperiment:
+    """
+    Estimate process fidelity by randomly sampled direct fidelity estimation.
+
+    This leads to constant overhead (w.r.t. number of qubits) fidelity estimation.
+
+    The algorithm is due to:
+
+    [DFE1]  Practical Characterization of Quantum Devices without Tomography
+            Silva et al., PRL 107, 210404 (2011)
+            https://doi.org/10.1103/PhysRevLett.107.210404
+
+    [DFE2]  Direct Fidelity Estimation from Few Pauli Measurements
+            Flammia and Liu, PRL 106, 230501 (2011)
+            https://doi.org/10.1103/PhysRevLett.106.230501
+
+    :param program: A program comprised of Clifford group gates that constructs a state
+        for which we estimate the fidelity.
+    :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
+        used in ``program``.
+    :param benchmarker: A `BenchmarkConnection` object
+    :param n_terms: Number of randomly chosen observables to measure. This number should be 
+        a constant less than ``2**len(qubits)``, otherwise ``exhaustive_process_dfe`` is more efficient.
+    """
     return TomographyExperiment(list(
         _monte_carlo_dfe(program=program, qubits=qubits,
                          in_states=[None, plusX, minusX, plusY, minusY, plusZ, minusZ],
