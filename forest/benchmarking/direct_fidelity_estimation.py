@@ -221,7 +221,8 @@ def monte_carlo_process_dfe(program: Program, qubits: List[int], benchmarker: Be
         for which we estimate the fidelity.
     :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
         used in ``program``.
-    :param n_terms: Number of randomly chosen observables to measure. This number should be 
+    :param benchmarker: A `BenchmarkConnection` object
+    :param n_terms: Number of randomly chosen observables to measure. This number should be
         a constant less than ``2**len(qubits)``, otherwise ``exhaustive_process_dfe`` is more efficient.
     """
     return TomographyExperiment(list(
