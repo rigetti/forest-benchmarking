@@ -26,6 +26,8 @@ bm = get_benchmarker()
 @dataclass()
 class Component:
     sequence: Tuple[Program]
+    # add list of experiment settings here? Good for unitarity and RPE, though not necessary for RB.
+    # Would allow natural use of measure_observables, labeling measurement types, symmetrized ro.
     measure_qubits: Tuple[int]
     num_shots: int = None
     results: np.ndarray = None
@@ -44,7 +46,7 @@ class Layer:
     components: Tuple[Component]
 
     def __str__(self):
-        return str(self.depth) + ':\n' + '\n'.join([str(comp) for comp in self.components]) + '\n'
+        return f'Depth {self.depth}:\n' + '\n'.join([str(comp) for comp in self.components]) + '\n'
 
 
 @dataclass
@@ -55,8 +57,6 @@ class StratifiedExperiment:
 
     def __str__(self):
         return '\n'.join([str(lyr) for lyr in self.layers]) + '\n'
-
-
 
 
 def oneq_rb_gateset(qubit: int) -> Gate:
@@ -172,7 +172,6 @@ def survival_statistics(bitstrings):
     survival_mean = beta.mean(n_survived + 1, n_died + 1)
     survival_var = beta.var(n_survived + 1, n_died + 1)
     return survival_mean, np.sqrt(survival_var)
-
 
 
 # do we want num_shots specified at run time or experiment creation?
@@ -357,9 +356,12 @@ def acquire_unitarity_data(qc, experiments, num_shots: int = 500):
                 component_results[comp_idx].append(result)
 
             for component, results in zip(components, component_results):
+                # results aren't quite the same as standard rb. We could cast standard rb in the
+                # form of ExperimentSettings and use measure observables.
                 component.results = results[1:]
                 exps = np.asarray([res.expectation for res in results[1:]])
                 variances = np.asarray([res.stddev**2 for res in results[1:]])
+                # the intermediate result is not a mean, but this is where it should go
                 component.mean  = estimate_purity(2**len(component.measure_qubits), exps)
                 component.stddev  = estimate_purity_err(2**len(component.measure_qubits), exps,
                                                         variances)
@@ -407,6 +409,7 @@ def fit_unitarity(depths, shifted_purities, weights=None):
 
 
 def fit_unitarity_results(experiment):
+    # almost identitical to fit_rb_results, could probably be combined by examining the expt.type
     depths = [layer.depth for layer in experiment.layers for _ in layer.components]
     shifted_purities = [comp.mean for layer in experiment.layers for comp in layer.components]
     weights = [1/comp.stddev for layer in experiment.layers for comp in layer.components]
