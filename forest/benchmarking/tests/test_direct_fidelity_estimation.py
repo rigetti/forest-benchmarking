@@ -1,5 +1,7 @@
-from forest.benchmarking.direct_fidelity_estimation import exhaustive_state_dfe, exhaustive_process_dfe, ratio_variance, \
-    monte_carlo_state_dfe, monte_carlo_process_dfe
+from forest.benchmarking.direct_fidelity_estimation import (exhaustive_state_dfe,
+                                                            exhaustive_process_dfe,
+                                                            ratio_variance, monte_carlo_state_dfe,
+                                                            monte_carlo_process_dfe)
 from pyquil import Program
 from pyquil.api import BenchmarkConnection
 from pyquil.gates import *
@@ -71,6 +73,7 @@ def test_monte_carlo_process_dfe(benchmarker: BenchmarkConnection):
         expectation = wfnsim.reset().do_program(prog).expectation(setting.out_operator)
         assert_almost_equal(expectation,1.,decimal=7)
 
+
 def test_monte_carlo_state_dfe(benchmarker: BenchmarkConnection):
     process = Program(H(0), CNOT(0, 1))
     texpt = monte_carlo_state_dfe(program=process, qubits=[0, 1], n_terms=10,
@@ -87,6 +90,7 @@ def test_monte_carlo_state_dfe(benchmarker: BenchmarkConnection):
 
         expectation = wfnsim.reset().do_program(prog).expectation(setting.out_operator)
         assert_almost_equal(expectation,1.,decimal=7)
+
 
 def test_ratio_variance():
     # If our uncertainty is 0 in each parameter, the uncertainty in the ratio should also be 0.
