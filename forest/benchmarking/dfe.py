@@ -16,7 +16,7 @@ from pyquil.operator_estimation import ExperimentSetting, TomographyExperiment, 
     TensorProductState, plusX, minusX, plusY, minusY, plusZ, minusZ
 from pyquil.paulis import PauliTerm, PauliSum, sI, sX, sY, sZ
 
-bm = get_benchmarker()
+bm = get_benchmarker(timeout=1)
 
 
 def calibrate_readout_imperfections(pauli: PauliTerm, quantum_machine: QuantumComputer,
