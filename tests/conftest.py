@@ -17,7 +17,7 @@ PATH = os.path.dirname(os.path.realpath(__file__))
 RACK_YAML = os.path.join(PATH, "example_rack.yaml")
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope='module')
 def qvm():
     try:
         qc = get_qc('9q-square-qvm')
