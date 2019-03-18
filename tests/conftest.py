@@ -21,6 +21,7 @@ RACK_YAML = os.path.join(PATH, "example_rack.yaml")
 def qvm():
     try:
         qc = get_qc('9q-square-qvm')
+        qc.compiler.client.timeout = 1
         qc.run_and_measure(Program(I(0)), trials=1)
         return qc
     except RequestException as e:
