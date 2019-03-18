@@ -1,6 +1,6 @@
 import numpy as np
 import warnings
-from forest_benchmarking.quantum_volume import *
+from forest.benchmarking.quantum_volume import *
 
 np.random.seed(1)
 

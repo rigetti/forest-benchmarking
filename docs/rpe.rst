@@ -11,7 +11,7 @@ Write about RPE
 API Reference
 -------------
 
-.. currentmodule:: forest_qcvv.rpe
+.. currentmodule:: forest.benchmarking.rpe
 .. autosummary::
     :toctree: autogen
     :template: autosumm.rst

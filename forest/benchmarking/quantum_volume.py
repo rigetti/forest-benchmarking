@@ -13,8 +13,8 @@ from pyquil.numpy_simulator import NumpyWavefunctionSimulator
 from pyquil.quil import DefGate, Program
 from pyquil.gates import RESET
 
-from forest_benchmarking.random_operators import haar_rand_unitary
-from forest_benchmarking.utils import bit_array_to_int
+from forest.benchmarking.random_operators import haar_rand_unitary
+from forest.benchmarking.utils import bit_array_to_int
 
 
 def _naive_program_generator(qc: QuantumComputer, qubits: Sequence[int], permutations: np.ndarray,
