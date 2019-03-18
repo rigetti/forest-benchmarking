@@ -1,6 +1,7 @@
 import networkx as nx
 import numpy as np
 import pytest
+from requests.exceptions import RequestException
 from rpcq.messages import PyQuilExecutableResponse
 
 from forest.benchmarking.compilation import basic_compile
@@ -11,11 +12,11 @@ from forest.benchmarking.tomography import proj_to_cp, proj_to_tni, \
 from forest.benchmarking.utils import sigma_x, partial_trace
 from pyquil import Program
 from pyquil import gate_matrices as mat
+from pyquil.api import QVM
 from pyquil.gates import CNOT, X
 from pyquil.numpy_simulator import NumpyWavefunctionSimulator
 from pyquil.operator_estimation import measure_observables, ExperimentResult, TomographyExperiment, \
     _one_q_state_prep
-from pyquil.pyqvm import PyQVM
 
 
 def test_proj_to_cp():
@@ -70,11 +71,13 @@ def test_proj_to_tni():
     assert np.allclose(pt, np.eye(2))
 
 
-def get_test_qc(n_qubits):
-    from pyquil.api import QuantumComputer
+@pytest.fixture
+def test_qc():
+    from pyquil.api import ForestConnection, QuantumComputer
     from pyquil.api._compiler import _extract_attribute_dictionary_from_program
     from pyquil.api._qac import AbstractCompiler
     from pyquil.device import NxDevice
+    from pyquil.gates import I
 
     class BasicQVMCompiler(AbstractCompiler):
         def quil_to_native_quil(self, program: Program):
@@ -84,13 +87,17 @@ def get_test_qc(n_qubits):
             return PyQuilExecutableResponse(
                 program=nq_program.out(),
                 attributes=_extract_attribute_dictionary_from_program(nq_program))
-
-    return QuantumComputer(
-        name='testing-qc',
-        qam=PyQVM(n_qubits=n_qubits, seed=52),
-        device=NxDevice(nx.complete_graph(n_qubits)),
-        compiler=BasicQVMCompiler(),
-    )
+    try:
+        qc = QuantumComputer(
+            name='testing-qc',
+            qam=QVM(connection=ForestConnection(), random_seed=52),
+            device=NxDevice(nx.complete_graph(2)),
+            compiler=BasicQVMCompiler(),
+        )
+        qc.run_and_measure(Program(I(0)), trials=1)
+        return qc
+    except (RequestException, TimeoutError) as e:
+        return pytest.skip("This test requires a running local QVM: {}".format(e))
 
 
 def wfn_measure_observables(n_qubits, tomo_expt: TomographyExperiment):
@@ -118,12 +125,12 @@ def basis(request):
 
 
 @pytest.fixture(params=['sampling', 'wfn'])
-def measurement_func(request):
+def measurement_func(request, test_qc):
     if request.param == 'wfn':
         return lambda expt: list(wfn_measure_observables(n_qubits=2, tomo_expt=expt))
     elif request.param == 'sampling':
-        return lambda expt: list(measure_observables(qc=get_test_qc(n_qubits=2),
-                                                     tomo_experiment=expt, n_shots=100_000))
+        return lambda expt: list(measure_observables(qc=test_qc,
+                                                     tomo_experiment=expt, n_shots=4000))
     else:
         raise ValueError()
 

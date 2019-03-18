@@ -1,19 +1,19 @@
 import networkx as nx
 import numpy as np
 import pytest
+from requests.exceptions import RequestException
 from forest.benchmarking.compilation import basic_compile
 from forest.benchmarking.random_operators import haar_rand_unitary
 from forest.benchmarking.tomography import generate_state_tomography_experiment, _R, \
     iterative_mle_state_estimate, project_density_matrix, estimate_variance, \
     linear_inv_state_estimate
-from pyquil.api import QuantumComputer
+from pyquil.api import ForestConnection, QuantumComputer, QVM
 from pyquil.api._compiler import _extract_attribute_dictionary_from_program
 from pyquil.api._qac import AbstractCompiler
 from pyquil.device import NxDevice
 from pyquil.gates import I, H, CZ
 from pyquil.numpy_simulator import NumpyWavefunctionSimulator
 from pyquil.operator_estimation import measure_observables
-from pyquil.pyqvm import PyQVM
 from pyquil.quil import Program
 from rpcq.messages import PyQuilExecutableResponse
 
@@ -106,12 +106,17 @@ def get_test_qc(n_qubits):
                 program=nq_program.out(),
                 attributes=_extract_attribute_dictionary_from_program(nq_program))
 
-    return QuantumComputer(
-        name='testing-qc',
-        qam=PyQVM(n_qubits=n_qubits, seed=52),
-        device=NxDevice(nx.complete_graph(n_qubits)),
-        compiler=BasicQVMCompiler(),
-    )
+    try:
+        qc = QuantumComputer(
+            name='testing-qc',
+            qam=QVM(connection=ForestConnection(), random_seed=52),
+            device=NxDevice(nx.complete_graph(n_qubits)),
+            compiler=BasicQVMCompiler(),
+        )
+        qc.run_and_measure(Program(I(0)), trials=1)
+        return qc
+    except (RequestException, TimeoutError) as e:
+        return pytest.skip("This test requires a running local QVM and quilc: {}".format(e))
 
 
 @pytest.fixture(scope='module')
@@ -120,7 +125,7 @@ def single_q_tomo_fixture():
     qc = get_test_qc(n_qubits=len(qubits))
 
     # Generate random unitary
-    u_rand = haar_rand_unitary(2 ** 1, rs=qc.qam.rs)
+    u_rand = haar_rand_unitary(2 ** 1, rs=np.random.RandomState(52))
     state_prep = Program().defgate("RandUnitary", u_rand)
     state_prep.inst([("RandUnitary", qubits[0])])
 
@@ -131,7 +136,7 @@ def single_q_tomo_fixture():
 
     # Get data from QVM
     tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
-    results = list(measure_observables(qc=qc, tomo_experiment=tomo_expt, n_shots=100_000))
+    results = list(measure_observables(qc=qc, tomo_experiment=tomo_expt, n_shots=4000))
 
     return results, rho_true
 
@@ -149,7 +154,7 @@ def two_q_tomo_fixture():
     qc = get_test_qc(n_qubits=len(qubits))
 
     # Generate random unitary
-    u_rand = haar_rand_unitary(2 ** 1, rs=qc.qam.rs)
+    u_rand = haar_rand_unitary(2 ** 1, rs=np.random.RandomState(52))
     state_prep = Program().defgate("RandUnitary", u_rand)
     state_prep.inst([("RandUnitary", q) for q in qubits])
 
@@ -163,7 +168,7 @@ def two_q_tomo_fixture():
 
     # Get data from QVM
     tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
-    results = list(measure_observables(qc=qc, tomo_experiment=tomo_expt, n_shots=100_000))
+    results = list(measure_observables(qc=qc, tomo_experiment=tomo_expt, n_shots=4000))
 
     return results, rho_true
 
@@ -245,7 +250,7 @@ def test_variance_bootstrap():
     state_prep = Program([H(q) for q in qubits])
     state_prep.inst(CZ(qubits[0], qubits[1]))
     tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
-    results = list(measure_observables(qc=qc, tomo_experiment=tomo_expt, n_shots=10_000))
+    results = list(measure_observables(qc=qc, tomo_experiment=tomo_expt, n_shots=4000))
     estimate, status = iterative_mle_state_estimate(results=results, qubits=qubits,
                                                     dilution=0.5)
     rho_est = estimate.estimate.state_point_est
