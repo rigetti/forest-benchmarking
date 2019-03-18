@@ -8,7 +8,7 @@ from typing import Tuple
 import numpy as np
 from dataclasses import dataclass
 
-import pyrethrum.operator_estimation as est
+import forest.benchmarking.operator_estimation as est
 from forest.benchmarking.utils import prepare_prod_pauli_eigenstate
 from pyquil import Program
 from pyquil.api import QuantumComputer, get_benchmarker
