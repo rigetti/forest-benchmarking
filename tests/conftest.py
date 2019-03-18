@@ -24,7 +24,7 @@ def qvm():
         qc.compiler.client.timeout = 1
         qc.run_and_measure(Program(I(0)), trials=1)
         return qc
-    except RequestException as e:
+    except (RequestException, TimeoutError) as e:
         return pytest.skip("This test requires a running local QVM and quilc: {}".format(e))
 
 
@@ -57,10 +57,10 @@ def cxn():
 @pytest.fixture(scope='session')
 def benchmarker():
     try:
-        bm = get_benchmarker()
-        bm.apply_clifford_to_pauli(Program(I(0)), sI(0))
-        return bm
-    except RequestException as e:
+        benchmarker = get_benchmarker(timeout=1)
+        benchmarker.apply_clifford_to_pauli(Program(I(0)), sI(0))
+        return benchmarker
+    except (IndexError, RequestException, TimeoutError) as e:
         return pytest.skip("This test requires a running local benchmarker endpoint (ie quilc): {}"
                            .format(e))
 

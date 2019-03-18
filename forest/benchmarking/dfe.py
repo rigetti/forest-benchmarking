@@ -11,12 +11,10 @@ from dataclasses import dataclass
 import forest.benchmarking.operator_estimation as est
 from forest.benchmarking.utils import prepare_prod_pauli_eigenstate
 from pyquil import Program
-from pyquil.api import QuantumComputer, get_benchmarker
+from pyquil.api import BenchmarkConnection, QuantumComputer, get_benchmarker
 from pyquil.operator_estimation import ExperimentSetting, TomographyExperiment, \
     TensorProductState, plusX, minusX, plusY, minusY, plusZ, minusZ
 from pyquil.paulis import PauliTerm, PauliSum, sI, sX, sY, sZ
-
-bm = get_benchmarker(timeout=1)
 
 
 def calibrate_readout_imperfections(pauli: PauliTerm, quantum_machine: QuantumComputer,
@@ -58,7 +56,8 @@ def _state_to_pauli(state: TensorProductState) -> PauliTerm:
     return term
 
 
-def _exhaustive_dfe(program: Program, qubits: Sequence[int], in_states):
+def _exhaustive_dfe(program: Program, qubits: Sequence[int], in_states,
+                    benchmarker: BenchmarkConnection) -> ExperimentSetting:
     """Yield experiments over itertools.product(in_paulis).
 
     Used as a helper function for exhaustive_xxx_dfe routines.
@@ -79,11 +78,12 @@ def _exhaustive_dfe(program: Program, qubits: Sequence[int], in_states):
 
         yield ExperimentSetting(
             in_state=i_st,
-            out_operator=bm.apply_clifford_to_pauli(program, _state_to_pauli(i_st)),
+            out_operator=benchmarker.apply_clifford_to_pauli(program, _state_to_pauli(i_st)).pauli,
         )
 
 
-def exhaustive_process_dfe(program, qubits):
+def exhaustive_process_dfe(program: Program, qubits: list,
+                           benchmarker: BenchmarkConnection) -> TomographyExperiment:
     """
     Estimate process fidelity by exhaustive direct fidelity estimation.
 
@@ -106,12 +106,15 @@ def exhaustive_process_dfe(program, qubits):
         used in ``program``.
     """
     return TomographyExperiment(list(
-        _exhaustive_dfe(program=program, qubits=qubits,
-                        in_states=[None, plusX, minusX, plusY, minusY, plusZ, minusZ])),
+        _exhaustive_dfe(program=program,
+                        qubits=qubits,
+                        in_states=[None, plusX, minusX, plusY, minusY, plusZ, minusZ],
+                        benchmarker=benchmarker)),
         program=program, qubits=qubits)
 
 
-def exhaustive_state_dfe(program, qubits):
+def exhaustive_state_dfe(program: Program, qubits: list,
+                         benchmarker: BenchmarkConnection) -> TomographyExperiment:
     """
     Estimate state fidelity by exhaustive direct fidelity estimation.
 
@@ -134,11 +137,15 @@ def exhaustive_state_dfe(program, qubits):
         used in ``program``.
     """
     return TomographyExperiment(list(
-        _exhaustive_dfe(program=program, qubits=qubits, in_states=[None, plusZ, minusZ])),
+        _exhaustive_dfe(program=program,
+                        qubits=qubits,
+                        in_states=[None, plusZ, minusZ],
+                        benchmarker=benchmarker)),
         program=program, qubits=qubits)
 
 
-def _monte_carlo_dfe(program: Program, qubits: Sequence[int], in_states, n_terms: int):
+def _monte_carlo_dfe(program: Program, qubits: Sequence[int], in_states: list, n_terms: int,
+                     benchmarker: BenchmarkConnection) -> ExperimentSetting:
     all_st_inds = np.random.randint(len(in_states), size=(n_terms, len(qubits)))
     for st_inds in all_st_inds:
         i_st = functools.reduce(mul, (in_states[si](qubits[i])
@@ -153,15 +160,16 @@ def _monte_carlo_dfe(program: Program, qubits: Sequence[int], in_states, n_terms
 
         yield ExperimentSetting(
             in_state=i_st,
-            out_operator=bm.apply_clifford_to_pauli(program, _state_to_pauli(i_st)),
+            out_operator=benchmarker.apply_clifford_to_pauli(program, _state_to_pauli(i_st)).pauli,
         )
 
 
-def monte_carlo_process_dfe(program: Program, qubits: List[int], n_terms=200):
+def monte_carlo_process_dfe(program: Program, qubits: List[int],benchmarker: BenchmarkConnection,
+                            n_terms: int = 200) -> TomographyExperiment:
     return TomographyExperiment(list(
         _monte_carlo_dfe(program=program, qubits=qubits,
                          in_states=[None, plusX, minusX, plusY, minusY, plusZ, minusZ],
-                         n_terms=n_terms)),
+                         n_terms=n_terms, benchmarker=benchmarker)),
         program=program, qubits=qubits)
 
 
@@ -191,6 +199,7 @@ class DFEdata:
 
     count: List[int]
     """number of shots used to calculate the `expectation`"""
+
 
 def acquire_dfe_data(experiment, quantum_machine: QuantumComputer, var: float = 0.01) -> Tuple[DFEdata, DFEdata]:
     """
@@ -303,6 +312,7 @@ class DFEestimate:
     fid_std_err_est: float
     """Standard deviation of the fidelity point estimate, after considering the calibration."""
 
+
 def direct_fidelity_estimate(data: DFEdata, cal: DFEdata, type: str) -> DFEestimate:
     """
     Estimate state or process fidelity by exhaustive direct fidelity estimation.
@@ -335,6 +345,7 @@ def direct_fidelity_estimate(data: DFEdata, cal: DFEdata, type: str) -> DFEestim
         fid_var_est=fid['variance'],
         fid_std_err_est=np.sqrt(fid['variance'])
     )
+
 
 def aggregate_process_dfe(data: dict):
     if isinstance(data['dimension'], int):
