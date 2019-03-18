@@ -52,7 +52,7 @@ class Layer:
 @dataclass
 class StratifiedExperiment:
     layers: Tuple[Layer]
-    qubits: Tuple[Layer]
+    qubits: Tuple[int]
     exp_type: str
 
     def __str__(self):
