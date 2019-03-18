@@ -11,7 +11,7 @@ from dataclasses import dataclass
 import forest.benchmarking.operator_estimation as est
 from forest.benchmarking.utils import prepare_prod_pauli_eigenstate
 from pyquil import Program
-from pyquil.api import BenchmarkConnection, QuantumComputer, get_benchmarker
+from pyquil.api import BenchmarkConnection, QuantumComputer
 from pyquil.operator_estimation import ExperimentSetting, TomographyExperiment, \
     TensorProductState, plusX, minusX, plusY, minusY, plusZ, minusZ
 from pyquil.paulis import PauliTerm, PauliSum, sI, sX, sY, sZ
@@ -78,7 +78,7 @@ def _exhaustive_dfe(program: Program, qubits: Sequence[int], in_states,
 
         yield ExperimentSetting(
             in_state=i_st,
-            out_operator=benchmarker.apply_clifford_to_pauli(program, _state_to_pauli(i_st)).pauli,
+            out_operator=benchmarker.apply_clifford_to_pauli(program, _state_to_pauli(i_st)),
         )
 
 
@@ -160,7 +160,7 @@ def _monte_carlo_dfe(program: Program, qubits: Sequence[int], in_states: list, n
 
         yield ExperimentSetting(
             in_state=i_st,
-            out_operator=benchmarker.apply_clifford_to_pauli(program, _state_to_pauli(i_st)).pauli,
+            out_operator=benchmarker.apply_clifford_to_pauli(program, _state_to_pauli(i_st)),
         )
 
 
