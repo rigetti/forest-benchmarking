@@ -116,7 +116,7 @@ def get_test_qc(n_qubits):
         qc.run_and_measure(Program(I(0)), trials=1)
         return qc
     except (RequestException, TimeoutError) as e:
-        return pytest.skip("This test requires a running local QVM and quilc: {}".format(e))
+        return pytest.skip("This test requires a running local QVM: {}".format(e))
 
 
 @pytest.fixture(scope='module')
