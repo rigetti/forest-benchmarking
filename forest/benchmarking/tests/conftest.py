@@ -6,7 +6,7 @@ from unittest.mock import create_autospec, Mock
 
 from pyquil.api import WavefunctionSimulator, ForestConnection, QVMConnection, get_benchmarker
 from pyquil.api._errors import UnknownApiError
-from pyquil.paulis import sI
+from pyquil.paulis import sX
 from pyquil import Program, get_qc
 from pyquil.gates import I, MEASURE
 from pyquil.device import ISA, Device
@@ -17,13 +17,14 @@ PATH = os.path.dirname(os.path.realpath(__file__))
 RACK_YAML = os.path.join(PATH, "example_rack.yaml")
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope='module')
 def qvm():
     try:
         qc = get_qc('9q-square-qvm')
+        qc.compiler.client.timeout = 1
         qc.run_and_measure(Program(I(0)), trials=1)
         return qc
-    except RequestException as e:
+    except (RequestException, TimeoutError) as e:
         return pytest.skip("This test requires a running local QVM and quilc: {}".format(e))
 
 
@@ -56,10 +57,10 @@ def cxn():
 @pytest.fixture(scope='session')
 def benchmarker():
     try:
-        bm = get_benchmarker()
-        bm.apply_clifford_to_pauli(Program(I(0)), sI(0))
-        return bm
-    except RequestException as e:
+        benchmarker = get_benchmarker(timeout=1)
+        benchmarker.apply_clifford_to_pauli(Program(I(0)), sX(0))
+        return benchmarker
+    except (RequestException, TimeoutError) as e:
         return pytest.skip("This test requires a running local benchmarker endpoint (ie quilc): {}"
                            .format(e))
 

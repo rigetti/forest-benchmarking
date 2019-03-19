@@ -1,25 +1,27 @@
 from forest.benchmarking.dfe import exhaustive_state_dfe, exhaustive_process_dfe, ratio_variance, \
     monte_carlo_process_dfe
 from pyquil import Program
+from pyquil.api import BenchmarkConnection
 from pyquil.gates import *
 from pyquil.numpy_simulator import NumpyWavefunctionSimulator
 from pyquil.operator_estimation import _one_q_state_prep
 
 
-def test_exhaustive_state_dfe():
-    texpt = exhaustive_state_dfe(program=Program(X(0), X(1)), qubits=[0, 1])
+def test_exhaustive_state_dfe(benchmarker: BenchmarkConnection):
+    texpt = exhaustive_state_dfe(program=Program(X(0), X(1)), qubits=[0, 1],
+                                 benchmarker=benchmarker)
     assert len(texpt) == 3 ** 2 - 1
 
 
-def test_exhaustive_dfe():
-    texpt = exhaustive_process_dfe(program=Program(Z(0)), qubits=[0])
+def test_exhaustive_dfe(benchmarker: BenchmarkConnection):
+    texpt = exhaustive_process_dfe(program=Program(Z(0)), qubits=[0], benchmarker=benchmarker)
     assert len(texpt) == 7 ** 1 - 1
 
 
-def test_exhaustive_dfe_run():
+def test_exhaustive_dfe_run(benchmarker: BenchmarkConnection):
     wfnsim = NumpyWavefunctionSimulator(n_qubits=1)
     process = Program(Z(0))
-    texpt = exhaustive_process_dfe(program=process, qubits=[0])
+    texpt = exhaustive_process_dfe(program=process, qubits=[0], benchmarker=benchmarker)
     for setting in texpt:
         setting = setting[0]
         prog = Program()
@@ -31,9 +33,10 @@ def test_exhaustive_dfe_run():
         assert expectation == 1.
 
 
-def test_monte_carlo_dfe():
+def test_monte_carlo_dfe(benchmarker: BenchmarkConnection):
     process = Program(CNOT(0, 1))
-    texpt = monte_carlo_process_dfe(program=process, qubits=[0, 1], n_terms=10)
+    texpt = monte_carlo_process_dfe(program=process, qubits=[0, 1], n_terms=10,
+                                    benchmarker=benchmarker)
     assert len(texpt) == 10
 
     wfnsim = NumpyWavefunctionSimulator(n_qubits=2)
