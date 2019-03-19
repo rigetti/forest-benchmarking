@@ -161,9 +161,7 @@ def test_HS_obeys_linearity():
 # =================================================================================================
 # Test:  distance measured for Processes
 # =================================================================================================
-def test_diamon_norm():
-    return pytest.skip('Having issues with SCS, skipping for now')
-
+def test_diamond_norm():
     # Test cases borrowed from qutip,
     # https://github.com/qutip/qutip/blob/master/qutip/tests/test_metrics.py
     # which were in turn generated using QuantumUtils for MATLAB
