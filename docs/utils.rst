@@ -4,7 +4,7 @@ Utilities
 API Reference
 -------------
 
-.. currentmodule:: forest_qcvv.utils
+.. currentmodule:: forest.benchmarking.utils
 .. autosummary::
     :toctree: autogen
     :template: autosumm.rst

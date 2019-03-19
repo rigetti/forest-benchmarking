@@ -23,11 +23,13 @@ project = 'Forest-Benchmarking'
 copyright = '2018, Rigetti Computing'
 author = 'Rigetti Computing'
 
-import forest_benchmarking
+import forest.benchmarking as fb
+VERSION = fb.__version__
+
 # The short X.Y version
-version = '.'.join(forest_benchmarking.__version__.split('.')[:2])
+version = '.'.join(VERSION.split('.')[:2])
 # The full version, including alpha/beta/rc tags
-release = forest_benchmarking.__version__
+release = VERSION
 
 
 # -- General configuration ---------------------------------------------------
