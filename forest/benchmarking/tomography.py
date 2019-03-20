@@ -372,25 +372,31 @@ def iterative_mle_state_estimate(results: List[ExperimentResult], qubits: List[i
     
     The basic algorithm is due to
     
-    [DIMLE1]    Diluted maximum-likelihood algorithm for quantum tomography
-                Řeháček et al., PRA 75, 042108 (2007)
-                https://doi.org/10.1103/PhysRevA.75.042108
+    [DIMLE1] Diluted maximum-likelihood algorithm for quantum tomography
+             Řeháček et al.,
+             PRA 75, 042108 (2007)
+             https://doi.org/10.1103/PhysRevA.75.042108
+             https://arxiv.org/abs/quant-ph/0611244
 
     with improvements from
 
-    [DIMLE2]    Quantum-State Reconstruction by Maximizing Likelihood and Entropy
-                Teo et al., PRL 107, 020404 (2011)
-                https://doi.org/10.1103/PhysRevLett.107.020404
+    [DIMLE2] Quantum-State Reconstruction by Maximizing Likelihood and Entropy
+             Teo et al.,
+             PRL 107, 020404 (2011)
+             https://doi.org/10.1103/PhysRevLett.107.020404
+             https://arxiv.org/abs/1102.2662
                 
-    [HMLE]      Hedged Maximum Likelihood Quantum State Estimation
-                Blume-Kohout, PRL, 105, 200504 (2010)
-                https://doi.org/10.1103/PhysRevLett.105.200504
+    [HMLE] Hedged Maximum Likelihood Quantum State Estimation
+           Blume-Kohout,
+           PRL, 105, 200504 (2010)
+           https://doi.org/10.1103/PhysRevLett.105.200504
+           https://arxiv.org/abs/1001.2029
 
-    [IHMLE]     Iterative Hedged MLE from Yong Siah Teo's PhD thesis:
-                Numerical Estimation Schemes for Quantum Tomography
-                https://arxiv.org/pdf/1302.3399.pdf
-                See Eqn. 1.5.13 on page 88.
-                
+    [IHMLE] Iterative Hedged MLE from Yong Siah Teo's PhD thesis, see Eqn. 1.5.13 on page 88:
+            Numerical Estimation Schemes for Quantum Tomography
+            Teo
+            PhD Thesis, National University of Singapore, (2013)
+            https://arxiv.org/pdf/1302.3399.pdf
 
     :param state_tomography_experiment_data data: namedtuple.
     :param dilution: delta  = 1 / epsilon where epsilon is the dilution parameter used in [DIMLE1].
