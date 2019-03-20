@@ -228,8 +228,9 @@ def measure_quantum_volume(qc: QuantumComputer, qubits: Sequence[int] = None,
     returned by this method.
 
             [QVol] Validating quantum computers using randomized model circuits
-            Cross et al., arXiv:1811.12926v1, Nov 2018
-            https://arxiv.org/pdf/1811.12926.pdf
+                   Cross et al.,
+                   arXiv:1811.12926v1  (2018)
+                   https://arxiv.org/abs/1811.12926
 
     :param qc: the quantum resource whose volume you wish to measure
     :param qubits: available qubits on which to act during measurement. Default all qubits in qc.
