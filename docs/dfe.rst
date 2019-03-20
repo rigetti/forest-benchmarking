@@ -13,7 +13,7 @@ Running DFE
 Data structures
 ---------------
 
-.. currentmodule:: forest_qcvv.dfe
+.. currentmodule:: forest.benchmarking.dfe
 .. autoclass:: dfe_experiment
 .. autoclass:: dfe_experiment_data
 .. autoclass:: dfe_calibration_data

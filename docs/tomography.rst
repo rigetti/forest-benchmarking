@@ -32,7 +32,7 @@ The state prep program is thus::
 
 We generate the required experiments::
 
-    from forest_qcvv.state_tomography import *
+    from forest.benchmarking.state_tomography import *
     exp_desc = generate_state_tomography_experiment(state_prep)
 
 which in this case are measurements of the following operators::
@@ -81,7 +81,7 @@ Finally, we analyze our data with one of the analysis routines::
 API Reference
 -------------
 
-.. currentmodule:: forest_qcvv.state_tomography
+.. currentmodule:: forest.benchmarking.state_tomography
 .. autosummary::
     :toctree: autogen
     :template: autosumm.rst

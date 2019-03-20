@@ -1,4 +1,4 @@
-.. currentmodule:: forest_qcvv.rb
+.. currentmodule:: forest.benchmarking.rb
 
 Randomized Benchmarking
 =======================
@@ -17,7 +17,7 @@ Unitary RB
 API Reference
 -------------
 
-.. currentmodule:: forest_qcvv.rb
+.. currentmodule:: forest.benchmarking.rb
 .. autosummary::
     :toctree: autogen
     :template: autosumm.rst
