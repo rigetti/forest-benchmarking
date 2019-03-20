@@ -61,7 +61,7 @@ def generate_single_depth_experiment(rotation: Program, depth: int, exp_type: st
 
 def generate_2q_single_depth_experiment(rotation: Program, depth: int, exp_type: str,
                                         measurement_qubit: int, init_one: bool = False, axis: Tuple = None) -> Program:
-    """
+    r"""
     A special variant of the 1q method that is specifically designed to calibrate a CPHASE gate. The
     ideal CPHASE is of the following form
         CPHASE(\phi) = diag(1,1,1,Exp[-i \phi]
@@ -111,12 +111,16 @@ def generate_rpe_experiments(rotation: Program, num_depths: int = 5, axis: Tuple
     The algorithm is due to:
 
     [RPE]  Robust Calibration of a Universal Single-Qubit Gate-Set via Robust Phase Estimation
-            Kimmel et al., Phys. Rev. A 92, 062315 (2015)
-            https://doi.org/10.1103/PhysRevA.92.062315
+           Kimmel et al.,
+           Phys. Rev. A 92, 062315 (2015)
+           https://doi.org/10.1103/PhysRevA.92.062315
+           https://arxiv.org/abs/1502.02677
 
     [RPE2] Experimental Demonstration of a Cheap and Accurate Phase Estimation
-            Rudinger et al., Phys. Rev. Lett. 118, 190502 (2017)
-            https://doi.org/10.1103/PhysRevLett.118.190502
+           Rudinger et al.,
+           Phys. Rev. Lett. 118, 190502 (2017)
+           https://doi.org/10.1103/PhysRevLett.118.190502
+           https://arxiv.org/abs/1702.01763
 
     :param rotation: the program or gate whose angle of rotation is to be estimated
     :param num_depths: the number of depths in the protocol described in [RPE]. Max depth = 2**(num_depths-1)

@@ -12,10 +12,19 @@ def create_graph_state(graph: nx.Graph, use_pragmas=True):
 
     A graph state involves Hadamarding all your qubits and then applying a CZ for each
     edge in the graph. A graph state and the ability to measure it however you want gives
-    you universal quantum computation. The authoritative references are
+    you universal quantum computation. Some good references are
 
-     - https://journals.aps.org/prl/abstract/10.1103/PhysRevLett.86.5188
-     - https://arxiv.org/abs/quant-ph/0301052
+    [MBQC] A One-Way Quantum Computer
+           Raussendorf et al.,
+           Phys. Rev. Lett. 86, 5188 (2001)
+           https://doi.org/10.1103/PhysRevLett.86.5188
+           https://arxiv.org/abs/quant-ph/0010033
+
+    [MBCS] Measurement-based quantum computation with cluster states
+           Raussendorf et al.,
+           Phys. Rev. A 68, 022312 (2003)
+           https://dx.doi.org/10.1103/PhysRevA.68.022312
+           https://arxiv.org/abs/quant-ph/0301052
 
     Similar to a Bell state / GHZ state, we can try to prepare a graph state and measure
     how well we've done according to expected parities.
