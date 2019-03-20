@@ -321,10 +321,10 @@ def linear_inv_state_estimate(results: List[ExperimentResult],
     see https://en.wikipedia.org/wiki/Quantum_tomography#Linear_inversion or
     see section 3.4 of
 
-        Initialization and characterization of open quantum systems
-        C. Wood, PhD thesis from University of Waterloo, (2015).
-        http://hdl.handle.net/10012/9557
-
+    [WOOD] Initialization and characterization of open quantum systems
+           C. Wood,
+           PhD thesis from University of Waterloo, (2015).
+           http://hdl.handle.net/10012/9557
 
     :param results: A tomographically complete list of results.
     :param qubits: All qubits that were tomographized. This specifies the order in
@@ -386,17 +386,17 @@ def iterative_mle_state_estimate(results: List[ExperimentResult], qubits: List[i
              https://doi.org/10.1103/PhysRevLett.107.020404
              https://arxiv.org/abs/1102.2662
                 
-    [HMLE] Hedged Maximum Likelihood Quantum State Estimation
-           Blume-Kohout,
-           PRL, 105, 200504 (2010)
-           https://doi.org/10.1103/PhysRevLett.105.200504
-           https://arxiv.org/abs/1001.2029
+    [HMLE]   Hedged Maximum Likelihood Quantum State Estimation
+             Blume-Kohout,
+             PRL, 105, 200504 (2010)
+             https://doi.org/10.1103/PhysRevLett.105.200504
+             https://arxiv.org/abs/1001.2029
 
-    [IHMLE] Iterative Hedged MLE from Yong Siah Teo's PhD thesis, see Eqn. 1.5.13 on page 88:
-            Numerical Estimation Schemes for Quantum Tomography
-            Teo
-            PhD Thesis, National University of Singapore, (2013)
-            https://arxiv.org/pdf/1302.3399.pdf
+    [IHMLE]  Iterative Hedged MLE from Yong Siah Teo's PhD thesis, see Eqn. 1.5.13 on page 88:
+             Numerical Estimation Schemes for Quantum Tomography
+             Y. S. Teo
+             PhD Thesis, from National University of Singapore, (2013)
+             https://arxiv.org/pdf/1302.3399.pdf
 
     :param state_tomography_experiment_data data: namedtuple.
     :param dilution: delta  = 1 / epsilon where epsilon is the dilution parameter used in [DIMLE1].
