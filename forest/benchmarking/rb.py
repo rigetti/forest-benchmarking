@@ -55,8 +55,10 @@ def add_sequences_to_dataframe(df: DataFrame, bm: BenchmarkConnection, random_se
     """
         For reference, see
         [RB] Scalable and Robust Randomized Benchmarking of Quantum Processes
-        Magesan et al., PRL 106, 180504 (2011)
-        arXiv:1009.3639
+             Magesan et al.,
+             Phys. Rev. Lett. 106, 180504 (2011)
+             https://dx.doi.org/10.1103/PhysRevLett.106.180504
+             https://arxiv.org/abs/1009.3639
 
     Generates a new random sequence for each row in the measurement DataFrame and adds these to a
     copy of the DataFrame. Returns the new DataFrame.
@@ -245,8 +247,10 @@ def add_unitarity_sequences_to_dataframe(df: DataFrame, bm: BenchmarkConnection,
     """
     Unitarity algorithm is due to:
         [ECN]  Estimating the Coherence of Noise
-            Wallman et al., New Journal of Physics 17, 113020 (2015)
-            arXiv:1503.07865
+               Wallman et al.,
+               New Journal of Physics 17, 113020 (2015)
+               https://dx.doi.org/10.1088/1367-2630/17/11/113020
+               https://arxiv.org/abs/1503.07865
 
     Generates a new random unitarity sequence for each row in the measurement DataFrame and adds
     these to a copy of the DataFrame. A unitarity sequence of depth D is a standard RB sequence
@@ -593,13 +597,16 @@ def interleaved_gate_fidelity_bounds(irb_decay, rb_decay, dim, unitarity = None)
 
     Bounds due to
         [IRB] Efficient measurement of quantum gate error by interleaved randomized benchmarking
-            Magesan et al., Physical Review Letters 109, 080505 (2012)
-            arXiv:1203.4550
+              Magesan et al.,
+              Phys. Rev. Lett. 109, 080505 (2012)
+              https://dx.doi.org/10.1103/PhysRevLett.109.080505
+              https://arxiv.org/abs/1203.4550
 
     Improved bounds using unitarity due to:
         [U+IRB]  Efficiently characterizing the total error in quantum circuits
-            Dugas, Wallman, and Emerson (2016)
-            arXiv:1610.05296v2
+                 Dugas et al.,
+                 arXiv:1610.05296 (2016)
+                 https://arxiv.org/abs/1610.05296
 
     :param irb_decay: Observed decay parameter in irb experiment with desired gate interleaved between Cliffords
     :param rb_decay: Observed decay parameter in standard rb experiment
