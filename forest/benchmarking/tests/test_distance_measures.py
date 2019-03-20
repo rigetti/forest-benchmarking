@@ -292,8 +292,8 @@ def test_watrous_bounds():
         choi0 = _superop_to_choi(chan0)
         choi1 = _superop_to_choi(chan1)
         wbounds = dm.watrous_bounds(choi0-choi1)
-        assert wbounds[0]/2 <= target or np.isclose(wbounds[0]/2, 2.0, rtol=1e-2)
-        assert wbounds[1]/2 >= target or np.isclose(wbounds[1]/2, 2.0, rtol=1e-2)
+        assert wbounds[0]/2 <= target or np.isclose(wbounds[0]/2, target, rtol=1e-2)
+        assert wbounds[1]/2 >= target or np.isclose(wbounds[1]/2, target, rtol=1e-2)
 
     choi0 = _gate_to_choi(_I)
     choi1 = _gate_to_choi(matpow(_Y, 0.5))
