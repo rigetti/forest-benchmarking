@@ -93,12 +93,16 @@ def exhaustive_process_dfe(program: Program, qubits: list,
     The algorithm is due to:
 
     [DFE1]  Practical Characterization of Quantum Devices without Tomography
-            Silva et al., PRL 107, 210404 (2011)
+            Silva et al.,
+            PRL 107, 210404 (2011)
             https://doi.org/10.1103/PhysRevLett.107.210404
+            https://arxiv.org/abs/1104.3835
 
     [DFE2]  Direct Fidelity Estimation from Few Pauli Measurements
-            Flammia and Liu, PRL 106, 230501 (2011)
+            Flammia et al.,
+            PRL 106, 230501 (2011)
             https://doi.org/10.1103/PhysRevLett.106.230501
+            https://arxiv.org/abs/1104.4695
 
     :param program: A program comprised of clifford gates that defines the process for
         which we estimate the fidelity.
@@ -124,12 +128,16 @@ def exhaustive_state_dfe(program: Program, qubits: list,
     The algorithm is due to:
 
     [DFE1]  Practical Characterization of Quantum Devices without Tomography
-            Silva et al., PRL 107, 210404 (2011)
+            Silva et al.,
+            PRL 107, 210404 (2011)
             https://doi.org/10.1103/PhysRevLett.107.210404
+            https://arxiv.org/abs/1104.3835
 
     [DFE2]  Direct Fidelity Estimation from Few Pauli Measurements
-            Flammia and Liu, PRL 106, 230501 (2011)
+            Flammia et al.,
+            PRL 106, 230501 (2011)
             https://doi.org/10.1103/PhysRevLett.106.230501
+            https://arxiv.org/abs/1104.4695
 
     :param program: A program comprised of clifford gates that constructs a state
         for which we estimate the fidelity.
@@ -207,16 +215,7 @@ def acquire_dfe_data(experiment, quantum_machine: QuantumComputer, var: float = 
 
     This leads to a quadratic reduction in overhead wrt state tomography for fidelity estimation.
 
-    The algorithm is due to:
-
-    [DFE1]  Practical Characterization of Quantum Devices without Tomography
-            Silva et al., PRL 107, 210404 (2011)
-            https://doi.org/10.1103/PhysRevLett.107.210404
-
-    [DFE2]  Direct Fidelity Estimation from Few Pauli Measurements
-            Flammia and Liu, PRL 106, 230501 (2011)
-            https://doi.org/10.1103/PhysRevLett.106.230501
-
+    The algorithm is due to [DFE1] and [DFE2].
 
     :param experiment: namedtuple with fields 'in_pauli', 'program', and 'out_pauli'.
     :param quantum_machine: QPUConnection or QVMConnection object to be used
