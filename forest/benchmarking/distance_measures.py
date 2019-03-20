@@ -276,7 +276,7 @@ def watrous_bounds(choi: np.ndarray) -> float:
     if len(choi.shape) != 2:
         raise ValueError("Watrous bounds only defined for matrices")
 
-    if not(_is_square(choi.shape[0]) && _is_square(choi.shape[1])):
+    if not(_is_square(choi.shape[0]) and _is_square(choi.shape[1])):
         raise ValueError("Choi matrix must have dimensions that are perfect squares")
     
     _,s,_ = np.linalg.svd(choi)
