@@ -367,7 +367,7 @@ def aggregate_state_dfe(data: dict):
 
 
 def ratio_variance(a: np.ndarray, var_a: np.ndarray, b: np.ndarray, var_b: np.ndarray) -> np.ndarray:
-    """
+    r"""
     Given random variables 'A' and 'B', compute the variance on the ratio Y = A/B. Denote the
     mean of the random variables as a = E[A] and b = E[B] while the variances are var_a = Var[A]
     and var_b = Var[B] and the covariance as Cov[A,B]. The following expression approximates the

@@ -27,6 +27,20 @@ def rb_dataframe(rb_type: str, subgraph: List[Tuple], depths: List[int],
     """
     Generate and return a DataFrame to characterize an RB or unitarity measurement.
 
+    For standard RB see
+    [RB] Scalable and Robust Randomized Benchmarking of Quantum Processes
+         Magesan et al.,
+         Phys. Rev. Lett. 106, 180504 (2011)
+         https://dx.doi.org/10.1103/PhysRevLett.106.180504
+         https://arxiv.org/abs/1009.3639
+
+    Unitarity algorithm is due to
+    [ECN]  Estimating the Coherence of Noise
+           Wallman et al.,
+           New Journal of Physics 17, 113020 (2015)
+           https://dx.doi.org/10.1088/1367-2630/17/11/113020
+           https://arxiv.org/abs/1503.07865
+
     :param rb_type: Label saying which type of RB measurement we're running
     :param subgraph: List of tuples, where each tuple specifies a single qubit or pair of qubits on
          which to run RB. If the length of this list is >1 then we are running simultaneous RB.
@@ -53,13 +67,6 @@ def rb_dataframe(rb_type: str, subgraph: List[Tuple], depths: List[int],
 
 def add_sequences_to_dataframe(df: DataFrame, bm: BenchmarkConnection, random_seed: int = None, interleaved_gate: Program = None):
     """
-        For reference, see
-        [RB] Scalable and Robust Randomized Benchmarking of Quantum Processes
-             Magesan et al.,
-             Phys. Rev. Lett. 106, 180504 (2011)
-             https://dx.doi.org/10.1103/PhysRevLett.106.180504
-             https://arxiv.org/abs/1009.3639
-
     Generates a new random sequence for each row in the measurement DataFrame and adds these to a
     copy of the DataFrame. Returns the new DataFrame.
 
@@ -245,15 +252,10 @@ def strip_inverse_from_sequences(df: DataFrame):
 
 def add_unitarity_sequences_to_dataframe(df: DataFrame, bm: BenchmarkConnection, random_seed: int = None):
     """
-    Unitarity algorithm is due to:
-        [ECN]  Estimating the Coherence of Noise
-               Wallman et al.,
-               New Journal of Physics 17, 113020 (2015)
-               https://dx.doi.org/10.1088/1367-2630/17/11/113020
-               https://arxiv.org/abs/1503.07865
-
     Generates a new random unitarity sequence for each row in the measurement DataFrame and adds
-    these to a copy of the DataFrame. A unitarity sequence of depth D is a standard RB sequence
+    these to a copy of the DataFrame.
+
+    A unitarity sequence of depth D is a standard RB sequence
     of depth D+1 with the last (inversion) gate stripped. Returns the new DataFrame.
     """
     new_df = df.copy()
@@ -296,7 +298,9 @@ def run_unitarity_measurement(df: DataFrame, qc: QuantumComputer, num_trials: in
 
 def unitarity_to_RB_decay(unitarity, dimension):
     """
-    This allows comparison of measured unitarity and RB decays. This function provides an upper bound on the
+    This allows comparison of measured unitarity and RB decays.
+
+    This function provides an upper bound on the
     RB decay given the input unitarity, where the upperbound is saturated when no unitary errors are present,
     e.g. in the case of depolarizing noise. For more, see Proposition 8. in [ECN]
         unitarity >= (1-dr/(d-1))^2
@@ -596,17 +600,17 @@ def interleaved_gate_fidelity_bounds(irb_decay, rb_decay, dim, unitarity = None)
     Optionally, use unitarity measurement result to provide improved bounds on the interleaved gate's fidelity.
 
     Bounds due to
-        [IRB] Efficient measurement of quantum gate error by interleaved randomized benchmarking
-              Magesan et al.,
-              Phys. Rev. Lett. 109, 080505 (2012)
-              https://dx.doi.org/10.1103/PhysRevLett.109.080505
-              https://arxiv.org/abs/1203.4550
+    [IRB] Efficient measurement of quantum gate error by interleaved randomized benchmarking
+          Magesan et al.,
+          Phys. Rev. Lett. 109, 080505 (2012)
+          https://dx.doi.org/10.1103/PhysRevLett.109.080505
+          https://arxiv.org/abs/1203.4550
 
-    Improved bounds using unitarity due to:
-        [U+IRB]  Efficiently characterizing the total error in quantum circuits
-                 Dugas et al.,
-                 arXiv:1610.05296 (2016)
-                 https://arxiv.org/abs/1610.05296
+    Improved bounds using unitarity due to
+    [U+IRB]  Efficiently characterizing the total error in quantum circuits
+             Dugas et al.,
+             arXiv:1610.05296 (2016)
+             https://arxiv.org/abs/1610.05296
 
     :param irb_decay: Observed decay parameter in irb experiment with desired gate interleaved between Cliffords
     :param rb_decay: Observed decay parameter in standard rb experiment

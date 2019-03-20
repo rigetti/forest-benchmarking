@@ -84,7 +84,7 @@ def ginibre_state_matrix(D, K):
     """
     Given a Hilbert space dimension $D$ and a desired rank $K$, returns
     a D × D positive semidefinite matrix of rank K drawn from the Ginibre ensemble. 
-    For D = K these are staes drawn from the Hilbert-Schmidt measure.
+    For D = K these are states drawn from the Hilbert-Schmidt measure.
 
     See reference [IM] for more details.
 
@@ -94,7 +94,6 @@ def ginibre_state_matrix(D, K):
     """
     if K > D:
         raise ValueError("The rank of the state matrix cannot exceed the dimension.")
-        return
 
     A = ginibre_matrix_complex(D, K)
     M = A.dot(np.transpose(np.conjugate(A)))
@@ -104,17 +103,17 @@ def ginibre_state_matrix(D, K):
 def bures_measure_state_matrix(D):
     """
     Given a Hilbert space dimension $D$, returns a D × D positive 
-    semidefinite matrix drawn from the Bures measure. 
-    
-    :param D: Hilbert space dimension (scalar).
-    :param K: The rank of a state (scalar).
-    :return: Returns a D × K matrix, drawn from the Ginibre ensemble.
-    
+    semidefinite matrix drawn from the Bures measure.
+
     [OSZ] Random Bures mixed states and the distribution of their purity
           Osipov et al.,
           J. Phys. A: Math. Theor. 43, 055302 (2010).
           https://doi.org/10.1088/1751-8113/43/5/055302
           https://arxiv.org/abs/0909.5094
+    
+    :param D: Hilbert space dimension (scalar).
+    :param K: The rank of a state (scalar).
+    :return: Returns a D × K matrix, drawn from the Ginibre ensemble.
     """
     A = ginibre_matrix_complex(D, D)
     U = haar_rand_unitary(D)
@@ -130,16 +129,16 @@ def rand_map_with_BCSZ_dist(D, K):
     Given a Hilbert space dimension $D$ and a Kraus rank $K$, returns a
     $D^2 × D^2$ Choi matrix $J(Λ)$ of a channel drawn from the BCSZ distribution 
     with Kraus rank $K$.
-    
-    :param D: Hilbert space dimension (scalar).
-    :param K: The rank of a state (scalar).
-    :return: D^2 × D^2 Choi matrix, drawn from the BCSZ distribution with Kraus rank K.    
 
     [RQO] Random quantum operations,
           Bruzda et al.,
           Physics Letters A 373, 320 (2009).
           https://doi.org/10.1016/j.physleta.2008.11.043
           https://arxiv.org/abs/0804.2361
+    
+    :param D: Hilbert space dimension (scalar).
+    :param K: The rank of a state (scalar).
+    :return: D^2 × D^2 Choi matrix, drawn from the BCSZ distribution with Kraus rank K.
     """
     # TODO: this ^^ is CPTP, might want a flag that allows for just CP quantum operations.
     # TODO: we now have a partial trace in utils.py  replace below with that...

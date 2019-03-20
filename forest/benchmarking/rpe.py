@@ -61,7 +61,7 @@ def generate_single_depth_experiment(rotation: Program, depth: int, exp_type: st
 
 def generate_2q_single_depth_experiment(rotation: Program, depth: int, exp_type: str,
                                         measurement_qubit: int, init_one: bool = False, axis: Tuple = None) -> Program:
-    """
+    r"""
     A special variant of the 1q method that is specifically designed to calibrate a CPHASE gate. The
     ideal CPHASE is of the following form
         CPHASE(\phi) = diag(1,1,1,Exp[-i \phi]

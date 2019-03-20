@@ -65,7 +65,7 @@ def unvec(vector):
 
 
 def kraus2superop(kraus_ops: list):
-    """
+    r"""
     Convert a set of Kraus operators (representing a channel) to
     a superoperator using the column stacking convention.
 
@@ -106,7 +106,7 @@ def kraus2pauli_liouville(kraus_ops: list):
 
 
 def kraus2choi(kraus_ops: list):
-    """
+    r"""
     Convert a set of Kraus operators (representing a channel) to
     a Choi matrix using the column stacking convention.
 

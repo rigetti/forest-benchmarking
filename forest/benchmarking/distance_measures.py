@@ -103,7 +103,7 @@ def quantum_chernoff_bound(rho, sigma):
 
 
 def hilbert_schmidt_ip(A, B):
-    """
+    r"""
     Computes the Hilbert-Schmidt (HS) inner product between two operators A and B as
         HS = (A|B) = Tr[A^\dagger B]
     where |B) = vec(B) and (A| is the dual vector to |A).
