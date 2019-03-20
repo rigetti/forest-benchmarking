@@ -586,10 +586,13 @@ def _constraint_project(choi_mat, trace_preserving=True):
     """
     Projects the given Choi matrix into the subspace of Completetly Positive and either Trace Perserving (TP) or
     Trace-Non-Increasing maps.
-    Uses Dykstra's algorithm witht the stopping criterion presented in
-        E. G. Birgin and M. Raydan, Dykstra’s algorithm and robust
-        stopping criteria (Springer US, Boston, MA, 2009),
-        pp. 828–833, ISBN 978-0-387-74759-0.
+    Uses Dykstra's algorithm with the stopping criterion presented in:
+
+    [DYKALG] Dykstra’s algorithm and robust stopping criteria
+             Birgin et al.,
+             (Springer US, Boston, MA, 2009), pp. 828–833, ISBN 978-0-387-74759-0.
+             https://doi.org/10.1007/978-0-387-74759-0_143
+
     This method is suggested in [PGD]
 
     :param choi_mat: A density matrix corresponding to the Choi representation estimate of a quantum process.
