@@ -684,9 +684,11 @@ def pgdb_process_estimate(results: List[ExperimentResult], qubits: List[int],
     """
     Provide an estimate of the process via Projected Gradient Descent with Backtracking.
 
-        [PGD] Maximum-likelihood quantum process tomography via projected gradient descent
-        Knee, Bolduc, Leach, and Gauger. (2018)
-        arXiv:1803.10062
+    [PGD] Maximum-likelihood quantum process tomography via projected gradient descent
+          Knee et al.,
+          Phys. Rev. A 98, 062336 (2018)
+          https://dx.doi.org/10.1103/PhysRevA.98.062336
+          https://arxiv.org/abs/1803.10062
 
     :param results: A tomographically complete list of ExperimentResults
     :param qubits: A list of qubits giving the tensor order of the resulting Choi matrix.
