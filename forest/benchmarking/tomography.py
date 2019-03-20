@@ -777,10 +777,12 @@ def project_density_matrix(rho) -> np.ndarray:
 
     This is the so called "wizard" method. It is described in the following reference:
 
-    Smolin et al., Efficient Method for Computing the Maximum-Likelihood Quantum State from
-    Measurements with Additive Gaussian Noise
-    Phys. Rev. Lett. 108, 070502 (2012)
-    https://doi.org/10.1103/PhysRevLett.108.070502
+    [MLEWIZ] Efficient Method for Computing the Maximum-Likelihood Quantum State from
+             Measurements with Additive Gaussian Noise
+             Smolin et al.,
+             Phys. Rev. Lett. 108, 070502 (2012)
+             https://doi.org/10.1103/PhysRevLett.108.070502
+             https://arxiv.org/abs/1106.5458
 
     :param rho: Numpy array containing the density matrix with dimension (N, N)
     :return rho_projected: The closest positive semi-definite trace 1 matrix to rho.
