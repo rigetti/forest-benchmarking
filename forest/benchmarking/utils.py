@@ -65,7 +65,7 @@ def str_to_pauli_term(pauli_str: str, qubit_labels=None):
 
 def local_sic_prep(label, qubit):
     """
-
+    TODO: !
     :param label:
     :param qubit:
     :return:
@@ -400,9 +400,9 @@ def transform_bit_moments_to_pauli(mean_c, var_c):
 
 
 def partial_trace(rho, keep, dims, optimize=False):
-    """Calculate the partial trace.
+    r"""Calculate the partial trace.
 
-    Consider a joint state ρ on the Hilbert space H_a \\otimes H_b. We wish to trace over H_b e.g.
+    Consider a joint state ρ on the Hilbert space H_a \otimes H_b. We wish to trace over H_b e.g.
 
     ρ_a = Tr_b(ρ).
 
