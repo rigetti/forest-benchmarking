@@ -326,14 +326,12 @@ def generate_t2_echo_experiments(qubits: Union[int, List[int]],
 
 
 def acquire_t2_data(qc: QuantumComputer,
-                    t2_experiment: pd.DataFrame,
-                    ) -> pd.DataFrame:
+                    t2_experiment: pd.DataFrame) -> pd.DataFrame:
     """
     Execute experiments to measure the T2 star or T2 echo decay time of 1 or more qubits.
 
     :param qc: The QuantumComputer to run the experiment on
     :param t2_experiment: A pandas DataFrame containing: time, T2 program
-    :param detuning: The additional detuning frequency about the z axis.
     :return: pandas DataFrame containing T2 results, and detuning used in creating experiments for
     those results.
     """
@@ -414,7 +412,7 @@ def plot_t2_estimate_over_data(df: pd.DataFrame,
     :param df_est: A pandas DataFrame containing estimates of T2.
     :param qubits: A list of qubits that you actually want plotted. The default is all qubits.
     :param detuning: Detuning frequency used in experiment creation.
-    :param type: String either 'star' or 'echo'.
+    :param t2_type: String either 'star' or 'echo'.
     :param filename: String.
     :return: None
     """
@@ -430,7 +428,6 @@ def plot_t2_estimate_over_data(df: pd.DataFrame,
         df2 = df[df['Qubit'] == q].sort_values('Time')
         x_data = df2['Time']
         y_data = df2['Average']
-        detuning = df2['Detuning'].values[0]
 
         plt.plot(x_data / MICROSECOND, y_data, 'o-', label=f"Qubit {q} T2 data")
 
@@ -439,7 +436,7 @@ def plot_t2_estimate_over_data(df: pd.DataFrame,
         if row['Fit_params'].values[0] is None:
             print(f"T2 estimate did not succeed for qubit {q}")
         else:
-            fit_params = (row['Fit_params'].values)[0]
+            fit_params = row['Fit_params'].values[0]
             plt.plot(x_data / MICROSECOND,
                      exponentially_decaying_sinusoidal_curve(x_data, *fit_params),
                      label=f"QC{q} fit: freq={fit_params[2] / MHZ:.2f}MHz, "
@@ -532,6 +529,7 @@ def acquire_rabi_data(qc: QuantumComputer,
 
     :param qc: The QuantumComputer to run the experiment on
     :param rabi_experiment: pandas DataFrame: (theta, Rabi program)
+    :param filename: The name of the file to write JSON-serialized results to
     :return: DataFrame with Rabi results
     """
     results = []
@@ -605,7 +603,7 @@ def plot_rabi_estimate_over_data(df: pd.DataFrame,
     :param df: Experimental results to plot and fit curve to.
     :param df_est: Estimates of Rabi oscillation.
     :param qubits: A list of qubits that you actually want plotted. The default is all qubits.
-    :param filename: String.
+    :param filename: The name of the file to write JSON-serialized results to
     :return: None
     """
     if qubits is None:
@@ -629,7 +627,7 @@ def plot_rabi_estimate_over_data(df: pd.DataFrame,
         if row['Fit_params'].values[0] is None:
             print(f"Rabi estimate did not succeed for qubit {q}")
         else:
-            fit_params = (row['Fit_params'].values)[0]
+            fit_params = row['Fit_params'].values[0]
             # overlay fitted sinusoidal curve
             plt.plot(angles, sinusoidal_waveform(angles, *fit_params),
                      label=f"qubit {q} fitted line")
@@ -656,7 +654,7 @@ def generate_cz_phase_ramsey_program(qb: int, other_qb: int, n_shots: int = 1000
     :param other_qb: The other qubit that constitutes a two-qubit pair along with `qb`.
     :param n_shots: The number of shots to average over for each data point.
     :param phase: The phase kick to supply after playing the CZ pulse on the equator.
-    :param num_shots: The number of shots to average over for the data point.
+    :param n_shots: The number of shots to average over for the data point.
     :return: A parametric Program for performing a CZ Ramsey experiment.
     """
     program = Program()
@@ -683,7 +681,7 @@ def generate_cz_phase_ramsey_experiment(edges: List[Tuple[int, int]],
                                         stop_phase: float = 2 * np.pi,
                                         num_points: int = 15,
                                         num_shots: int = 1000):
-    '''
+    """
     Returns a DataFrame of parameters and programs that constitute a CZ phase ramsey experiment.
 
     :param edges: List of Tuples containing edges that one can perform a CZ on.
@@ -692,10 +690,9 @@ def generate_cz_phase_ramsey_experiment(edges: List[Tuple[int, int]],
     :param num_points: The number of points to sample at between the starting and stopping phase.
     :param num_shots: The number of shots to average over for each data point.
     :return: pandas DataFrame
-    '''
+    """
 
     cz_expriment = []
-    rz_qubit = []  # this is the qubit to which the RZ is applied
     for edge in edges:
         qubit, other_qubit = edge
 
@@ -775,7 +772,6 @@ def estimate_cz_phase_ramsey(df: pd.DataFrame) -> pd.DataFrame:
     Estimate CZ phase ramsey experimental data.
 
     :param df: Experimental results to plot and fit exponential decay curve to.
-    :param detuning: Detuning frequency used in experiment creation.
     :return: List of dicts.
     """
     results = []
@@ -830,6 +826,7 @@ def plot_cz_phase_estimate_over_data(df: pd.DataFrame,
 
     :param df: Experimental results to plot and fit exponential decay curve to.
     :param df_est: estimates of CZ Ramsey experiments
+    :param filename: The name of the file to write JSON-serialized results to
     :return: None
     """
     edges = df['Edge'].unique()
@@ -856,9 +853,9 @@ def plot_cz_phase_estimate_over_data(df: pd.DataFrame,
             if row['Fit_params'].values[0] is None:
                 print(f"Rabi estimate did not succeed for qubit {q}")
             else:
-                fit_params = (row['Fit_params'].values)[0]
-                max_ESV = (row['max_ESV'].values)[0]
-                max_ESV_err = (row['max_ESV_err'].values)[0]
+                fit_params = row['Fit_params'].values[0]
+                max_ESV = row['max_ESV'].values[0]
+                max_ESV_err = row['max_ESV_err'].values[0]
 
                 # overlay fitted curve and vertical line at maximum ESV
                 axes[id_row, id_col].plot(phases, sinusoidal_waveform(phases, *fit_params),

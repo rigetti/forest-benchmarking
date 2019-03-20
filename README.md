@@ -2,8 +2,7 @@
 
 [![pipeline status](https://gitlab.com/rigetti/forest-benchmarking/badges/master/pipeline.svg)](https://gitlab.com/rigetti/forest-benchmarking/commits/master)[![Build Status](https://semaphoreci.com/api/v1/rigetti/forest-benchmarking/branches/master/shields_badge.svg)](https://semaphoreci.com/rigetti/forest-benchmarking)
 
-A library for quantum characterization, verification, validation (QCVV) using 
-[Forest](https:/rigetti.com/forest), Rigetti's quantum SDK.
+A library for quantum characterization, verification, validation (QCVV), and benchmarking using [pyQuil](https://github.com/rigetti/pyquil).
 
 ## Installation
 

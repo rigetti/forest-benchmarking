@@ -103,7 +103,7 @@ def quantum_chernoff_bound(rho, sigma):
 
 
 def hilbert_schmidt_ip(A, B):
-    """
+    r"""
     Computes the Hilbert-Schmidt (HS) inner product between two operators A and B as
         HS = (A|B) = Tr[A^\dagger B]
     where |B) = vec(B) and (A| is the dual vector to |A).
@@ -182,10 +182,11 @@ def process_fidelity(pauli_lio0: np.ndarray, pauli_lio1: np.ndarray) -> float:
 
     For more information see:
 
-    A simple formula for the average gate fidelity of a quantum dynamical operation
-    M. Nielsen, Physics Letters A 303, 249 (2002)
-    https://doi.org/10.1016/S0375-9601(02)01272-0
-    https://arxiv.org/abs/quant-ph/0205035
+    [GFID] A simple formula for the average gate fidelity of a quantum dynamical operation
+           M. Nielsen,
+           Physics Letters A 303, 249 (2002)
+           https://doi.org/10.1016/S0375-9601(02)01272-0
+           https://arxiv.org/abs/quant-ph/0205035
 
     :param pauli_lio0: A D^2 x D^2 pauli-liouville matrix (where D is the Hilbert space dimension)
     :param pauli_lio1: A D^2 x D^2 pauli-liouville matrix (where D is the Hilbert space dimension)
@@ -206,10 +207,14 @@ def diamond_norm(choi0: np.ndarray, choi1: np.ndarray) -> float:
     trace-preserving (CPTP) superoperators, represented as Choi matrices.
 
     The calculation uses the simplified semidefinite program of Watrous
-    [arXiv:0901.4709](http://arxiv.org/abs/0901.4709). This calculation
-    becomes very slow for 4 or more qubits.
-    [J. Watrous, [Theory of Computing 5, 11, pp. 217-238
-    (2009)](http://theoryofcomputing.org/articles/v005a011/)]
+
+    [CBN] Semidefinite programs for completely bounded norms
+          J. Watrous
+          Theory of Computing 5, 11, pp. 217-238 (2009)
+          http://theoryofcomputing.org/articles/v005a011
+          http://arxiv.org/abs/0901.4709
+
+    This calculation becomes very slow for 4 or more qubits.
 
     :param choi0: A 4^N x 4^N matrix (where N is the number of qubits)
     :param choi1: A 4^N x 4^N matrix (where N is the number of qubits)
