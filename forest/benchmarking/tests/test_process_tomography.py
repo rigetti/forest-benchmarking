@@ -6,7 +6,7 @@ from rpcq.messages import PyQuilExecutableResponse
 
 from forest.benchmarking.compilation import basic_compile
 from forest.benchmarking.random_operators import haar_rand_unitary
-from forest.benchmarking.superop_conversion import vec, unvec, kraus2choi
+from forest.benchmarking.superoperator_conversion import vec, unvec, kraus2choi
 from forest.benchmarking.tomography import proj_to_cp, proj_to_tni, \
     generate_process_tomography_experiment, pgdb_process_estimate, proj_to_tp, _constraint_project
 from forest.benchmarking.utils import sigma_x, partial_trace

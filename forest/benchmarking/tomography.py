@@ -11,7 +11,7 @@ from scipy.linalg import logm, pinv, eigh
 
 import forest.benchmarking.distance_measures as dm
 import forest.benchmarking.operator_estimation as est
-from forest.benchmarking.superop_conversion import vec, unvec
+from forest.benchmarking.superoperator_conversion import vec, unvec
 from forest.benchmarking.utils import prepare_prod_sic_state, n_qubit_pauli_basis, partial_trace
 from pyquil import Program
 from pyquil.api import QuantumComputer
@@ -321,10 +321,10 @@ def linear_inv_state_estimate(results: List[ExperimentResult],
     see https://en.wikipedia.org/wiki/Quantum_tomography#Linear_inversion or
     see section 3.4 of
 
-        Initialization and characterization of open quantum systems
-        C. Wood, PhD thesis from University of Waterloo, (2015).
-        http://hdl.handle.net/10012/9557
-
+    [WOOD] Initialization and characterization of open quantum systems
+           C. Wood,
+           PhD thesis from University of Waterloo, (2015).
+           http://hdl.handle.net/10012/9557
 
     :param results: A tomographically complete list of results.
     :param qubits: All qubits that were tomographized. This specifies the order in
@@ -372,25 +372,31 @@ def iterative_mle_state_estimate(results: List[ExperimentResult], qubits: List[i
     
     The basic algorithm is due to
     
-    [DIMLE1]    Diluted maximum-likelihood algorithm for quantum tomography
-                Řeháček et al., PRA 75, 042108 (2007)
-                https://doi.org/10.1103/PhysRevA.75.042108
+    [DIMLE1] Diluted maximum-likelihood algorithm for quantum tomography
+             Řeháček et al.,
+             PRA 75, 042108 (2007)
+             https://doi.org/10.1103/PhysRevA.75.042108
+             https://arxiv.org/abs/quant-ph/0611244
 
     with improvements from
 
-    [DIMLE2]    Quantum-State Reconstruction by Maximizing Likelihood and Entropy
-                Teo et al., PRL 107, 020404 (2011)
-                https://doi.org/10.1103/PhysRevLett.107.020404
+    [DIMLE2] Quantum-State Reconstruction by Maximizing Likelihood and Entropy
+             Teo et al.,
+             PRL 107, 020404 (2011)
+             https://doi.org/10.1103/PhysRevLett.107.020404
+             https://arxiv.org/abs/1102.2662
                 
-    [HMLE]      Hedged Maximum Likelihood Quantum State Estimation
-                Blume-Kohout, PRL, 105, 200504 (2010)
-                https://doi.org/10.1103/PhysRevLett.105.200504
+    [HMLE]   Hedged Maximum Likelihood Quantum State Estimation
+             Blume-Kohout,
+             PRL, 105, 200504 (2010)
+             https://doi.org/10.1103/PhysRevLett.105.200504
+             https://arxiv.org/abs/1001.2029
 
-    [IHMLE]     Iterative Hedged MLE from Yong Siah Teo's PhD thesis:
-                Numerical Estimation Schemes for Quantum Tomography
-                https://arxiv.org/pdf/1302.3399.pdf
-                See Eqn. 1.5.13 on page 88.
-                
+    [IHMLE]  Iterative Hedged MLE from Yong Siah Teo's PhD thesis, see Eqn. 1.5.13 on page 88:
+             Numerical Estimation Schemes for Quantum Tomography
+             Y. S. Teo
+             PhD Thesis, from National University of Singapore, (2013)
+             https://arxiv.org/pdf/1302.3399.pdf
 
     :param state_tomography_experiment_data data: namedtuple.
     :param dilution: delta  = 1 / epsilon where epsilon is the dilution parameter used in [DIMLE1].
@@ -586,10 +592,13 @@ def _constraint_project(choi_mat, trace_preserving=True):
     """
     Projects the given Choi matrix into the subspace of Completetly Positive and either Trace Perserving (TP) or
     Trace-Non-Increasing maps.
-    Uses Dykstra's algorithm witht the stopping criterion presented in
-        E. G. Birgin and M. Raydan, Dykstra’s algorithm and robust
-        stopping criteria (Springer US, Boston, MA, 2009),
-        pp. 828–833, ISBN 978-0-387-74759-0.
+    Uses Dykstra's algorithm with the stopping criterion presented in:
+
+    [DYKALG] Dykstra’s algorithm and robust stopping criteria
+             Birgin et al.,
+             (Springer US, Boston, MA, 2009), pp. 828–833, ISBN 978-0-387-74759-0.
+             https://doi.org/10.1007/978-0-387-74759-0_143
+
     This method is suggested in [PGD]
 
     :param choi_mat: A density matrix corresponding to the Choi representation estimate of a quantum process.
@@ -684,9 +693,11 @@ def pgdb_process_estimate(results: List[ExperimentResult], qubits: List[int],
     """
     Provide an estimate of the process via Projected Gradient Descent with Backtracking.
 
-        [PGD] Maximum-likelihood quantum process tomography via projected gradient descent
-        Knee, Bolduc, Leach, and Gauger. (2018)
-        arXiv:1803.10062
+    [PGD] Maximum-likelihood quantum process tomography via projected gradient descent
+          Knee et al.,
+          Phys. Rev. A 98, 062336 (2018)
+          https://dx.doi.org/10.1103/PhysRevA.98.062336
+          https://arxiv.org/abs/1803.10062
 
     :param results: A tomographically complete list of ExperimentResults
     :param qubits: A list of qubits giving the tensor order of the resulting Choi matrix.
@@ -777,10 +788,12 @@ def project_density_matrix(rho) -> np.ndarray:
 
     This is the so called "wizard" method. It is described in the following reference:
 
-    Smolin et al., Efficient Method for Computing the Maximum-Likelihood Quantum State from
-    Measurements with Additive Gaussian Noise
-    Phys. Rev. Lett. 108, 070502 (2012)
-    https://doi.org/10.1103/PhysRevLett.108.070502
+    [MLEWIZ] Efficient Method for Computing the Maximum-Likelihood Quantum State from
+             Measurements with Additive Gaussian Noise
+             Smolin et al.,
+             Phys. Rev. Lett. 108, 070502 (2012)
+             https://doi.org/10.1103/PhysRevLett.108.070502
+             https://arxiv.org/abs/1106.5458
 
     :param rho: Numpy array containing the density matrix with dimension (N, N)
     :return rho_projected: The closest positive semi-definite trace 1 matrix to rho.

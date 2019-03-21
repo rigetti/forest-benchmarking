@@ -103,7 +103,7 @@ def quantum_chernoff_bound(rho, sigma):
 
 
 def hilbert_schmidt_ip(A, B):
-    """
+    r"""
     Computes the Hilbert-Schmidt (HS) inner product between two operators A and B as
         HS = (A|B) = Tr[A^\dagger B]
     where |B) = vec(B) and (A| is the dual vector to |A).
@@ -182,10 +182,11 @@ def process_fidelity(pauli_lio0: np.ndarray, pauli_lio1: np.ndarray) -> float:
 
     For more information see:
 
-    A simple formula for the average gate fidelity of a quantum dynamical operation
-    M. Nielsen, Physics Letters A 303, 249 (2002)
-    https://doi.org/10.1016/S0375-9601(02)01272-0
-    https://arxiv.org/abs/quant-ph/0205035
+    [GFID] A simple formula for the average gate fidelity of a quantum dynamical operation
+           M. Nielsen,
+           Physics Letters A 303, 249 (2002)
+           https://doi.org/10.1016/S0375-9601(02)01272-0
+           https://arxiv.org/abs/quant-ph/0205035
 
     :param pauli_lio0: A D^2 x D^2 pauli-liouville matrix (where D is the Hilbert space dimension)
     :param pauli_lio1: A D^2 x D^2 pauli-liouville matrix (where D is the Hilbert space dimension)
@@ -206,10 +207,14 @@ def diamond_norm(choi0: np.ndarray, choi1: np.ndarray) -> float:
     trace-preserving (CPTP) superoperators, represented as Choi matrices.
 
     The calculation uses the simplified semidefinite program of Watrous
-    [arXiv:0901.4709](http://arxiv.org/abs/0901.4709). This calculation
-    becomes very slow for 4 or more qubits.
-    [J. Watrous, [Theory of Computing 5, 11, pp. 217-238
-    (2009)](http://theoryofcomputing.org/articles/v005a011/)]
+
+    [CBN] Semidefinite programs for completely bounded norms
+          J. Watrous
+          Theory of Computing 5, 11, pp. 217-238 (2009)
+          http://theoryofcomputing.org/articles/v005a011
+          http://arxiv.org/abs/0901.4709
+
+    This calculation becomes very slow for 4 or more qubits.
 
     :param choi0: A 4^N x 4^N matrix (where N is the number of qubits)
     :param choi1: A 4^N x 4^N matrix (where N is the number of qubits)
@@ -250,3 +255,31 @@ def diamond_norm(choi0: np.ndarray, choi1: np.ndarray) -> float:
     dnorm = prob.value * 2
 
     return dnorm
+
+
+def _is_square(n):
+    return n == np.round(np.sqrt(n))**2
+
+
+def watrous_bounds(choi: np.ndarray) -> float:
+    """Return the Watrous bounds for the diamon norm of a superoperator in
+    the Choi representation. If this is applied to the difference of two Choi 
+    representations, it yields bounds to the diamond norm distance.
+
+    The bound can be found in [this](https://cstheory.stackexchange.com/a/4920)
+    StackOverflow answer, although the results can also be found scattered in 
+    the literature.
+
+    :param choi: d1 x d2 matrix (for qubits, di = 4^Ni, where Ni is a number of qubits)
+    """
+
+    if len(choi.shape) != 2:
+        raise ValueError("Watrous bounds only defined for matrices")
+
+    if not(_is_square(choi.shape[0]) and _is_square(choi.shape[1])):
+        raise ValueError("Choi matrix must have dimensions that are perfect squares")
+    
+    _,s,_ = np.linalg.svd(choi)
+    nuclear_norm = np.sum(s)
+    
+    return (nuclear_norm, choi.shape[0]*nuclear_norm)
