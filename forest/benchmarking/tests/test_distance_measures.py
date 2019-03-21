@@ -303,7 +303,7 @@ def test_watrous_bounds():
     
 def test_process_fidelity():
     # test single qubit fidelity of identical gates
-    from forest.benchmarking.superop_conversion import kraus2pauli_liouville
+    from forest.benchmarking.superoperator_conversion import kraus2pauli_liouville
     _X = np.asarray([[0, 1], [1, 0]])
     X_pauli_rep = kraus2pauli_liouville([_X])
     assert np.isclose( dm.process_fidelity(X_pauli_rep, X_pauli_rep), 1, rtol=0.01)
