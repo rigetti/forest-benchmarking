@@ -255,3 +255,31 @@ def diamond_norm(choi0: np.ndarray, choi1: np.ndarray) -> float:
     dnorm = prob.value * 2
 
     return dnorm
+
+
+def _is_square(n):
+    return n == np.round(np.sqrt(n))**2
+
+
+def watrous_bounds(choi: np.ndarray) -> float:
+    """Return the Watrous bounds for the diamon norm of a superoperator in
+    the Choi representation. If this is applied to the difference of two Choi 
+    representations, it yields bounds to the diamond norm distance.
+
+    The bound can be found in [this](https://cstheory.stackexchange.com/a/4920)
+    StackOverflow answer, although the results can also be found scattered in 
+    the literature.
+
+    :param choi: d1 x d2 matrix (for qubits, di = 4^Ni, where Ni is a number of qubits)
+    """
+
+    if len(choi.shape) != 2:
+        raise ValueError("Watrous bounds only defined for matrices")
+
+    if not(_is_square(choi.shape[0]) and _is_square(choi.shape[1])):
+        raise ValueError("Choi matrix must have dimensions that are perfect squares")
+    
+    _,s,_ = np.linalg.svd(choi)
+    nuclear_norm = np.sum(s)
+    
+    return (nuclear_norm, choi.shape[0]*nuclear_norm)
