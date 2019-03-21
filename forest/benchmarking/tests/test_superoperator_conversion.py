@@ -1,6 +1,6 @@
 import numpy as np
 from forest.benchmarking.utils import *
-from forest.benchmarking.superop_conversion import *
+from forest.benchmarking.superoperator_conversion import *
 
 # one and zero state as a density matrix
 ONE_STATE = np.asarray([[0, 0], [0, 1]])

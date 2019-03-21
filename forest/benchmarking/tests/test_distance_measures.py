@@ -231,9 +231,79 @@ def test_diamond_norm():
     dnorm = dm.diamond_norm(choi0, choi1)
     assert np.isclose(dnorm, np.sqrt(2), rtol=0.01)
 
+def test_watrous_bounds():
+    # Test cases borrowed from qutip,
+    # https://github.com/qutip/qutip/blob/master/qutip/tests/test_metrics.py
+    # which were in turn generated using QuantumUtils for MATLAB
+    # (https://goo.gl/oWXhO9) by Christopher Granade
+
+    _I = np.asarray([[1, 0], [0, 1]])
+    _X = np.asarray([[0, 1], [1, 0]])
+    _Y = np.asarray([[0, -1.0j], [1.0j, 0]])
+    _H = np.asarray([[1, 1], [1, -1]]) / np.sqrt(2)
+
+    def _gate_to_superop(gate):
+        dim = gate.shape[0]
+        superop = np.outer(gate, gate.conj().T)
+        superop = np.reshape(superop, [dim]*4)
+        superop = np.transpose(superop, [0, 3, 1, 2])
+        return superop
+
+    def _superop_to_choi(superop):
+        dim = superop.shape[0]
+        superop = np.transpose(superop, (0, 2, 1, 3))
+        choi = np.reshape(superop, [dim**2] * 2)
+        return choi
+
+    def _gate_to_choi(gate):
+        return _superop_to_choi(_gate_to_superop(gate))
+
+    choi0 = _gate_to_choi(_I)
+    choi1 = _gate_to_choi(_X)
+    wbounds = dm.watrous_bounds(choi0-choi1)
+    assert wbounds[0]/2 <= 2.0 or np.isclose(wbounds[0]/2, 2.0, rtol=1e-2)
+    assert wbounds[1]/2 >= 2.0 or np.isclose(wbounds[1]/2, 2.0, rtol=1e-2)
+
+    turns_dnorm = [[1.000000e-03, 3.141591e-03],
+                   [3.100000e-03, 9.738899e-03],
+                   [1.000000e-02, 3.141463e-02],
+                   [3.100000e-02, 9.735089e-02],
+                   [1.000000e-01, 3.128689e-01],
+                   [3.100000e-01, 9.358596e-01]]
+
+    for turns, target in turns_dnorm:
+        choi0 = _gate_to_choi(_X)
+        choi1 = _gate_to_choi(matpow(_X, 1 + turns))
+        wbounds = dm.watrous_bounds(choi0-choi1)
+        assert wbounds[0]/2 <= target or np.isclose(wbounds[0]/2, target, rtol=1e-2)
+        assert wbounds[1]/2 >= target or np.isclose(wbounds[1]/2, target, rtol=1e-2)
+                          
+    hadamard_mixtures = [[1.000000e-03, 2.000000e-03],
+                         [3.100000e-03, 6.200000e-03],
+                         [1.000000e-02, 2.000000e-02],
+                         [3.100000e-02, 6.200000e-02],
+                         [1.000000e-01, 2.000000e-01],
+                         [3.100000e-01, 6.200000e-01]]
+
+    for p, target in hadamard_mixtures:
+        chan0 = _gate_to_superop(_I) * (1 - p) + _gate_to_superop(_H) * p
+        chan1 = _gate_to_superop(_I)
+
+        choi0 = _superop_to_choi(chan0)
+        choi1 = _superop_to_choi(chan1)
+        wbounds = dm.watrous_bounds(choi0-choi1)
+        assert wbounds[0]/2 <= target or np.isclose(wbounds[0]/2, target, rtol=1e-2)
+        assert wbounds[1]/2 >= target or np.isclose(wbounds[1]/2, target, rtol=1e-2)
+
+    choi0 = _gate_to_choi(_I)
+    choi1 = _gate_to_choi(matpow(_Y, 0.5))
+    wbounds = dm.watrous_bounds(choi0-choi1)
+    assert wbounds[0]/2 <= np.sqrt(2) or np.isclose(wbounds[0]/2, np.sqrt(2), rtol=1e-2)
+    assert wbounds[1]/2 >= np.sqrt(2) or np.isclose(wbounds[0]/2, np.sqrt(2), rtol=1e-2)
+    
 def test_process_fidelity():
     # test single qubit fidelity of identical gates
-    from forest.benchmarking.superop_conversion import kraus2pauli_liouville
+    from forest.benchmarking.superoperator_conversion import kraus2pauli_liouville
     _X = np.asarray([[0, 1], [1, 0]])
     X_pauli_rep = kraus2pauli_liouville([_X])
     assert np.isclose( dm.process_fidelity(X_pauli_rep, X_pauli_rep), 1, rtol=0.01)
