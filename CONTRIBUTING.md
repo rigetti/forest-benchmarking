@@ -6,7 +6,7 @@ contributors:
 
 * API style. We have chosen to split the API of the modules in our 
   benchmarking package in the following way: \
-  `exp_obj = generate_X_experiment( parameters)` \
+  `exp_obj = generate_X_experiment(parameters)` \
   `results_obj = acquire_X_data(exp_obj)` \
   `estimates = estimate_X(results_object)` \
   `plot_X(estimates, results)` \
@@ -25,16 +25,17 @@ contributors:
   references to to the relavent papers and equations in those papers.
   The recomended reference style guide is:
   
-  [TOPX]  Cool title about topic X
-          first author lastname, journal name, volume, firstpage (year)
-          DOI Link
-          arXiv Link
+  [TOPX]  Cool title about topic X \
+          first author lastname, journal name, volume, firstpage (year) \
+          DOI Link \
+          arXiv Link 
+          
   e.g.
   
-  [HMLE]  Hedged Maximum Likelihood Quantum State Estimation
-          Blume-Kohout, PRL, 105, 200504 (2010)
-          https://doi.org/10.1103/PhysRevLett.105.200504
-          https://arxiv.org/abs/1001.2029
+  [HMLE]  Hedged Maximum Likelihood Quantum State Estimation \
+          Blume-Kohout, PRL, 105, 200504 (2010) \
+          https://doi.org/10.1103/PhysRevLett.105.200504 \
+          https://arxiv.org/abs/1001.2029 
  
  * Notebooks. At the moment we are clearing the notebook metadata.
    A recommended workflow is to install `jq` (https://stedolan.github.io/jq/),
