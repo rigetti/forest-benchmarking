@@ -7,7 +7,9 @@ import numpy as np
 from statistics import median
 from collections import OrderedDict
 from pandas import DataFrame, Series
+import networkx as nx
 import time
+from queue import Queue
 from pyquil.api import QuantumComputer
 from pyquil.numpy_simulator import NumpyWavefunctionSimulator
 from pyquil.quil import DefGate, Program
@@ -15,6 +17,41 @@ from pyquil.gates import RESET
 
 from forest.benchmarking.random_operators import haar_rand_unitary
 from forest.benchmarking.utils import bit_array_to_int
+
+
+def get_connected_nodes(graph: nx.Graph, num_nodes: int, allowed_nodes: Sequence[int] = None):
+    """
+    Get a connected component of the graph that includes only allowed_nodes and has at least
+    num_nodes many nodes.
+
+    :param graph: a graph from which you wish to get a connected set of nodes
+    :param num_nodes: the number of connected nodes you want from the allowed_nodes in graph
+    :param allowed_nodes: the nodes that the connected nodes can be
+    :return: a num_nodes size subset of allowed_nodes that are connected in the graph
+    """
+    g = graph.copy()
+    if allowed_nodes is not None:
+        g.remove_nodes_from([n for n in g.nodes if n not in allowed_nodes])
+
+    for cc in nx.connected_components(g):
+        if len(cc) < num_nodes:
+            continue
+
+        frontier = Queue()
+        frontier.put(cc.pop())  # get a random start node from the cc
+        nodes = []
+        while not frontier.empty():
+            node = frontier.get()
+            nodes.append(node)
+
+            if len(nodes) >= num_nodes:
+                return nodes
+            
+            for neighbor in g.neighbors(node):
+                if neighbor not in nodes:
+                    frontier.put(neighbor)
+
+    raise ValueError("Could not find connected subgraph of desired size among allowed nodes.")
 
 
 def _naive_program_generator(qc: QuantumComputer, qubits: Sequence[int], permutations: np.ndarray,
@@ -34,9 +71,10 @@ def _naive_program_generator(qc: QuantumComputer, qubits: Sequence[int], permuta
         such that the results may be directly compared to the simulated heavy hitters from
         collect_heavy_outputs.
     """
+    # artificially restrict the entire computation to num_measure_qubits
     num_measure_qubits = len(permutations[0])
-    # at present, naively select the minimum number of qubits to run on
-    qubits = qubits[:num_measure_qubits]
+    # get some connected component with num_measure_qubits many qubits
+    qubits = get_connected_nodes(qc.qubit_topology(), num_measure_qubits, qubits)
 
     # create a simple program that uses the compiler to directly generate 2q gates from the matrices
     prog = Program()
