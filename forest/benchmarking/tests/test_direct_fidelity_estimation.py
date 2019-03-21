@@ -10,7 +10,7 @@ from pyquil.operator_estimation import _one_q_state_prep
 def test_exhaustive_state_dfe(benchmarker: BenchmarkConnection):
     texpt = exhaustive_state_dfe(program=Program(X(0), X(1)), qubits=[0, 1],
                                  benchmarker=benchmarker)
-    assert len(texpt) == 3 ** 2 - 1
+    assert len(texpt) == 2 ** 2 - 1
 
 
 def test_exhaustive_dfe(benchmarker: BenchmarkConnection):

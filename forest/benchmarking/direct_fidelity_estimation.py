@@ -147,7 +147,7 @@ def exhaustive_state_dfe(program: Program, qubits: list,
     return TomographyExperiment(list(
         _exhaustive_dfe(program=program,
                         qubits=qubits,
-                        in_states=[None, plusZ, minusZ],
+                        in_states=[None, plusZ],
                         benchmarker=benchmarker)),
         program=program, qubits=qubits)
 
