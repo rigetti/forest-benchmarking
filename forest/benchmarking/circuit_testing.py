@@ -14,8 +14,8 @@ from pyquil.api import QuantumComputer
 from pyquil.api import BenchmarkConnection
 from pyquil.gates import CNOT, CCNOT, Z, X, I, H, CZ, MEASURE, RESET
 from pyquil.quil import address_qubits
-from forest_benchmarking.rb import get_rb_gateset
-from forest_benchmarking.distance_measures import total_variation_distance as tvd
+from forest.benchmarking.rb import get_rb_gateset
+from forest.benchmarking.distance_measures import total_variation_distance as tvd
 
 
 # ==================================================================================================
