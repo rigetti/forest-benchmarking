@@ -1,4 +1,4 @@
-from forest_benchmarking.direct_fidelity_estimation import exhaustive_state_dfe, exhaustive_process_dfe, ratio_variance, \
+from forest.benchmarking.direct_fidelity_estimation import exhaustive_state_dfe, exhaustive_process_dfe, ratio_variance, \
     monte_carlo_state_dfe, monte_carlo_process_dfe
 from pyquil import Program
 from pyquil.api import BenchmarkConnection
