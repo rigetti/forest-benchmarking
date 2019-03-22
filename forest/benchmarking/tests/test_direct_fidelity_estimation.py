@@ -73,7 +73,6 @@ def test_monte_carlo_process_dfe(benchmarker: BenchmarkConnection):
         expectation = wfnsim.reset().do_program(prog).expectation(setting.out_operator)
         assert_almost_equal(expectation,1.,decimal=7)
 
-
 def test_monte_carlo_state_dfe(benchmarker: BenchmarkConnection):
     process = Program(H(0), CNOT(0, 1))
     texpt = monte_carlo_state_dfe(program=process, qubits=[0, 1], n_terms=10,
