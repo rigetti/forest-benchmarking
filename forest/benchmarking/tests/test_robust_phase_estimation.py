@@ -1,5 +1,4 @@
 import numpy as np
-from forest.benchmarking.compilation import basic_compile
 from numpy import pi
 from pandas import Series
 from pyquil.gates import I, H, RY, RZ
@@ -29,7 +28,7 @@ def test_single_depth(qvm):
             assert np.allclose(expected, result, atol=.005)
 
 
-def test_noiseless_RPE(qvm):
+def test_noiseless_rpe(qvm):
     qvm.qam.random_seed = 5
     angle = pi / 4 - .5  # pick arbitrary angle
     expt = rpe.generate_rpe_experiment(RZ(angle, 0), I(0), num_depths=7)
@@ -42,8 +41,7 @@ def test_noiseless_RPE(qvm):
     assert np.abs(angle - result) < 2 * np.sqrt(rpe.get_variance_upper_bound(expt))
 
 
-
-def test_noisy_RPE(qvm):
+def test_noisy_rpe(qvm):
     qvm.qam.random_seed = 5
     angles = pi * np.linspace(2 / 9, 2.0 - 2 / 9, 3)
     add_error = .15

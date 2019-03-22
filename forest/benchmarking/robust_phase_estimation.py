@@ -15,7 +15,6 @@ from forest.benchmarking.compilation import basic_compile
 from forest.benchmarking.utils import transform_bit_moments_to_pauli, local_pauli_eig_prep, \
     local_pauli_eig_meas, determine_simultaneous_grouping, bloch_vector_to_standard_basis
 
-
 import matplotlib.pyplot as plt
 
 
@@ -434,6 +433,7 @@ def acquire_rpe_data(qc: QuantumComputer, experiments: Union[DataFrame, Sequence
     :param multiplicative_factor: ad-hoc factor to multiply the number of shots per iteration. See
         num_trials() which computes the optimal number of shots per iteration.
     :param additive_error: estimate of the max additive error in the experiment, see num_trials()
+    :param grouping: a sequence of groups of experiment indices that should be run simultaneously
     :param results_label: label for the column of the returned df to be populated with results
     :return: A copy of the experiments data frame with the raw shot results in a new column.
     """
