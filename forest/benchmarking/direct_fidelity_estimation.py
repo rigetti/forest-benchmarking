@@ -197,10 +197,10 @@ def monte_carlo_state_dfe(program: Program, qubits: List[int], n_terms=200):
     return TomographyExperiment(list(
         _monte_carlo_dfe(program=program, qubits=qubits,
                          in_states=[None, plusZ],
-                         n_terms=n_terms)),
+                         n_terms=n_terms, benchmarker=benchmarker)),
         program=program, qubits=qubits)
 
-def monte_carlo_process_dfe(program: Program, qubits: List[int],benchmarker: BenchmarkConnection,
+def monte_carlo_process_dfe(program: Program, qubits: List[int], benchmarker: BenchmarkConnection,
                             n_terms: int = 200) -> TomographyExperiment:
     """
     Estimate process fidelity by randomly sampled direct fidelity estimation.
