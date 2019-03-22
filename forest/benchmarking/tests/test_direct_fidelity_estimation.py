@@ -13,7 +13,7 @@ def test_exhaustive_state_dfe(benchmarker: BenchmarkConnection):
     assert len(texpt) == 2 ** 2 - 1
 
 
-def test_mc_state_dfe(becnhmarker: BenchmarkConnection):
+def test_mc_state_dfe(benchmarker: BenchmarkConnection):
     texpt = monte_carlo_state_dfe(program=Program(X(0), X(1), X(2), X(3), X(4), X(5), X(6)), 
                          qubits=[0, 1, 2, 3, 4, 5, 6],
                          n_terms=50, benchmarker=benchmarker)
