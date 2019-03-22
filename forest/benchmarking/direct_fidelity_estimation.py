@@ -199,7 +199,7 @@ def monte_carlo_state_dfe(program: Program, qubits: List[int], benchmarker: Benc
     return TomographyExperiment(list(
         _monte_carlo_dfe(program=program, qubits=qubits,
                          in_states=[None, plusZ],
-                         n_terms=n_terms, benchmarker=benchmaker)),
+                         n_terms=n_terms, benchmarker=benchmarker)),
         program=program, qubits=qubits)
 
 def monte_carlo_process_dfe(program: Program, qubits: List[int], benchmarker: BenchmarkConnection,
