@@ -74,7 +74,8 @@ def _naive_program_generator(qc: QuantumComputer, qubits: Sequence[int], permuta
     # artificially restrict the entire computation to num_measure_qubits
     num_measure_qubits = len(permutations[0])
     # get some connected component with num_measure_qubits many qubits
-    qubits = get_connected_nodes(qc.qubit_topology(), num_measure_qubits, qubits)
+    # the compiler still may not use these qubits in the end.
+    target_qubits = get_connected_nodes(qc.qubit_topology(), num_measure_qubits, qubits)
 
     # create a simple program that uses the compiler to directly generate 2q gates from the matrices
     prog = Program()
@@ -87,10 +88,10 @@ def _naive_program_generator(qc: QuantumComputer, qubits: Sequence[int], permuta
             # add definition to program
             prog += g_definition
             # add gate to program, acting on properly permuted qubits
-            prog += G(int(qubits[perm[gate_idx]]), int(qubits[perm[gate_idx+1]]))
+            prog += G(int(target_qubits[perm[gate_idx]]), int(target_qubits[perm[gate_idx+1]]))
 
-    ro = prog.declare("ro", "BIT", len(qubits))
-    for idx, qubit in enumerate(qubits):
+    ro = prog.declare("ro", "BIT", num_measure_qubits)
+    for idx, qubit in enumerate(target_qubits):
         prog.measure(qubit, ro[idx])
 
     native_quil = qc.compiler.quil_to_native_quil(prog)
