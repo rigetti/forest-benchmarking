@@ -6,7 +6,7 @@ np.random.seed(1)
 
 
 def test_ideal_sim_heavy_probs(qvm):
-    qvm.qam.random_seed = 1
+    qvm.qam.random_seed = 2
     depths = [2, 3]
 
     # silence warning from too few circuits, since 100 circuits is too slow
