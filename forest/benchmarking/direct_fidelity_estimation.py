@@ -171,7 +171,8 @@ def _monte_carlo_dfe(program: Program, qubits: Sequence[int], in_states: list, n
             out_operator=benchmarker.apply_clifford_to_pauli(program, _state_to_pauli(i_st)),
         )
 
-def monte_carlo_state_dfe(program: Program, qubits: List[int], n_terms=200):
+def monte_carlo_state_dfe(program: Program, qubits: List[int], benchmarker: BenchmarkConnection,
+                            n_terms: int = 200) -> TomographyExperiment:
     """
     Estimate state fidelity by sampled direct fidelity estimation.
 
@@ -191,6 +192,7 @@ def monte_carlo_state_dfe(program: Program, qubits: List[int], n_terms=200):
         for which we estimate the fidelity.
     :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
         used in ``program``.
+    :param benchmarker: The `BenchmarkConnection` object used to design experiments
     :param n_terms: Number of randomly chosen observables to measure. This number should be 
         a constant less than ``2**len(qubits)``, otherwise ``exhaustive_state_dfe`` is more efficient.
     """
@@ -200,7 +202,7 @@ def monte_carlo_state_dfe(program: Program, qubits: List[int], n_terms=200):
                          n_terms=n_terms, benchmarker=benchmarker)),
         program=program, qubits=qubits)
 
-def monte_carlo_process_dfe(program: Program, qubits: List[int],benchmarker: BenchmarkConnection,
+def monte_carlo_process_dfe(program: Program, qubits: List[int], benchmarker: BenchmarkConnection,
                             n_terms: int = 200) -> TomographyExperiment:
     """
     Estimate process fidelity by randomly sampled direct fidelity estimation.
@@ -221,7 +223,7 @@ def monte_carlo_process_dfe(program: Program, qubits: List[int],benchmarker: Ben
         for which we estimate the fidelity.
     :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
         used in ``program``.
-    :param benchmarker: A `BenchmarkConnection` object
+    :param benchmarker: The `BenchmarkConnection` object used to design experiments
     :param n_terms: Number of randomly chosen observables to measure. This number should be 
         a constant less than ``2**len(qubits)``, otherwise ``exhaustive_process_dfe`` is more efficient.
     """
