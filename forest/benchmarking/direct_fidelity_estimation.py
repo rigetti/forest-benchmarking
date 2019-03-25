@@ -291,21 +291,21 @@ def acquire_dfe_data(qc: QuantumComputer, dfe: DFEexperiment, active_reset=False
                    qubits = dfe.exp.qubits,
                    type = dfe.type)
 
-def analyse_dfe_data(res: DFEdata):
-    mean = np.sum([r.expectation for r in res])
-    variance = np.sum([r.stddev**2 for r in res])
+def analyse_dfe_data(data: DFEdata):
+    mean = np.sum([r.expectation for r in data.res])
+    variance = np.sum([r.stddev**2 for r in data.res])
 
-    if res.type == 'state':
-        mean_est = (1+mean)/res.dimension
-        var_est = variance/res.dimension**2
-    elif res.type == 'process':
-        mean_est = (1+mean+res.dimension)/(res.dimension+1)/(res.dimension)
-        var_est = variance/(res.dimension+1)**2/(res.dimension)**2
+    if data.type == 'state':
+        mean_est = (1+mean)/data.dimension
+        var_est = variance/data.dimension**2
+    elif data.type == 'process':
+        mean_est = (1+mean+data.dimension)/(data.dimension+1)/(data.dimension)
+        var_est = variance/(data.dimension+1)**2/(data.dimension)**2
     else:
         raise ValueError('DFEdata can only be of type \'state\' or \'process\'.')
 
-    return DFEestimate( dimension= res.dimension,
-                        qubits = res.qubits,
+    return DFEestimate( dimension= data.dimension,
+                        qubits = data.qubits,
                         fid_point_est = mean_est, 
                         fid_var_est = var_est, 
                         fid_std_err_est = sqrt(var_est))
