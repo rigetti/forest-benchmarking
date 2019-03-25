@@ -17,6 +17,69 @@ from pyquil.operator_estimation import ExperimentSetting, TomographyExperiment, 
 from pyquil.paulis import PauliTerm, PauliSum, sI, sX, sY, sZ
 
 
+@dataclass 
+class DFEexperiment:
+    """Experiments to obtain an estimate of fidelity via DFE"""
+
+    exp: TomographyExperiment
+    """The experiment to be performed"""
+
+    type: str
+    """Type of fidelity to be estimate (state or process)"""
+
+
+@dataclass
+class DFEdata:
+    """Experimental data from a DFE experiment"""
+
+    res: List[ExperimentResults]
+    """The experimental results"""
+
+    in_states: List[TensorProductState]
+    """The input tensor product states being acted on by the `program`"""
+
+    program: Program
+    """The pyquil Program to perform DFE on"""
+
+    out_pauli: List[str]
+    """The expected output Pauli operators after the program acts on the corresponding `in_pauli`"""
+
+    pauli_point_est: List[float]
+    """Point estimate of Pauli operators"""
+
+    pauli_var_est: List[float]
+    """Estimate of variance in the point estimate"""
+
+    dimension: int
+    """Dimension of the Hilbert space"""
+
+    qubits: List[int]
+    """qubits involved in the experiment"""
+
+    type: str
+    """Type of fidelity to be estimate (state or process)"""
+
+
+@dataclass
+class DFEestimate:
+    """State/Process estimates from DFE experiments"""
+
+    dimension: int
+    """Dimension of the Hilbert space"""
+
+    qubits: List[int]
+    """qubits involved in the experiment"""
+
+    fid_point_est: float
+    """Point estimate of fidelity between ideal gate or state and measured, rescaled by the calibration."""
+
+    fid_var_est: float
+    """Error variance of the fidelity point estimate, after considering the calibration."""
+
+    fid_std_err_est: float
+    """Standard error of the fidelity point estimate, after considering the calibration."""
+
+
 def _exhaustive_dfe(program: Program, qubits: Sequence[int], in_states,
                     benchmarker: BenchmarkConnection) -> ExperimentSetting:
     """Yield experiments over itertools.product(in_paulis).
@@ -231,64 +294,3 @@ def analyse_dfe_data(res: DFEdata):
                         fid_var_est = var_est, 
                         fid_std_err_est = sqrt(var_est))
 
-@dataclass 
-class DFEexperiment:
-    """Experiments to obtain an estimate of fidelity via DFE"""
-
-    exp: TomographyExperiment
-    """The experiment to be performed"""
-
-    type: str
-    """Type of fidelity to be estimate (state or process)"""
-
-
-@dataclass
-class DFEdata:
-    """Experimental data from a DFE experiment"""
-
-    res: List[ExperimentResults]
-    """The experimental results"""
-
-    in_states: List[TensorProductState]
-    """The input tensor product states being acted on by the `program`"""
-
-    program: Program
-    """The pyquil Program to perform DFE on"""
-
-    out_pauli: List[str]
-    """The expected output Pauli operators after the program acts on the corresponding `in_pauli`"""
-
-    pauli_point_est: List[float]
-    """Point estimate of Pauli operators"""
-
-    pauli_var_est: List[float]
-    """Estimate of variance in the point estimate"""
-
-    dimension: int
-    """Dimension of the Hilbert space"""
-
-    qubits: List[int]
-    """qubits involved in the experiment"""
-
-    type: str
-    """Type of fidelity to be estimate (state or process)"""
-
-
-@dataclass
-class DFEestimate:
-    """State/Process estimates from DFE experiments"""
-
-    dimension: int
-    """Dimension of the Hilbert space"""
-
-    qubits: List[int]
-    """qubits involved in the experiment"""
-
-    fid_point_est: float
-    """Point estimate of fidelity between ideal gate or state and measured, rescaled by the calibration."""
-
-    fid_var_est: float
-    """Error variance of the fidelity point estimate, after considering the calibration."""
-
-    fid_std_err_est: float
-    """Standard error of the fidelity point estimate, after considering the calibration."""
