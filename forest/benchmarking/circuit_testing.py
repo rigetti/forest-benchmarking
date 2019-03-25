@@ -1,14 +1,14 @@
-from typing import List
+from typing import Tuple, Sequence, Callable, Any, List
 import networkx as nx
 import numpy as np
 import random
 import itertools
 import pandas as pd
 from scipy.spatial.distance import hamming
-import scipy.interpolate
 from scipy.special import comb
+from dataclasses import dataclass
 
-from pyquil.quilbase import Pragma
+from pyquil.quilbase import Pragma, Gate, DefGate
 from pyquil.quil import Program
 from pyquil.api import QuantumComputer
 from pyquil.api import BenchmarkConnection
@@ -16,12 +16,75 @@ from pyquil.gates import CNOT, CCNOT, Z, X, I, H, CZ, MEASURE, RESET
 from pyquil.quil import address_qubits
 from forest.benchmarking.rb import get_rb_gateset
 from forest.benchmarking.distance_measures import total_variation_distance as tvd
+from forest.benchmarking.random_operators import haar_rand_unitary
 
+
+@dataclass(order=True)
+class Slice:
+    index: int
+    gates: Tuple[Program]
+    needs_compilation: bool = True
+
+    # def __str__(self):
+    #     return f'Index {self.index}:\n' + '\n'.join([str(comp) for comp in self.components]) + '\n'
+
+
+@dataclass(order=True)
+class Layer:
+    depth: int
+    slices: Tuple[Slice]
+    needs_compilation: bool = True
+
+    # def __str__(self):
+    #     return f'Depth {self.depth}:\n' + '\n'.join([str(comp) for comp in self.components]) + '\n'
+
+
+@dataclass
+class Circuit:
+    layers: Tuple[Layer]
+    graph: nx.Graph
+    needs_compilation: bool = True
+    name: str = None
+
+    # def __str__(self):
+    #     return '\n'.join([str(lyr) for lyr in self.layers]) + '\n'
+
+
+@dataclass(order=True)
+class SliceTemplate:
+    index: int
+    generator: Callable
+    args = Sequence[Any]
+    sandwich: bool = False
+
+    # def __str__(self):
+    #     return f'Depth {self.depth}:\n' + '\n'.join([str(comp) for comp in self.components]) + '\n'
+
+
+@dataclass(order=True)
+class LayerTemplate:
+    depth: int
+    slices: Tuple[SliceTemplate]
+    sandwich: bool = False
+
+    # def __str__(self):
+    #     return f'Depth {self.depth}:\n' + '\n'.join([str(comp) for comp in self.components]) + '\n'
+
+
+@dataclass
+class CircuitTemplate:
+    layers: Tuple[LayerTemplate]
+    graph: nx.Graph
+    sandwich: bool = False
+    name: str = None
+
+    # def __str__(self):
+    #     return '\n'.join([str(lyr) for lyr in self.layers]) + '\n'
 
 # ==================================================================================================
 # Gate Sets
 # ==================================================================================================
-def random_single_qubit_gates(graph: nx.Graph, gates: list):
+def random_single_qubit_gates(graph: nx.Graph, gates: Sequence[Gate]):
     """
     Create a program comprised of single qubit gates randomly placed on the nodes of the
     specified graph. The gates are chosen uniformly from the list provided.
@@ -37,7 +100,7 @@ def random_single_qubit_gates(graph: nx.Graph, gates: list):
     return program
 
 
-def random_two_qubit_gates(graph: nx.Graph, gates: list):
+def random_two_qubit_gates(graph: nx.Graph, gates:  Sequence[Gate]):
     """
     Write a program to randomly place two qubit gates on edges of the specified graph.
 
@@ -54,7 +117,7 @@ def random_two_qubit_gates(graph: nx.Graph, gates: list):
     return program
 
 
-def random_single_qubit_cliffords(bm: BenchmarkConnection, graph: nx.Graph):
+def random_single_qubit_cliffords(graph: nx.Graph, bm: BenchmarkConnection):
     """
     Create a program comprised of single qubit Cliffords gates randomly placed on the nodes of
     the specified graph. Each uniformly random choice of Clifford is implemented in the native 
@@ -78,7 +141,7 @@ def random_single_qubit_cliffords(bm: BenchmarkConnection, graph: nx.Graph):
     return prog
 
 
-def random_two_qubit_cliffords(bm: BenchmarkConnection, graph: nx.Graph):
+def random_two_qubit_cliffords(graph: nx.Graph, bm: BenchmarkConnection):
     """
     Write a program to place random two qubit Cliffords gates on edges of the graph.
 
@@ -101,6 +164,38 @@ def random_two_qubit_cliffords(bm: BenchmarkConnection, graph: nx.Graph):
         gate = address_qubits(clif, qubit_mapping={qb1: edges[0], qb2: edges[1], })
         prog += gate
     return prog
+
+
+def random_permutation(graph: nx.Graph):
+    qubits = graph.nodes
+    permutation = np.random_permutation(range(len(qubits)))
+
+    matrix = []
+    for target in permutation:
+        row = [0 for _ in permutation]
+        row[target] = 1
+        matrix.append(row)
+
+    gate_definition = DefGate("".join([str(qubits[idx]) for idx in permutation]), matrix)
+    PERMUTE = gate_definition.get_constructor()
+    p = Program()
+    p += gate_definition
+    p += PERMUTE(*qubits)
+    return p
+
+
+def random_su2_pairs(graph: nx.Graph):
+    qubits = graph.nodes
+    gates = []
+    for q1, q2 in zip(qubits[::2], qubits[1::2]):
+        matrix = haar_rand_unitary(4)
+        gate_definition = DefGate("RSU2(" + str(q1) + str(q2) + ")", matrix)
+        RSU2 = gate_definition.get_constructor()
+        p = Program()
+        p += gate_definition
+        p += RSU2(q1, q2)
+        gates.append(p)
+    return gates
 
 
 # ==================================================================================================
@@ -126,6 +221,18 @@ def post_trival():
 # ==================================================================================================
 # Layer tools
 # ==================================================================================================
+
+def slice_templates_1q_and_2q_rand_cliff(bm: BenchmarkConnection):
+    slice_1q = SliceTemplate(0, random_single_qubit_cliffords, (bm, ))
+    slice_2q = SliceTemplate(1, random_two_qubit_cliffords, (bm, ))
+    return slice_1q, slice_2q
+
+
+def slice_templates_1q_and_2q_rand_rand_gates(one_q_gates, two_q_gates):
+    slice_1q = SliceTemplate(0, random_single_qubit_gates, (one_q_gates, ))
+    slice_2q = SliceTemplate(1, random_two_qubit_gates, (two_q_gates, ))
+    return slice_1q, slice_2q
+
 
 def layer_1q_and_2q_rand_cliff(bm: BenchmarkConnection,
                                graph: nx.Graph,
@@ -247,6 +354,37 @@ def circuit_sandwich_clifford(bm: BenchmarkConnection,
 # ==================================================================================================
 # Generate and Acquire functions
 # ==================================================================================================
+def generate_repeated_layer_circuit_template(lattice: nx.Graph, circuit_depth: int,
+                                             circuit_width: int,
+                                             slice_templates: Sequence[SliceTemplate],
+                                             layer_sandwich: bool = False,
+                                             circuit_sandwich: bool = False) -> CircuitTemplate:
+    """
+    Return the template needed to generate random circuits of a certain width and depth using a
+    particular lattice connectivity.
+
+    :param lattice:
+    :param circuit_depth: depth of quantum circuit
+    :param circuit_width: width of quantum circuit
+    :param slice_templates:
+    :param layer_sandwich:
+    :param circuit_sandwich:
+    :return:
+    """
+    if circuit_width > len(lattice.nodes):
+        raise ValueError("You must have circuit widths less than or equal to the number of qubits "
+                         "on a lattice.")
+    layers = (LayerTemplate(depth, slice_templates, layer_sandwich) \
+              for depth in range(1, circuit_depth + 1))
+
+    return CircuitTemplate(layers, lattice, circuit_sandwich, "UniformLayers")
+
+
+# def generate_circuit_experiments():
+#     
+#     yield Circuit(layers, graph, needs_compilation, name)
+
+
 def generate_sandwich_circuits_experiments(qc_noisy: QuantumComputer,
                                            circuit_depth: int,
                                            circuit_width: int,
