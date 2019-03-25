@@ -35,7 +35,7 @@ class DFEdata:
     res: List[ExperimentResult]
     """The experimental results"""
 
-    in_states: List[TensorProductState]
+    in_states: List[str]
     """The input tensor product states being acted on by the `program`"""
 
     program: Program
@@ -282,7 +282,7 @@ def monte_carlo_process_dfe(program: Program, qubits: List[int], benchmarker: Be
 def acquire_dfe_data(qc: QuantumComputer, dfe: DFEexperiment, active_reset=False):
     res = list(measure_observables(qc, dfe.exp, active_reset=active_reset))
     return DFEdata(res, 
-                   in_states = [exp[0].in_state for exp in dfe.exp],
+                   in_states = [str(exp[0].in_state) for exp in dfe.exp],
                    program = dfe.exp.program,
                    out_pauli = [str(exp[0].out_operator) for exp in dfe.exp], 
                    pauli_point_est = np.array([r.expectation for r in res ]), 
