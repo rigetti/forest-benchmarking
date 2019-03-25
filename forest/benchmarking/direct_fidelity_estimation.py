@@ -12,7 +12,7 @@ import forest.benchmarking.operator_estimation as est
 from forest.benchmarking.utils import prepare_prod_pauli_eigenstate
 from pyquil import Program
 from pyquil.api import BenchmarkConnection, QuantumComputer
-from pyquil.operator_estimation import ExperimentSetting, TomographyExperiment, \
+from pyquil.operator_estimation import ExperimentResults, ExperimentSetting, TomographyExperiment, \
     TensorProductState, plusX, minusX, plusY, minusY, plusZ, minusZ
 from pyquil.paulis import PauliTerm, PauliSum, sI, sX, sY, sZ
 
