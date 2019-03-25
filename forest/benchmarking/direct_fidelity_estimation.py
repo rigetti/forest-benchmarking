@@ -50,6 +50,12 @@ class DFEdata:
     pauli_var_est: List[float]
     """Estimate of variance in the point estimate"""
 
+    cal_point_est: List[float]
+    """Point estimate of readout calibration for Pauli operators"""
+
+    cal_var_est: List[float]
+    """Estimate of variance in the point estimate of readout calibration for Pauli operators"""
+
     dimension: int
     """Dimension of the Hilbert space"""
 
@@ -289,6 +295,8 @@ def acquire_dfe_data(qc: QuantumComputer, dfe: DFEexperiment, n_shots = 10_000, 
                    out_pauli = [str(exp[0].out_operator) for exp in dfe.exp], 
                    pauli_point_est = np.array([r.expectation for r in res ]), 
                    pauli_var_est = np.array([r.stddev**2 for r in res]), 
+                   cal_point_est = np.array([r.cal_expectation for r in res ]), 
+                   cal_var_est = np.array([r.cal_stddev**2 for r in res ]), 
                    dimension = 2**len(dfe.exp.qubits), 
                    qubits = dfe.exp.qubits,
                    type = dfe.type)
