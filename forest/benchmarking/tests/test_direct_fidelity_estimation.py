@@ -92,6 +92,17 @@ def test_monte_carlo_state_dfe(benchmarker: BenchmarkConnection):
         expectation = wfnsim.reset().do_program(prog).expectation(setting.out_operator)
         assert_almost_equal(expectation,1.,decimal=7)
 
+<<<<<<< Updated upstream
+=======
+# State DFE tests:
+# + look at fidelity of + state as a function of dephasing, expect linear dependence
+# + look at fidelity of + state, with ROE mitigation, asym RO error, expect average to remain unchanged
+# Proc DFE tests:
+# + look at fidelity of Z(a) wrt to Z, everything ideal. Expect sinunoisal dep on a
+# + look at the fidelity of Z(a)I wrt ZI
+# + look at the fidelity of Z(a)II wrt ZII
+#
+>>>>>>> Stashed changes
 
 def test_ratio_variance():
     # If our uncertainty is 0 in each parameter, the uncertainty in the ratio should also be 0.
