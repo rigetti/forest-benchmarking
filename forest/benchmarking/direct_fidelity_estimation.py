@@ -32,7 +32,7 @@ class DFEexperiment:
 class DFEdata:
     """Experimental data from a DFE experiment"""
 
-    res: List[ExperimentResults]
+    res: List[ExperimentResult]
     """The experimental results"""
 
     in_states: List[TensorProductState]
