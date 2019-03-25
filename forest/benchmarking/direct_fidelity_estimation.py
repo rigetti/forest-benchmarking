@@ -79,6 +79,22 @@ class DFEestimate:
     fid_std_err_est: float
     """Standard error of the fidelity point estimate, after considering the calibration."""
 
+def _state_to_pauli(state: TensorProductState) -> PauliTerm:
+    term = sI()
+    for oneq_st in state.states:
+        if oneq_st.label == 'X':
+            term *= sX(oneq_st.qubit)
+        elif oneq_st.label == 'Y':
+            term *= sY(oneq_st.qubit)
+        elif oneq_st.label == 'Z':
+            term *= sZ(oneq_st.qubit)
+        else:
+            raise ValueError(f"Can't convert state {state} to a PauliTerm")
+
+        if oneq_st.index == 1:
+            term *= -1
+    return term
+
 
 def _exhaustive_dfe(program: Program, qubits: Sequence[int], in_states,
                     benchmarker: BenchmarkConnection) -> ExperimentSetting:
