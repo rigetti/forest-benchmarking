@@ -279,10 +279,10 @@ def monte_carlo_process_dfe(program: Program, qubits: List[int], benchmarker: Be
     return DFEexperiment(exp,'process')
 
 
-def acquire_dfe_data(qc: QuantumComputer, dfe: DFEexperiment, active_reset=False):
+def acquire_dfe_data(qc: QuantumComputer, dfe: DFEexperiment, n_shots = 10_000, active_reset=False):
     # TODO: add number of shots
     #       add variance bounds?
-    res = list(measure_observables(qc, dfe.exp, active_reset=active_reset))
+    res = list(measure_observables(qc, dfe.exp, n_shots=n_shots, active_reset=active_reset))
     return DFEdata(res, 
                    in_states = [str(exp[0].in_state) for exp in dfe.exp],
                    program = dfe.exp.program,
