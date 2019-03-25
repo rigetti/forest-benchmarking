@@ -308,5 +308,5 @@ def analyse_dfe_data(data: DFEdata):
                         qubits = data.qubits,
                         fid_point_est = mean_est, 
                         fid_var_est = var_est, 
-                        fid_std_err_est = sqrt(var_est))
+                        fid_std_err_est = np.sqrt(var_est))
 
