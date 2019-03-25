@@ -1,4 +1,4 @@
-from forest.benchmarking.direct_fidelity_estimation import exhaustive_state_dfe, exhaustive_process_dfe, ratio_variance, \
+from forest.benchmarking.direct_fidelity_estimation import exhaustive_state_dfe, exhaustive_process_dfe, \
     monte_carlo_state_dfe, monte_carlo_process_dfe
 
 from pyquil import Program
@@ -12,26 +12,26 @@ from numpy.testing import assert_almost_equal
 def test_exhaustive_state_dfe(benchmarker: BenchmarkConnection):
     texpt = exhaustive_state_dfe(program=Program(X(0), X(1)), qubits=[0, 1],
                                  benchmarker=benchmarker)
-    assert len(texpt) == 2 ** 2 - 1
+    assert len(texpt.exp) == 2 ** 2 - 1
 
 
 def test_mc_state_dfe(benchmarker: BenchmarkConnection):
     texpt = monte_carlo_state_dfe(program=Program(X(0), X(1), X(2), X(3), X(4), X(5), X(6)), 
                          qubits=[0, 1, 2, 3, 4, 5, 6],
                          n_terms=50, benchmarker=benchmarker)
-    assert len(texpt) == 50
+    assert len(texpt.exp) == 50
 
 
 def test_exhaustive_dfe(benchmarker: BenchmarkConnection):
     texpt = exhaustive_process_dfe(program=Program(Z(0)), qubits=[0], benchmarker=benchmarker)
-    assert len(texpt) == 7 ** 1 - 1
+    assert len(texpt.exp) == 7 ** 1 - 1
 
 
 def test_exhaustive_process_dfe_run(benchmarker: BenchmarkConnection):
     wfnsim = NumpyWavefunctionSimulator(n_qubits=1)
     process = Program(Z(0))
     texpt = exhaustive_process_dfe(program=process, qubits=[0], benchmarker=benchmarker)
-    for setting in texpt:
+    for setting in texpt.exp:
         setting = setting[0]
         prog = Program()
         for oneq_state in setting.in_state.states:
@@ -46,7 +46,7 @@ def test_exhaustive_state_dfe_run(benchmarker: BenchmarkConnection):
     wfnsim = NumpyWavefunctionSimulator(n_qubits=1)
     process = Program(X(0))
     texpt = exhaustive_state_dfe(program=process, qubits=[0], benchmarker=benchmarker)
-    for setting in texpt:
+    for setting in texpt.exp:
         setting = setting[0]
         prog = Program()
         for oneq_state in setting.in_state.states:
@@ -61,10 +61,10 @@ def test_monte_carlo_process_dfe(benchmarker: BenchmarkConnection):
     process = Program(CNOT(0, 1))
     texpt = monte_carlo_process_dfe(program=process, qubits=[0, 1], n_terms=10,
                                     benchmarker=benchmarker)
-    assert len(texpt) == 10
+    assert len(texpt.exp) == 10
 
     wfnsim = NumpyWavefunctionSimulator(n_qubits=2)
-    for setting in texpt:
+    for setting in texpt.exp:
         setting = setting[0]
         prog = Program()
         for oneq_state in setting.in_state.states:
@@ -79,10 +79,10 @@ def test_monte_carlo_state_dfe(benchmarker: BenchmarkConnection):
     process = Program(H(0), CNOT(0, 1))
     texpt = monte_carlo_state_dfe(program=process, qubits=[0, 1], n_terms=10,
                                     benchmarker=benchmarker)
-    assert len(texpt) == 10
+    assert len(texpt.exp) == 10
 
     wfnsim = NumpyWavefunctionSimulator(n_qubits=2)
-    for setting in texpt:
+    for setting in texpt.exp:
         setting = setting[0]
         prog = Program()
         for oneq_state in setting.in_state.states:
@@ -91,24 +91,3 @@ def test_monte_carlo_state_dfe(benchmarker: BenchmarkConnection):
 
         expectation = wfnsim.reset().do_program(prog).expectation(setting.out_operator)
         assert_almost_equal(expectation,1.,decimal=7)
-
-<<<<<<< Updated upstream
-=======
-# State DFE tests:
-# + look at fidelity of + state as a function of dephasing, expect linear dependence
-# + look at fidelity of + state, with ROE mitigation, asym RO error, expect average to remain unchanged
-# Proc DFE tests:
-# + look at fidelity of Z(a) wrt to Z, everything ideal. Expect sinunoisal dep on a
-# + look at the fidelity of Z(a)I wrt ZI
-# + look at the fidelity of Z(a)II wrt ZII
-#
->>>>>>> Stashed changes
-
-def test_ratio_variance():
-    # If our uncertainty is 0 in each parameter, the uncertainty in the ratio should also be 0.
-    assert ratio_variance(1, 0, 1, 0) == 0
-    # If our uncertainty in the denominator is 0, and it's expectation value is one, then
-    # the uncertainty in the ratio should just be the uncertainty in the numerator.
-    assert ratio_variance(1, 1, 1, 0) == 1
-    # It shouldn't depend on the value in the numerator.
-    assert ratio_variance(2, 1, 1, 0) == 1
