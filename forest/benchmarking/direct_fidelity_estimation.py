@@ -280,6 +280,8 @@ def monte_carlo_process_dfe(program: Program, qubits: List[int], benchmarker: Be
 
 
 def acquire_dfe_data(qc: QuantumComputer, dfe: DFEexperiment, active_reset=False):
+    # TODO: add number of shots
+    #       add variance bounds?
     res = list(measure_observables(qc, dfe.exp, active_reset=active_reset))
     return DFEdata(res, 
                    in_states = [str(exp[0].in_state) for exp in dfe.exp],
@@ -291,13 +293,14 @@ def acquire_dfe_data(qc: QuantumComputer, dfe: DFEexperiment, active_reset=False
                    qubits = dfe.exp.qubits,
                    type = dfe.type)
 
+
 def analyse_dfe_data(data: DFEdata):
     mean = np.sum([r.expectation for r in data.res])
     variance = np.sum([r.stddev**2 for r in data.res])
 
     if data.type == 'state':
-        mean_est = (1+mean)/data.dimension
-        var_est = variance/data.dimension**2
+        mean_est = np.mean([r.expectation for r in data.res])
+        var_est = np.sum([r.stddev**2 for r in data.res])/len(data.res)**2
     elif data.type == 'process':
         mean_est = (1+mean+data.dimension)/(data.dimension+1)/(data.dimension)
         var_est = variance/(data.dimension+1)**2/(data.dimension)**2
