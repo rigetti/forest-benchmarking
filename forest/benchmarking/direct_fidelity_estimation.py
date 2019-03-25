@@ -172,7 +172,7 @@ def _monte_carlo_dfe(program: Program, qubits: Sequence[int], in_states: list, n
         )
 
 def monte_carlo_state_dfe(program: Program, qubits: List[int], benchmarker: BenchmarkConnection,
-                            n_terms: int = 200) -> TomographyExperiment:
+                          n_terms=200) -> TomographyExperiment:
     """
     Estimate state fidelity by sampled direct fidelity estimation.
 
@@ -201,6 +201,7 @@ def monte_carlo_state_dfe(program: Program, qubits: List[int], benchmarker: Benc
                          in_states=[None, plusZ],
                          n_terms=n_terms, benchmarker=benchmarker)),
         program=program, qubits=qubits)
+
 
 def monte_carlo_process_dfe(program: Program, qubits: List[int], benchmarker: BenchmarkConnection,
                             n_terms: int = 200) -> TomographyExperiment:
