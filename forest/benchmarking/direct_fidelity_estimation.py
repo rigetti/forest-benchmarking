@@ -284,7 +284,7 @@ def acquire_dfe_data(qc: QuantumComputer, dfe: DFEexperiment, active_reset=False
     return DFEdata(res, 
                    in_states = [exp[0].in_state for exp in dfe.exp],
                    program = dfe.exp.program,
-                   out_pauli = [str(exp[0].out_operator) for exp in bell_state], 
+                   out_pauli = [str(exp[0].out_operator) for exp in dfe.exp], 
                    pauli_point_est = np.array([r.expectation for r in res ]), 
                    pauli_var_est = np.array([r.stddev**2 for r in res]), 
                    dimesion = 2**len(dfe.exp.qubits), 
