@@ -85,6 +85,7 @@ class DFEestimate:
     fid_std_err_est: float
     """Standard error of the fidelity point estimate, after considering the calibration."""
 
+
 def _state_to_pauli(state: TensorProductState) -> PauliTerm:
     term = sI()
     for oneq_st in state.states:
@@ -305,13 +306,15 @@ def acquire_dfe_data(qc: QuantumComputer, dfe: DFEexperiment, n_shots = 10_000, 
 def analyse_dfe_data(data: DFEdata):
     mean = np.sum([r.expectation for r in data.res])
     variance = np.sum([r.stddev**2 for r in data.res])
+    d = data.dimension
 
     if data.type == 'state':
         mean_est = np.mean([r.expectation for r in data.res])
         var_est = np.sum([r.stddev**2 for r in data.res])/len(data.res)**2
     elif data.type == 'process':
-        mean_est = (1+mean+data.dimension)/(data.dimension+1)/(data.dimension)
-        var_est = variance/(data.dimension+1)**2/(data.dimension)**2
+        mean_est = (d**2 * np.mean([r.expectation for r in data.res]) + d)/(d**2+d)
+        v = np.sum([r.stddev**2 for r in data.res])/len(data.res)**2
+        var_est = d**2/(d+1)**2 * v
     else:
         raise ValueError('DFEdata can only be of type \'state\' or \'process\'.')
 
