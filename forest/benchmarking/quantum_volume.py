@@ -1,57 +1,24 @@
 from typing import List, Sequence, Tuple, Callable, Dict
 import warnings
-import logging
-log = logging.getLogger(__name__)
 from tqdm import tqdm
 import numpy as np
 from statistics import median
 from collections import OrderedDict
 from pandas import DataFrame, Series
-import networkx as nx
 import time
-from queue import Queue
+from copy import copy
+
 from pyquil.api import QuantumComputer
 from pyquil.numpy_simulator import NumpyWavefunctionSimulator
 from pyquil.quil import DefGate, Program
 from pyquil.gates import RESET
+from rpcq.messages import TargetDevice
+from rpcq._utils import RPCErrorError
 
 from forest.benchmarking.random_operators import haar_rand_unitary
 from forest.benchmarking.utils import bit_array_to_int
-
-
-def get_connected_nodes(graph: nx.Graph, num_nodes: int, allowed_nodes: Sequence[int] = None):
-    """
-    Get a connected component of the graph that includes only allowed_nodes and has at least
-    num_nodes many nodes.
-
-    :param graph: a graph from which you wish to get a connected set of nodes
-    :param num_nodes: the number of connected nodes you want from the allowed_nodes in graph
-    :param allowed_nodes: the nodes that the connected nodes can be
-    :return: a num_nodes size subset of allowed_nodes that are connected in the graph
-    """
-    g = graph.copy()
-    if allowed_nodes is not None:
-        g.remove_nodes_from([n for n in g.nodes if n not in allowed_nodes])
-
-    for cc in nx.connected_components(g):
-        if len(cc) < num_nodes:
-            continue
-
-        frontier = Queue()
-        frontier.put(cc.pop())  # get a random start node from the cc
-        nodes = []
-        while not frontier.empty():
-            node = frontier.get()
-            nodes.append(node)
-
-            if len(nodes) >= num_nodes:
-                return nodes
-            
-            for neighbor in g.neighbors(node):
-                if neighbor not in nodes:
-                    frontier.put(neighbor)
-
-    raise ValueError("Could not find connected subgraph of desired size among allowed nodes.")
+import logging
+log = logging.getLogger(__name__)
 
 
 def _naive_program_generator(qc: QuantumComputer, qubits: Sequence[int], permutations: np.ndarray,
@@ -73,9 +40,9 @@ def _naive_program_generator(qc: QuantumComputer, qubits: Sequence[int], permuta
     """
     # artificially restrict the entire computation to num_measure_qubits
     num_measure_qubits = len(permutations[0])
-    # get some connected component with num_measure_qubits many qubits
-    # the compiler still may not use these qubits in the end.
-    target_qubits = get_connected_nodes(qc.qubit_topology(), num_measure_qubits, qubits)
+    # if these measure_qubits do not have a topology that supports the program, the compiler may
+    # act on a different (potentially larger) subset of the input sequence of qubits.
+    measure_qubits = qubits[:num_measure_qubits]
 
     # create a simple program that uses the compiler to directly generate 2q gates from the matrices
     prog = Program()
@@ -88,18 +55,41 @@ def _naive_program_generator(qc: QuantumComputer, qubits: Sequence[int], permuta
             # add definition to program
             prog += g_definition
             # add gate to program, acting on properly permuted qubits
-            prog += G(int(target_qubits[perm[gate_idx]]), int(target_qubits[perm[gate_idx+1]]))
+            prog += G(int(measure_qubits[perm[gate_idx]]), int(measure_qubits[perm[gate_idx+1]]))
 
     ro = prog.declare("ro", "BIT", num_measure_qubits)
-    for idx, qubit in enumerate(target_qubits):
+    for idx, qubit in enumerate(measure_qubits):
         prog.measure(qubit, ro[idx])
 
-    native_quil = qc.compiler.quil_to_native_quil(prog)
+    # restrict compilation to chosen qubits
+    isa_dict = qc.device.get_isa().to_dict()
+    single_qs = isa_dict['1Q']
+    two_qs = isa_dict['2Q']
 
-    if not set(native_quil.get_qubits()).issubset(set(qubits)):
-        raise ValueError("naive_program_generator could not generate program using only the "
-                         "qubits supplied. Please provide your own program_generator if you wish "
-                         "to use only the qubits specified.")
+    new_1q = {}
+    for key, val in single_qs.items():
+        if int(key) in qubits:
+            new_1q[key] = val
+    new_2q = {}
+    for key, val in two_qs.items():
+        q1, q2 = key.split('-')
+        if int(q1) in qubits and int(q2) in qubits:
+            new_2q[key] = val
+
+    new_isa = {'1Q': new_1q, '2Q': new_2q}
+
+    new_compiler = copy(qc.compiler)
+    new_compiler.target_device = TargetDevice(isa=new_isa, specs=qc.device.get_specs().to_dict())
+    # try to compile with the restricted qubit topology
+    try:
+        native_quil = new_compiler.quil_to_native_quil(prog)
+    except RPCErrorError as e:
+        if "Multiqubit instruction requested between disconnected components of the QPU graph:" \
+                in str(e):
+            raise ValueError("naive_program_generator could not generate a program using only the "
+                             "qubits supplied; expand the set of allowed qubits or supply "
+                             "a custom program_generator.")
+        raise
 
     return native_quil
 
