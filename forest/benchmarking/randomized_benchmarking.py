@@ -14,15 +14,14 @@ from pyquil.gates import CZ, RX, RZ
 from pyquil.quilbase import Gate
 from pyquil.quil import merge_programs
 from pyquil import Program
-<<<<<<< HEAD:forest_benchmarking/rb.py
-from forest_benchmarking.tomography import _state_tomo_settings
-=======
 from pyquil.quilatom import QubitPlaceholder
+
+from forest.benchmarking.tomography import _state_tomo_settings
 from forest.benchmarking.tomography import generate_state_tomography_experiment, acquire_tomography_data
->>>>>>> origin/master:forest/benchmarking/randomized_benchmarking.py
+from forest.benchmarking.compilation import basic_compile
 
 from dataclasses import dataclass
-from forest_benchmarking.compilation import basic_compile
+
 
 
 bm = get_benchmarker()
