@@ -150,6 +150,7 @@ def generate_exhaustive_process_dfe_experiment(program: Program, qubits: list,
         which we estimate the fidelity.
     :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
         used in ``program``.
+    :param benchmarker: A ``BecnhmarkConnection`` object to be used in experiment design
     :return: a DFE experiment object
     :rtype: ``DFEExperiment`
     """
@@ -188,6 +189,7 @@ def generate_exhaustive_state_dfe_experiment(program: Program, qubits: list,
         for which we estimate the fidelity.
     :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
         used in ``program``.
+    :param benchmarker: A ``BecnhmarkConnection`` object to be used in experiment design
     :return: a DFE experiment object
     :rtype: ``DFEExperiment`
     """
@@ -231,6 +233,7 @@ def _monte_carlo_dfe(program: Program, qubits: Sequence[int], in_states: list, n
             in_state=i_st,
             out_operator=benchmarker.apply_clifford_to_pauli(program, _state_to_pauli(i_st)),
         )
+
 
 def generate_monte_carlo_state_dfe_experiment(program: Program, qubits: List[int], benchmarker: BenchmarkConnection,
                                               n_terms=200) -> DFEExperiment:
@@ -302,7 +305,7 @@ def generate_monte_carlo_process_dfe_experiment(program: Program, qubits: List[i
     return DFEExperiment(exp, 'monte carlo, process')
 
 
-def acquire_dfe_data(qc: QuantumComputer, exp: DFEExperiment, n_shots = 10_000, active_reset=False) -> DFEData:
+def acquire_dfe_data(qc: QuantumComputer, exp: DFEExperiment, n_shots=10_000, active_reset=False) -> DFEData:
     """
     Acquire data necessary for direct fidelity estimate (DFE).
 
@@ -315,17 +318,17 @@ def acquire_dfe_data(qc: QuantumComputer, exp: DFEExperiment, n_shots = 10_000, 
     :rtype: ``DFEData`
     """
     res = list(measure_observables(qc, exp.experiments, n_shots=n_shots, active_reset=active_reset))
-    return DFEData(results = res,
-                   in_states = [str(exp[0].in_state) for exp in exp.experiments],
-                   program = exp.experiments.program,
-                   out_pauli = [str(exp[0].out_operator) for exp in exp.experiments],
-                   pauli_point_est = np.array([r.expectation for r in res ]),
-                   pauli_std_err = np.array([r.stddev for r in res]),
-                   cal_point_est = np.array([r.calibration_expectation for r in res ]),
-                   cal_std_err = np.array([r.calibration_stddev for r in res ]),
-                   dimension = 2**len(exp.experiments.qubits),
-                   qubits = exp.experiments.qubits,
-                   kind = exp.kind)
+    return DFEData(results=res,
+                   in_states=[str(exp[0].in_state) for exp in exp.experiments],
+                   program=exp.experiments.program,
+                   out_pauli=[str(exp[0].out_operator) for exp in exp.experiments],
+                   pauli_point_est=np.array([r.expectation for r in res]),
+                   pauli_std_err=np.array([r.stddev for r in res]),
+                   cal_point_est=np.array([r.calibration_expectation for r in res]),
+                   cal_std_err=np.array([r.calibration_stddev for r in res]),
+                   dimension=2**len(exp.experiments.qubits),
+                   qubits=exp.experiments.qubits,
+                   kind=exp.kind)
 
 
 def estimate_dfe(data: DFEData) -> DFEEstimate:
@@ -352,8 +355,7 @@ def estimate_dfe(data: DFEData) -> DFEEstimate:
     else:
         raise ValueError('DFEdata can only be of kind \'state\' or \'process\'.')
 
-    return DFEEstimate(dimension= data.dimension,
-                       qubits = data.qubits,
-                       fid_point_est = mean_est,
-                       fid_std_err = np.sqrt(var_est))
-
+    return DFEEstimate(dimension=data.dimension,
+                       qubits=data.qubits,
+                       fid_point_est=mean_est,
+                       fid_std_err=np.sqrt(var_est))
