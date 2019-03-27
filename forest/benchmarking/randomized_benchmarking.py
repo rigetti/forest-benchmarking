@@ -23,35 +23,11 @@ from forest.benchmarking.compilation import basic_compile
 from dataclasses import dataclass
 
 
-
 bm = get_benchmarker()
 
 
-<<<<<<< HEAD:forest_benchmarking/rb.py
 @dataclass()
 class Component:
-=======
-    For standard RB see
-    [RB] Scalable and Robust Randomized Benchmarking of Quantum Processes
-         Magesan et al.,
-         Phys. Rev. Lett. 106, 180504 (2011)
-         https://dx.doi.org/10.1103/PhysRevLett.106.180504
-         https://arxiv.org/abs/1009.3639
-
-    Unitarity algorithm is due to
-    [ECN]  Estimating the Coherence of Noise
-           Wallman et al.,
-           New Journal of Physics 17, 113020 (2015)
-           https://dx.doi.org/10.1088/1367-2630/17/11/113020
-           https://arxiv.org/abs/1503.07865
-
-    :param rb_type: Label saying which type of RB measurement we're running
-    :param subgraph: List of tuples, where each tuple specifies a single qubit or pair of qubits on
-         which to run RB. If the length of this list is >1 then we are running simultaneous RB.
-    :param depths: List of RB sequence depths (numbers of Cliffords) to include in this measurement
-    :param num_sequences: Number of different random sequences to run at each depth
-    :return: DataFrame with one row for every sequence in the measurement
->>>>>>> origin/master:forest/benchmarking/randomized_benchmarking.py
     """
     A component is the low-level structure of a StratifiedExperiment that stores a sequence of
     gates that will be run on a qc.
@@ -80,17 +56,10 @@ class Component:
     stddev: int = None  # currently alos houses purity_error for unitarity
 
 
-<<<<<<< HEAD:forest_benchmarking/rb.py
     def __str__(self):
         return '[' + ', '.join([str(instr) for instr in self.sequence[0]]) + '] ... [' + \
                ', '.join([str(instr) for instr in self.sequence[-1]]) + ']'
 
-=======
-def add_sequences_to_dataframe(df: DataFrame, bm: BenchmarkConnection, random_seed: int = None, interleaved_gate: Program = None):
-    """
-    Generates a new random sequence for each row in the measurement DataFrame and adds these to a
-    copy of the DataFrame. Returns the new DataFrame.
->>>>>>> origin/master:forest/benchmarking/randomized_benchmarking.py
 
 @dataclass(order=True)
 class Layer:
@@ -234,97 +203,6 @@ def merge_sequences(sequences: list) -> list:
     return [merge_programs([seq[idx] for seq in sequences]) for idx in range(depth)]
 
 
-<<<<<<< HEAD:forest_benchmarking/rb.py
-=======
-########
-# Unitarity
-########
-
-
-def strip_inverse_from_sequences(df: DataFrame):
-    """
-    Removes the inverse (the last gate) from each of the RB sequences in a copy of the
-    DataFrame and returns the copy.
-
-    :param df: Dataframe with "Sequence" series.
-    :return new_df: A copy of the input df with each entry in the "Sequence" series
-               lacking the last inverse gate
-    """
-    new_df = df.copy()
-    new_df["Sequence"] = Series([seq[:-1] for seq in new_df["Sequence"].values])
-    return new_df
-
-
-def add_unitarity_sequences_to_dataframe(df: DataFrame, bm: BenchmarkConnection, random_seed: int = None):
-    """
-    Generates a new random unitarity sequence for each row in the measurement DataFrame and adds
-    these to a copy of the DataFrame.
-
-    A unitarity sequence of depth D is a standard RB sequence
-    of depth D+1 with the last (inversion) gate stripped. Returns the new DataFrame.
-    """
-    new_df = df.copy()
-    if random_seed is not None:
-        new_df["Sequence"] = Series([generate_simultaneous_rb_sequence(bm, s, d, random_seed + len(s) * j) for j, (s, d)
-                                     in enumerate(zip(new_df["Subgraph"].values, new_df["Depth"].values + 1))])
-                            #TODO: check consistency with depth for RB
-    else:
-        new_df["Sequence"] = Series([generate_simultaneous_rb_sequence(bm, s, d) for (s, d)
-                                     in zip(new_df["Subgraph"].values, new_df["Depth"].values + 1)])
-                            #TODO: check consistency with depth for RB
-    stripped_seq_df = strip_inverse_from_sequences(new_df)
-    return stripped_seq_df
-
-
-def run_unitarity_measurement(df: DataFrame, qc: QuantumComputer, num_trials: int):
-    """
-    Execute trials on all sequences and add the results to a copy of the DataFrame. Returns the
-    new DataFrame.
-    """
-    new_df = df.copy()
-    def run(qc: QuantumComputer, seq: List[Program], subgraph: List[List[int]], num_trials: int) -> np.ndarray:
-        prog = merge_programs(seq)
-        # TODO: parallelize
-        results = []
-        for qubits in subgraph:
-            state_prep = prog
-            tomo_exp = generate_state_tomography_experiment(state_prep, qubits=qubits)
-            _rs = list(measure_observables(qc, tomo_exp, num_trials))
-            # Inelegant shim from state tomo refactor. To clean up!
-            expectations=[r.expectation for r in _rs[1:]]
-            variances=[r.stddev ** 2 for r in _rs[1:]]
-            results.append((expectations, variances))
-        return results
-
-    new_df["Results"] = Series(
-        [run(qc, seq, sg, num_trials) for seq, sg in zip(new_df["Sequence"].values, new_df["Subgraph"].values)])
-    return new_df
-
-
-def unitarity_to_RB_decay(unitarity, dimension):
-    """
-    This allows comparison of measured unitarity and RB decays.
-
-    This function provides an upper bound on the
-    RB decay given the input unitarity, where the upperbound is saturated when no unitary errors are present,
-    e.g. in the case of depolarizing noise. For more, see Proposition 8. in [ECN]
-        unitarity >= (1-dr/(d-1))^2
-    where r is the average gate infidelity and d is the dimension
-
-    :param unitarity: The measured decay parameter in a unitarity measurement
-    :param dimension: The dimension of the Hilbert space, 2^num_qubits
-    :return: The upperbound on RB decay, saturated if no unitary errors are present Proposition 8 [ECN]
-    """
-    r = (np.sqrt(unitarity) - 1)*(1-dimension)/dimension
-    return average_gate_infidelity_to_RB_decay(r, dimension)
-
-
-#########
-# Analysis stuff
-#########
-
-
->>>>>>> origin/master:forest/benchmarking/randomized_benchmarking.py
 def survival_statistics(bitstrings):
     """
     Calculate the mean and variance of the estimated probability of the ground state given shot
@@ -711,17 +589,14 @@ def interleaved_gate_fidelity_bounds(irb_decay, rb_decay, dim, unitarity = None)
     Optionally, use unitarity measurement result to provide improved bounds on the interleaved gate's fidelity.
 
     Bounds due to
-    [IRB] Efficient measurement of quantum gate error by interleaved randomized benchmarking
-          Magesan et al.,
-          Phys. Rev. Lett. 109, 080505 (2012)
-          https://dx.doi.org/10.1103/PhysRevLett.109.080505
-          https://arxiv.org/abs/1203.4550
+        [IRB] Efficient measurement of quantum gate error by interleaved randomized benchmarking
+            Magesan et al., Physical Review Letters 109, 080505 (2012)
+            arXiv:1203.4550
 
-    Improved bounds using unitarity due to
-    [U+IRB]  Efficiently characterizing the total error in quantum circuits
-             Dugas et al.,
-             arXiv:1610.05296 (2016)
-             https://arxiv.org/abs/1610.05296
+    Improved bounds using unitarity due to:
+        [U+IRB]  Efficiently characterizing the total error in quantum circuits
+            Dugas, Wallman, and Emerson (2016)
+            arXiv:1610.05296v2
 
     :param irb_decay: Observed decay parameter in irb experiment with desired gate interleaved between Cliffords
     :param rb_decay: Observed decay parameter in standard rb experiment
