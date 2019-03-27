@@ -1,20 +1,16 @@
-import copy
 import functools
 import itertools
 from operator import mul
 from typing import List, Sequence
-from typing import Tuple
 
 import numpy as np
 from dataclasses import dataclass
 
-import forest.benchmarking.operator_estimation as est
-from forest.benchmarking.utils import prepare_prod_pauli_eigenstate
 from pyquil import Program
 from pyquil.api import BenchmarkConnection, QuantumComputer
 from pyquil.operator_estimation import ExperimentResult, ExperimentSetting, TomographyExperiment, \
     TensorProductState, measure_observables, plusX, minusX, plusY, minusY, plusZ, minusZ
-from pyquil.paulis import PauliTerm, PauliSum, sI, sX, sY, sZ
+from pyquil.paulis import PauliTerm, sI, sX, sY, sZ
 
 
 @dataclass 
