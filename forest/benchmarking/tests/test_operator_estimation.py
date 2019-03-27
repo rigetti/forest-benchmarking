@@ -91,24 +91,19 @@ def test_get_parity():
     assert np.allclose(test_parity_results, parity_results)
 
 
-def test_estimate_pauli_sum():
+def test_estimate_pauli_sum(qvm):
     """
     Full test of the estimation procedures
     """
-    quantum_resource = QVMConnection()
-
     # type checks
     with pytest.raises(TypeError):
-        estimate_pauli_sum('5', {0: 'X', 1: 'Z'}, Program(), 1.0E-3,
-                           quantum_resource)
+        estimate_pauli_sum('5', {0: 'X', 1: 'Z'}, Program(), 1.0E-3, qvm)
 
     with pytest.raises(CommutationError):
-        estimate_pauli_sum([sX(0), sY(0)], {0: 'X', 1: 'Z'}, Program(), 1.0E-3,
-                           quantum_resource)
+        estimate_pauli_sum([sX(0), sY(0)], {0: 'X', 1: 'Z'}, Program(), 1.0E-3, qvm)
 
     with pytest.raises(TypeError):
-        estimate_pauli_sum(sX(0), {0: 'X', 1: 'Z'}, Program(), 1.0E-3,
-                           quantum_resource)
+        estimate_pauli_sum(sX(0), {0: 'X', 1: 'Z'}, Program(), 1.0E-3, qvm)
 
     # mock out qvm
     np.random.seed(87655678)
