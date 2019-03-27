@@ -43,14 +43,14 @@ class DFEData:
     pauli_point_est: List[float]
     """Point estimate of Pauli operators"""
 
-    pauli_var_est: List[float]
-    """Estimate of variance in the point estimate"""
+    pauli_std_err: List[float]
+    """Estimate of std error in the point estimate"""
 
     cal_point_est: List[float]
     """Point estimate of readout calibration for Pauli operators"""
 
-    cal_var_est: List[float]
-    """Estimate of variance in the point estimate of readout calibration for Pauli operators"""
+    cal_std_err: List[float]
+    """Estimate of std error in the point estimate of readout calibration for Pauli operators"""
 
     dimension: int
     """Dimension of the Hilbert space"""
@@ -75,11 +75,8 @@ class DFEEstimate:
     fid_point_est: float
     """Point estimate of fidelity between ideal gate or state and measured, rescaled by the calibration."""
 
-    fid_var_est: float
-    """Error variance of the fidelity point estimate, after considering the calibration."""
-
-    fid_std_err_est: float
-    """Standard error of the fidelity point estimate, after considering the calibration."""
+    fid_std_err: float
+    """Standard error of the fidelity point estimate, including the calibration."""
 
 
 def _state_to_pauli(state: TensorProductState) -> PauliTerm:
@@ -282,41 +279,53 @@ def generate_monte_carlo_process_dfe(program: Program, qubits: List[int], benchm
     return DFEExperiment(exp, 'monte carlo, process')
 
 
-def acquire_dfe_data(qc: QuantumComputer, dfe: DFEExperiment, n_shots = 10_000, active_reset=False):
-    # TODO: add number of shots
-    #       add variance bounds?
+def acquire_dfe_data(qc: QuantumComputer, dfe: DFEExperiment, n_shots = 10_000, active_reset=False) -> DFEData:
+    """
+    Acquire data necessary for direct fidelity estimate (DFE).
+
+    :param qc: A quantum computer object where the experiment will run.
+    :param dfe: A direct fidelity experiment (``DFEExperiment``) object describing the experiments to be run.
+    :param n_shots: The minimum number of shots to be taken in each experiment (including calibration).
+    :param active_reset: Boolean flag indicating whether experiments should terminate with an active reset instruction
+        (this can make experiments a lot faster).
+    """
     res = list(measure_observables(qc, dfe.experiments, n_shots=n_shots, active_reset=active_reset))
     return DFEData(results = res,
                    in_states = [str(exp[0].in_state) for exp in dfe.experiments],
                    program = dfe.experiments.program,
                    out_pauli = [str(exp[0].out_operator) for exp in dfe.experiments],
                    pauli_point_est = np.array([r.expectation for r in res ]),
-                   pauli_var_est = np.array([r.stddev**2 for r in res]),
+                   pauli_std_err = np.array([r.stddev for r in res]),
                    cal_point_est = np.array([r.calibration_expectation for r in res ]),
-                   cal_var_est = np.array([r.calibration_stddev**2 for r in res ]),
+                   cal_std_err = np.array([r.calibration_stddev for r in res ]),
                    dimension = 2**len(dfe.experiments.qubits),
                    qubits = dfe.experiments.qubits,
                    kind = dfe.kind)
 
 
 def analyse_dfe_data(data: DFEData) -> DFEEstimate:
+    """
+    Analyse data from experiments to obtain a direct fidelity estimate (DFE).
+
+    :param data: A ``DFEData`` object containing unanalysed experimental results.
+    """
     p_mean = np.mean(pauli_point_est)
-    p_variance = np.sum(pauli_var_est)
+    p_variance = np.sum(pauli_std_err**2)
     d = data.dimension
 
-    if data.kind == 'state':
+    if 'state' in data.kind:
         mean_est = p_mean
         var_est = p_variance / len(data.results) ** 2
-    elif data.kind == 'process':
+    elif 'process' in data.kind:
+        # TODO: double check this
         mean_est = (d**2 * p_mean + d)/(d**2+d)
         v = p_variance / len(data.results) ** 2
         var_est = d**2/(d+1)**2 * v
     else:
-        raise ValueError('DFEdata can only be of type \'state\' or \'process\'.')
+        raise ValueError('DFEdata can only be of kind \'state\' or \'process\'.')
 
     return DFEEstimate(dimension= data.dimension,
                        qubits = data.qubits,
                        fid_point_est = mean_est,
-                       fid_var_est = var_est,
-                       fid_std_err_est = np.sqrt(var_est))
+                       fid_std_err = np.sqrt(var_est))
 
