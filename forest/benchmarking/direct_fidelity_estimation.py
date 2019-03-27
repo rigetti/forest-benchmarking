@@ -21,7 +21,7 @@ class DFEExperiment:
     """The experiment to be performed"""
 
     kind: str
-    """Kind of fidelity to be estimate (exhaustive or monte carlo, state or process)"""
+    """Kind of fidelity to be estimated (exhaustive or monte carlo, state or process)"""
 
 
 @dataclass
@@ -35,7 +35,7 @@ class DFEData:
     """The input tensor product states being acted on by the `program`"""
 
     program: Program
-    """The pyquil Program to DFE applies to"""
+    """The pyquil Program DFE data refers to"""
 
     out_pauli: List[str]
     """The expected output Pauli operators after the program acts on the corresponding `in_pauli`"""
@@ -59,7 +59,7 @@ class DFEData:
     """qubits involved in the experiment"""
 
     kind: str
-    """Kind of fidelity to be estimate (exhaustive or monte carlo, state or process)"""
+    """Kind of fidelity to be estimated (exhaustive or monte carlo, state or process)"""
 
 
 @dataclass
