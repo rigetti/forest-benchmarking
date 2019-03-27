@@ -100,13 +100,15 @@ def _exhaustive_dfe(program: Program, qubits: Sequence[int], in_states,
                     benchmarker: BenchmarkConnection) -> ExperimentSetting:
     """Yield experiments over itertools.product(in_paulis).
 
-    Used as a helper function for exhaustive_xxx_dfe routines.
+    Used as a helper function for generate_exhaustive_xxx_dfe_experiment routines.
 
     :param program: A program comprised of clifford gates
     :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
         used in ``program``.
-    :param in_paulis: Use these single-qubit Pauli operators in every itertools.product()
+    :param in_states: Use these single-qubit Pauli operators in every itertools.product()
         to generate an exhaustive list of DFE experiments.
+    :return: experiment setting iterator
+    :rtype: ``ExperimentSetting``
     """
     n_qubits = len(qubits)
     for i_states in itertools.product(in_states, repeat=n_qubits):
@@ -125,7 +127,7 @@ def _exhaustive_dfe(program: Program, qubits: Sequence[int], in_states,
 def generate_exhaustive_process_dfe_experiment(program: Program, qubits: list,
                                                benchmarker: BenchmarkConnection) -> DFEExperiment:
     """
-    Estimate process fidelity by exhaustive direct fidelity estimation.
+    Estimate process fidelity by exhaustive direct fidelity estimation (DFE).
 
     This leads to a quadratic reduction in overhead w.r.t. process tomography for
     fidelity estimation.
@@ -148,6 +150,8 @@ def generate_exhaustive_process_dfe_experiment(program: Program, qubits: list,
         which we estimate the fidelity.
     :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
         used in ``program``.
+    :return: a DFE experiment object
+    :rtype: ``DFEExperiment`
     """
     exp = TomographyExperiment(list(
         _exhaustive_dfe(program=program,
@@ -184,6 +188,8 @@ def generate_exhaustive_state_dfe_experiment(program: Program, qubits: list,
         for which we estimate the fidelity.
     :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
         used in ``program``.
+    :return: a DFE experiment object
+    :rtype: ``DFEExperiment`
     """
     exp = TomographyExperiment(list(
         _exhaustive_dfe(program=program,
@@ -196,6 +202,19 @@ def generate_exhaustive_state_dfe_experiment(program: Program, qubits: list,
 
 def _monte_carlo_dfe(program: Program, qubits: Sequence[int], in_states: list, n_terms: int,
                      benchmarker: BenchmarkConnection) -> ExperimentSetting:
+    """Yield experiments over itertools.product(in_paulis).
+
+    Used as a helper function for generate_monte_carlo_xxx_dfe_experiment routines.
+
+    :param program: A program comprised of clifford gates
+    :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
+        used in ``program``.
+    :param in_states: Use these single-qubit Pauli operators in every itertools.product()
+        to generate an exhaustive list of DFE experiments.
+    :param n_terms: Number of preparation and measurement settings to be chosen at random
+    :return: experiment setting iterator
+    :rtype: ``ExperimentSetting``
+    """
     all_st_inds = np.random.randint(len(in_states), size=(n_terms, len(qubits)))
     for st_inds in all_st_inds:
         i_st = functools.reduce(mul, (in_states[si](qubits[i])
@@ -237,6 +256,8 @@ def generate_monte_carlo_state_dfe_experiment(program: Program, qubits: List[int
     :param benchmarker: The `BenchmarkConnection` object used to design experiments
     :param n_terms: Number of randomly chosen observables to measure. This number should be 
         a constant less than ``2**len(qubits)``, otherwise ``exhaustive_state_dfe`` is more efficient.
+    :return: a DFE experiment object
+    :rtype: ``DFEExperiment`
     """
     exp = TomographyExperiment(list(
         _monte_carlo_dfe(program=program, qubits=qubits,
@@ -270,6 +291,8 @@ def generate_monte_carlo_process_dfe_experiment(program: Program, qubits: List[i
     :param benchmarker: The `BenchmarkConnection` object used to design experiments
     :param n_terms: Number of randomly chosen observables to measure. This number should be 
         a constant less than ``2**len(qubits)``, otherwise ``exhaustive_process_dfe`` is more efficient.
+    :return: a DFE experiment object
+    :rtype: ``DFEExperiment`
     """
     exp = TomographyExperiment(list(
         _monte_carlo_dfe(program=program, qubits=qubits,
@@ -288,6 +311,8 @@ def acquire_dfe_data(qc: QuantumComputer, exp: DFEExperiment, n_shots = 10_000, 
     :param n_shots: The minimum number of shots to be taken in each experiment (including calibration).
     :param active_reset: Boolean flag indicating whether experiments should terminate with an active reset instruction
         (this can make experiments a lot faster).
+    :return: a DFE data object
+    :rtype: ``DFEData`
     """
     res = list(measure_observables(qc, exp.experiments, n_shots=n_shots, active_reset=active_reset))
     return DFEData(results = res,
@@ -308,6 +333,9 @@ def estimate_dfe(data: DFEData) -> DFEEstimate:
     Analyse data from experiments to obtain a direct fidelity estimate (DFE).
 
     :param data: A ``DFEData`` object containing raw experimental results.
+    :return: a DFE estimate object
+    :rtype: ``DFEEstimate`
+
     """
     p_mean = np.mean(data.pauli_point_est)
     p_variance = np.sum(data.pauli_std_err**2)
