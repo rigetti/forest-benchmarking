@@ -307,7 +307,7 @@ def estimate_dfe(data: DFEData) -> DFEEstimate:
     """
     Analyse data from experiments to obtain a direct fidelity estimate (DFE).
 
-    :param data: A ``DFEData`` object containing unanalysed experimental results.
+    :param data: A ``DFEData`` object containing raw experimental results.
     """
     p_mean = np.mean(data.pauli_point_est)
     p_variance = np.sum(data.pauli_std_err**2)
