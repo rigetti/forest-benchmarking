@@ -18,28 +18,28 @@ from pyquil.paulis import PauliTerm, PauliSum, sI, sX, sY, sZ
 
 
 @dataclass 
-class DFEexperiment:
+class DFEExperiment:
     """Experiments to obtain an estimate of fidelity via DFE"""
 
-    exp: TomographyExperiment
+    experiments: TomographyExperiment
     """The experiment to be performed"""
 
-    type: str
-    """Type of fidelity to be estimate (state or process)"""
+    kind: str
+    """Kind of fidelity to be estimate (exhaustive or monte carlo, state or process)"""
 
 
 @dataclass
-class DFEdata:
+class DFEData:
     """Experimental data from a DFE experiment"""
 
-    res: List[ExperimentResult]
+    results: List[ExperimentResult]
     """The experimental results"""
 
     in_states: List[str]
     """The input tensor product states being acted on by the `program`"""
 
     program: Program
-    """The pyquil Program to perform DFE on"""
+    """The pyquil Program to DFE applies to"""
 
     out_pauli: List[str]
     """The expected output Pauli operators after the program acts on the corresponding `in_pauli`"""
@@ -62,12 +62,12 @@ class DFEdata:
     qubits: List[int]
     """qubits involved in the experiment"""
 
-    type: str
-    """Type of fidelity to be estimate (state or process)"""
+    kind: str
+    """Kind of fidelity to be estimate (exhaustive or monte carlo, state or process)"""
 
 
 @dataclass
-class DFEestimate:
+class DFEEstimate:
     """State/Process estimates from DFE experiments"""
 
     dimension: int
@@ -129,8 +129,8 @@ def _exhaustive_dfe(program: Program, qubits: Sequence[int], in_states,
         )
 
 
-def exhaustive_process_dfe(program: Program, qubits: list,
-                           benchmarker: BenchmarkConnection) -> TomographyExperiment:
+def generate_exhaustive_process_dfe(program: Program, qubits: list,
+                                    benchmarker: BenchmarkConnection) -> DFEExperiment:
     """
     Estimate process fidelity by exhaustive direct fidelity estimation.
 
@@ -162,11 +162,11 @@ def exhaustive_process_dfe(program: Program, qubits: list,
                         in_states=[None, plusX, minusX, plusY, minusY, plusZ, minusZ],
                         benchmarker=benchmarker)),
         program=program, qubits=qubits)
-    return DFEexperiment(exp, 'process')
+    return DFEExperiment(exp, 'exhaustive, process')
 
 
-def exhaustive_state_dfe(program: Program, qubits: list,
-                         benchmarker: BenchmarkConnection) -> TomographyExperiment:
+def generate_exhaustive_state_dfe(program: Program, qubits: list,
+                                  benchmarker: BenchmarkConnection) -> DFEExperiment:
     """
     Estimate state fidelity by exhaustive direct fidelity estimation.
 
@@ -198,7 +198,7 @@ def exhaustive_state_dfe(program: Program, qubits: list,
                         in_states=[None, plusZ],
                         benchmarker=benchmarker)),
         program=program, qubits=qubits)
-    return DFEexperiment(exp, 'state')
+    return DFEExperiment(exp, 'exhaustive, state')
 
 
 def _monte_carlo_dfe(program: Program, qubits: Sequence[int], in_states: list, n_terms: int,
@@ -220,8 +220,8 @@ def _monte_carlo_dfe(program: Program, qubits: Sequence[int], in_states: list, n
             out_operator=benchmarker.apply_clifford_to_pauli(program, _state_to_pauli(i_st)),
         )
 
-def monte_carlo_state_dfe(program: Program, qubits: List[int], benchmarker: BenchmarkConnection,
-                          n_terms=200) -> TomographyExperiment:
+def generate_monte_carlo_state_dfe(program: Program, qubits: List[int], benchmarker: BenchmarkConnection,
+                                   n_terms=200) -> DFEExperiment:
     """
     Estimate state fidelity by sampled direct fidelity estimation.
 
@@ -250,11 +250,11 @@ def monte_carlo_state_dfe(program: Program, qubits: List[int], benchmarker: Benc
                          in_states=[None, plusZ],
                          n_terms=n_terms, benchmarker=benchmarker)),
         program=program, qubits=qubits)
-    return DFEexperiment(exp,'state')
+    return DFEExperiment(exp, 'monte carlo, state')
 
 
-def monte_carlo_process_dfe(program: Program, qubits: List[int], benchmarker: BenchmarkConnection,
-                            n_terms: int = 200) -> TomographyExperiment:
+def generate_monte_carlo_process_dfe(program: Program, qubits: List[int], benchmarker: BenchmarkConnection,
+                                     n_terms: int = 200) -> DFEExperiment:
     """
     Estimate process fidelity by randomly sampled direct fidelity estimation.
 
@@ -283,44 +283,44 @@ def monte_carlo_process_dfe(program: Program, qubits: List[int], benchmarker: Be
                          in_states=[None, plusX, minusX, plusY, minusY, plusZ, minusZ],
                          n_terms=n_terms, benchmarker=benchmarker)),
         program=program, qubits=qubits)
-    return DFEexperiment(exp,'process')
+    return DFEExperiment(exp, 'monte carlo, process')
 
 
-def acquire_dfe_data(qc: QuantumComputer, dfe: DFEexperiment, n_shots = 10_000, active_reset=False):
+def acquire_dfe_data(qc: QuantumComputer, dfe: DFEExperiment, n_shots = 10_000, active_reset=False):
     # TODO: add number of shots
     #       add variance bounds?
-    res = list(measure_observables(qc, dfe.exp, n_shots=n_shots, active_reset=active_reset))
-    return DFEdata(res, 
-                   in_states = [str(exp[0].in_state) for exp in dfe.exp],
-                   program = dfe.exp.program,
-                   out_pauli = [str(exp[0].out_operator) for exp in dfe.exp], 
-                   pauli_point_est = np.array([r.expectation for r in res ]), 
-                   pauli_var_est = np.array([r.stddev**2 for r in res]), 
-                   cal_point_est = np.array([r.calibration_expectation for r in res ]), 
-                   cal_var_est = np.array([r.calibration_stddev**2 for r in res ]), 
-                   dimension = 2**len(dfe.exp.qubits), 
-                   qubits = dfe.exp.qubits,
-                   type = dfe.type)
+    res = list(measure_observables(qc, dfe.experiments, n_shots=n_shots, active_reset=active_reset))
+    return DFEData(results = res,
+                   in_states = [str(exp[0].in_state) for exp in dfe.experiments],
+                   program = dfe.experiments.program,
+                   out_pauli = [str(exp[0].out_operator) for exp in dfe.experiments],
+                   pauli_point_est = np.array([r.expectation for r in res ]),
+                   pauli_var_est = np.array([r.stddev**2 for r in res]),
+                   cal_point_est = np.array([r.calibration_expectation for r in res ]),
+                   cal_var_est = np.array([r.calibration_stddev**2 for r in res ]),
+                   dimension = 2**len(dfe.experiments.qubits),
+                   qubits = dfe.experiments.qubits,
+                   kind = dfe.kind)
 
 
-def analyse_dfe_data(data: DFEdata):
-    mean = np.sum([r.expectation for r in data.res])
-    variance = np.sum([r.stddev**2 for r in data.res])
+def analyse_dfe_data(data: DFEData) -> DFEEstimate:
+    p_mean = np.mean(pauli_point_est)
+    p_variance = np.sum(pauli_var_est)
     d = data.dimension
 
-    if data.type == 'state':
-        mean_est = np.mean([r.expectation for r in data.res])
-        var_est = np.sum([r.stddev**2 for r in data.res])/len(data.res)**2
-    elif data.type == 'process':
-        mean_est = (d**2 * np.mean([r.expectation for r in data.res]) + d)/(d**2+d)
-        v = np.sum([r.stddev**2 for r in data.res])/len(data.res)**2
+    if data.kind == 'state':
+        mean_est = p_mean
+        var_est = p_variance / len(data.results) ** 2
+    elif data.kind == 'process':
+        mean_est = (d**2 * p_mean + d)/(d**2+d)
+        v = p_variance / len(data.results) ** 2
         var_est = d**2/(d+1)**2 * v
     else:
         raise ValueError('DFEdata can only be of type \'state\' or \'process\'.')
 
-    return DFEestimate( dimension= data.dimension,
-                        qubits = data.qubits,
-                        fid_point_est = mean_est, 
-                        fid_var_est = var_est, 
-                        fid_std_err_est = np.sqrt(var_est))
+    return DFEEstimate(dimension= data.dimension,
+                       qubits = data.qubits,
+                       fid_point_est = mean_est,
+                       fid_var_est = var_est,
+                       fid_std_err_est = np.sqrt(var_est))
 
