@@ -122,8 +122,8 @@ def _exhaustive_dfe(program: Program, qubits: Sequence[int], in_states,
         )
 
 
-def generate_exhaustive_process_dfe(program: Program, qubits: list,
-                                    benchmarker: BenchmarkConnection) -> DFEExperiment:
+def generate_exhaustive_process_dfe_experiment(program: Program, qubits: list,
+                                               benchmarker: BenchmarkConnection) -> DFEExperiment:
     """
     Estimate process fidelity by exhaustive direct fidelity estimation.
 
@@ -158,8 +158,8 @@ def generate_exhaustive_process_dfe(program: Program, qubits: list,
     return DFEExperiment(exp, 'exhaustive, process')
 
 
-def generate_exhaustive_state_dfe(program: Program, qubits: list,
-                                  benchmarker: BenchmarkConnection) -> DFEExperiment:
+def generate_exhaustive_state_dfe_experiment(program: Program, qubits: list,
+                                             benchmarker: BenchmarkConnection) -> DFEExperiment:
     """
     Estimate state fidelity by exhaustive direct fidelity estimation.
 
@@ -213,8 +213,8 @@ def _monte_carlo_dfe(program: Program, qubits: Sequence[int], in_states: list, n
             out_operator=benchmarker.apply_clifford_to_pauli(program, _state_to_pauli(i_st)),
         )
 
-def generate_monte_carlo_state_dfe(program: Program, qubits: List[int], benchmarker: BenchmarkConnection,
-                                   n_terms=200) -> DFEExperiment:
+def generate_monte_carlo_state_dfe_experiment(program: Program, qubits: List[int], benchmarker: BenchmarkConnection,
+                                              n_terms=200) -> DFEExperiment:
     """
     Estimate state fidelity by sampled direct fidelity estimation.
 
@@ -246,8 +246,8 @@ def generate_monte_carlo_state_dfe(program: Program, qubits: List[int], benchmar
     return DFEExperiment(exp, 'monte carlo, state')
 
 
-def generate_monte_carlo_process_dfe(program: Program, qubits: List[int], benchmarker: BenchmarkConnection,
-                                     n_terms: int = 200) -> DFEExperiment:
+def generate_monte_carlo_process_dfe_experiment(program: Program, qubits: List[int], benchmarker: BenchmarkConnection,
+                                                n_terms: int = 200) -> DFEExperiment:
     """
     Estimate process fidelity by randomly sampled direct fidelity estimation.
 
@@ -279,38 +279,38 @@ def generate_monte_carlo_process_dfe(program: Program, qubits: List[int], benchm
     return DFEExperiment(exp, 'monte carlo, process')
 
 
-def acquire_dfe_data(qc: QuantumComputer, dfe: DFEExperiment, n_shots = 10_000, active_reset=False) -> DFEData:
+def acquire_dfe_data(qc: QuantumComputer, exp: DFEExperiment, n_shots = 10_000, active_reset=False) -> DFEData:
     """
     Acquire data necessary for direct fidelity estimate (DFE).
 
     :param qc: A quantum computer object where the experiment will run.
-    :param dfe: A direct fidelity experiment (``DFEExperiment``) object describing the experiments to be run.
+    :param exp: A direct fidelity experiment (``DFEExperiment``) object describing the experiments to be run.
     :param n_shots: The minimum number of shots to be taken in each experiment (including calibration).
     :param active_reset: Boolean flag indicating whether experiments should terminate with an active reset instruction
         (this can make experiments a lot faster).
     """
-    res = list(measure_observables(qc, dfe.experiments, n_shots=n_shots, active_reset=active_reset))
+    res = list(measure_observables(qc, exp.experiments, n_shots=n_shots, active_reset=active_reset))
     return DFEData(results = res,
-                   in_states = [str(exp[0].in_state) for exp in dfe.experiments],
-                   program = dfe.experiments.program,
-                   out_pauli = [str(exp[0].out_operator) for exp in dfe.experiments],
+                   in_states = [str(exp[0].in_state) for exp in exp.experiments],
+                   program = exp.experiments.program,
+                   out_pauli = [str(exp[0].out_operator) for exp in exp.experiments],
                    pauli_point_est = np.array([r.expectation for r in res ]),
                    pauli_std_err = np.array([r.stddev for r in res]),
                    cal_point_est = np.array([r.calibration_expectation for r in res ]),
                    cal_std_err = np.array([r.calibration_stddev for r in res ]),
-                   dimension = 2**len(dfe.experiments.qubits),
-                   qubits = dfe.experiments.qubits,
-                   kind = dfe.kind)
+                   dimension = 2**len(exp.experiments.qubits),
+                   qubits = exp.experiments.qubits,
+                   kind = exp.kind)
 
 
-def analyse_dfe_data(data: DFEData) -> DFEEstimate:
+def estimate_dfe(data: DFEData) -> DFEEstimate:
     """
     Analyse data from experiments to obtain a direct fidelity estimate (DFE).
 
     :param data: A ``DFEData`` object containing unanalysed experimental results.
     """
-    p_mean = np.mean(pauli_point_est)
-    p_variance = np.sum(pauli_std_err**2)
+    p_mean = np.mean(data.pauli_point_est)
+    p_variance = np.sum(data.pauli_std_err**2)
     d = data.dimension
 
     if 'state' in data.kind:
