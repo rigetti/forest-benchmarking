@@ -2,7 +2,7 @@
 
 This document summarizes different Superoperator representations and how to convert between a subset of representations.
 
-At the bottom of the document you can find a list of references if you need more information
+At the bottom of the document you can find a list of references if you need more information.
 
 ## `vec` and `unvec`
 
