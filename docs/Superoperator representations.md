@@ -1,5 +1,9 @@
 # Superoperator representations
 
+This document summarizes different Superoperator representations and how to convert between a subset of representations.
+
+At the bottom of the document you can find a list of references if you need more information
+
 ## `vec` and `unvec`
 
 $$ A = [a_{ij}] = \begin{pmatrix}  
@@ -32,15 +36,60 @@ $ {\rm vec}([A,X])= (I\otimes A - A^T\otimes I) {\rm vec}(X)$
 
 ${\rm vec}(ABC) = (I\otimes AB) {\rm vec}( C ) = (C^T B^T\otimes I) {\rm vec}(A)$
 
-${\rm vec}(AB) = (I\otimes A) {\rm vec}(B) = (B^T\otimes I) {\rm vec}(A)$
+${\rm vec}(AB) = (I\otimes A) {\rm vec}(B) = (B^T\otimes I) {\rm vec}(A)$.  
+
+Eq. 1 is useful in representing quantum operations on mixed quantum states. For example consider 
+$$ \rho' = U \rho U^\dagger.$$
+We can use Eq. 1 to write this as
+
+$$ {\rm vec}(\rho') = \{(U^\dagger)^T \otimes U \} {\rm vec}(\rho)
+= (U^*\otimes U) |\rho\rangle\rangle$$
+so 
+$$ |\rho'\rangle \rangle = \mathcal U |\rho\rangle\rangle,
+$$
+where $\mathcal U = U^*\otimes U$. 
+
+## Quantum channels in the Kraus decomposition (or operator-sum representation)
+A completely positive map on the state $\rho$ can be written using a set of Kraus operators $\{ M_k \}$ as
+
+
+$\mathcal E (\rho) = \sum_{k=1}^N M_k \rho M_k^\dagger $.
+
+If $\sum_k M_k^\dagger M_k= I $ the map is trace preserving. It turns out that $N\le d^2$ where $d$ is the Hilbert space dimension e.g. $d=2^n$ for $n$ qubits.
+
+
+## Kraus to process matrix
+We choose to represent the process matrix in the Pauli basis. The $n$ qubit Pauli basis is denoted $\mathcal P^{\otimes n} $ where $\mathcal  P = \{ I, X, Y, Z \}$ are the usual Pauli matricies. For two qubits we have $\{II,IX,IY,IZ,XI,XX,...,ZZ\}$ were $II$ should be intepreted as $I\otimes I$ etc.
+
+So we expand each of the Kraus operators in this basis 
+
+$M_k = \sum^{d^2}_{k=1}c_{ij}\,P_j$ 
+
+where $\mathcal P_j \in \mathcal P ^{\otimes n}$.
+
+Now the channel $\mathcal E$ can be written as
+
+$\mathcal E (\rho) = \sum_{i,j=1}^{d^2} \chi_{i,j} P_i\rho P_j ,$
+
+where $\chi_{i,j} = \sum_k c_{k,i} c_{k,j}^*$ is an element of the process matrix $\chi$. The process matrix is a Hermitian and positive semidefinite of size $d^2 \times d^2$. 
+
+
+## Kraus to Pauli Transfer matrix
+The Pauli Liouville or Pauli transfer matrix representation of the channel $\mathcal E$ is denoted by $R_{\mathcal E}$. The matrix elements are
+
+$$(R_{\mathcal E})_{i,j} = \frac 1 d {\rm Tr}[P_i \mathcal E(P_j)].$$
+
+Trace preservation implies $(R_{\mathcal E})_{0,j} = \delta_{0,j}$, i.e. the first row is one and all zeros. Unitality implies $(R_{\mathcal E})_{i,0} = \delta_{i,0}$, the first column is one and all zeros.
+
 
 ## Kraus to Superoperator
+We already saw an example of this in the setion on `vec`-ing. There we had uintary evolutiuon which only requires one Kraus operator. Lets generalized that to many Kraus opeerators.  
 
 Consider the set of Kraus operators $\{ M_k \}$. The corresponding quantum operation is $\mathcal E (\rho) = \sum_k M_k \rho M_k^\dagger $.
 
-Using the vec operato (see Eq. 1) this implies a superoperator
+Using the vec operator (see Eq. 1) this implies a superoperator
 
-$\mathcal E = \sum_k (M_k^\dagger)^T \otimes M_k = \sum_k M_k^* \otimes M_k$
+$\mathcal E = \sum_k (M_k^\dagger)^T \otimes M_k = \sum_k M_k^* \otimes M_k.$
 
 ## Kraus to Choi
 
@@ -58,3 +107,93 @@ $\begin{align}
 & = \frac{1}{d} \sum_i {\rm vec}(M_i)  {\rm vec} (M_i) ^\dagger \\\\
 & = \frac{1}{d} \sum_i |M_i\rangle \rangle \langle\langle M_i | 
 \end{align}$
+
+## Examples
+
+### Pauli Channels
+In the operator sum representation a single qubit Pauli channel is defined as  
+$$\mathcal E(\rho) = (1-p_x-p_y-p_z) I \rho I + p_x X\rho X + p_y Y \rho Y + p_z Z \rho Z$$
+where $p_x,p_y,p_z\ge 0$ and $p_x+p_y+p_z\le 1$.
+
+If we define $p' = p_x+p_y+p_z$ then
+
+$$\mathcal E(\rho) = (1-p') I \rho I + p_x X\rho X + p_y Y \rho Y + p_z Z \rho Z$$
+
+**Kraus** 
+
+The Kraus operators are
+$$\begin{align}
+M_0 &= \sqrt{1-p'}I \\\\
+M_1 &= \sqrt{p_x}X \\\\
+M_2 &= \sqrt{p_y'}Y \\\\
+M_3 &= \sqrt{p_z}Z
+\end{align}$$
+
+**Process or $\chi$ matrix**
+
+$$ \chi = [\chi_{ij}] = \begin{pmatrix}  
+(1-p') & 0 & 0 & 0 \\\\
+0 & p_x & 0 & 0\\\\ 
+0 & 0  & p_y & 0\\\\ 
+0 & 0 & 0 & p_z 
+\end{pmatrix}$$
+
+**Pauli Transfer matrix**
+$$
+R_{\mathcal E}= [(R_{\mathcal E})_{i,j}] =
+\begin{pmatrix}  
+1 & 0 & 0 & 0 \\\\
+0 & 1-2(p_y+p_z) & 0 & 0 \\\\ 
+0 & 0 & 1-2(p_x+p_z) & 0 \\\\ 
+0 & 0 & 0 & 1-2(p_x+p_y) 
+\end{pmatrix}$$
+
+**Superoperator**
+$$(1-p')
+\begin{pmatrix}  
+1 & 0 & 0 & 0 \\\\
+0 & 1 & 0 & 0\\\\ 
+0 & 0  & 1 & 0\\\\ 
+0 & 0 & 0 & 1 
+\end{pmatrix} + 
+p_x
+\begin{pmatrix}  
+0 & 0 & 0 & 1\\\\
+0 & 0 & 1 & 0\\\\ 
+0 & 1 & 0 & 0\\\\ 
+1 & 0 & 0 & 0 
+\end{pmatrix}+ 
+p_y
+\begin{pmatrix}  
+0 & 0 & 0 & 1\\\\
+0 & 0 & -1 & 0\\\\ 
+0 & -1 & 0 & 0\\\\ 
+1 & 0 & 0 & 0 
+\end{pmatrix}+ 
+p_z
+\begin{pmatrix}  
+1 & 0 & 0 & 0\\\\
+0 & -1 & 0 & 0\\\\ 
+0 & 0 & -1 & 0\\\\ 
+0 & 0 & 0 & 1 
+\end{pmatrix}
+$$
+So 
+$$
+\begin{pmatrix}  
+(1-p')+p_z & 0 & 0 & p_x+p_y \\\\
+0 & (1-p')-p_z & p_x-p_y & 0\\\\ 
+0 & p_x-p_y  & (1-p')-p_z & 0\\\\ 
+p_x +p_y & 0 & 0 & (1-p')+p_z 
+\end{pmatrix} $$
+
+
+## References
+
+[IGST] Introduction to Quantum Gate Set Tomography   
+Greenbaum, arXiv:1509.02921, (2015)  
+https://arxiv.org/abs/1509.02921     
+
+[QN] Quantum Nescimus. Improving the characterization of quantum systems from limited information  
+Harper, PhD thesis University of Sydney, 2018  
+https://ses.library.usyd.edu.au/handle/2123/17896  
