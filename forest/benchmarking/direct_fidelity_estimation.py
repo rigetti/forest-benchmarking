@@ -13,17 +13,6 @@ from pyquil.operator_estimation import ExperimentResult, ExperimentSetting, Tomo
 from pyquil.paulis import PauliTerm, sI, sX, sY, sZ
 
 
-@dataclass 
-class DFEExperiment:
-    """Experiments to obtain an estimate of fidelity via DFE"""
-
-    experiments: TomographyExperiment
-    """The experiment to be performed"""
-
-    kind: str
-    """Kind of fidelity to be estimated (exhaustive or monte carlo, state or process)"""
-
-
 @dataclass
 class DFEData:
     """Experimental data from a DFE experiment"""
@@ -57,9 +46,6 @@ class DFEData:
 
     qubits: List[int]
     """qubits involved in the experiment"""
-
-    kind: str
-    """Kind of fidelity to be estimated (exhaustive or monte carlo, state or process)"""
 
 
 @dataclass
@@ -125,7 +111,7 @@ def _exhaustive_dfe(program: Program, qubits: Sequence[int], in_states,
 
 
 def generate_exhaustive_process_dfe_experiment(program: Program, qubits: list,
-                                               benchmarker: BenchmarkConnection) -> DFEExperiment:
+                                               benchmarker: BenchmarkConnection) -> TomographyExperiment:
     """
     Estimate process fidelity by exhaustive direct fidelity estimation (DFE).
 
@@ -151,20 +137,20 @@ def generate_exhaustive_process_dfe_experiment(program: Program, qubits: list,
     :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
         used in ``program``.
     :param benchmarker: A ``BecnhmarkConnection`` object to be used in experiment design
-    :return: a DFE experiment object
-    :rtype: ``DFEExperiment`
+    :return: a set of experiments
+    :rtype: ``TomographyExperiment`
     """
-    exp = TomographyExperiment(list(
+    expr = TomographyExperiment(list(
         _exhaustive_dfe(program=program,
                         qubits=qubits,
                         in_states=[None, plusX, minusX, plusY, minusY, plusZ, minusZ],
                         benchmarker=benchmarker)),
         program=program, qubits=qubits)
-    return DFEExperiment(exp, 'exhaustive, process')
+    return expr
 
 
 def generate_exhaustive_state_dfe_experiment(program: Program, qubits: list,
-                                             benchmarker: BenchmarkConnection) -> DFEExperiment:
+                                             benchmarker: BenchmarkConnection) -> TomographyExperiment:
     """
     Estimate state fidelity by exhaustive direct fidelity estimation.
 
@@ -190,16 +176,16 @@ def generate_exhaustive_state_dfe_experiment(program: Program, qubits: list,
     :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
         used in ``program``.
     :param benchmarker: A ``BecnhmarkConnection`` object to be used in experiment design
-    :return: a DFE experiment object
-    :rtype: ``DFEExperiment`
+    :return: a set of experiments
+    :rtype: ``TomographyExperiment`
     """
-    exp = TomographyExperiment(list(
+    expr = TomographyExperiment(list(
         _exhaustive_dfe(program=program,
                         qubits=qubits,
                         in_states=[None, plusZ],
                         benchmarker=benchmarker)),
         program=program, qubits=qubits)
-    return DFEExperiment(exp, 'exhaustive, state')
+    return expr
 
 
 def _monte_carlo_dfe(program: Program, qubits: Sequence[int], in_states: list, n_terms: int,
@@ -236,7 +222,7 @@ def _monte_carlo_dfe(program: Program, qubits: Sequence[int], in_states: list, n
 
 
 def generate_monte_carlo_state_dfe_experiment(program: Program, qubits: List[int], benchmarker: BenchmarkConnection,
-                                              n_terms=200) -> DFEExperiment:
+                                              n_terms=200) -> TomographyExperiment:
     """
     Estimate state fidelity by sampled direct fidelity estimation.
 
@@ -259,19 +245,19 @@ def generate_monte_carlo_state_dfe_experiment(program: Program, qubits: List[int
     :param benchmarker: The `BenchmarkConnection` object used to design experiments
     :param n_terms: Number of randomly chosen observables to measure. This number should be 
         a constant less than ``2**len(qubits)``, otherwise ``exhaustive_state_dfe`` is more efficient.
-    :return: a DFE experiment object
-    :rtype: ``DFEExperiment`
+    :return: a set of experiments
+    :rtype: ``TomographyExperiment`
     """
-    exp = TomographyExperiment(list(
+    expr = TomographyExperiment(list(
         _monte_carlo_dfe(program=program, qubits=qubits,
                          in_states=[None, plusZ],
                          n_terms=n_terms, benchmarker=benchmarker)),
         program=program, qubits=qubits)
-    return DFEExperiment(exp, 'monte carlo, state')
+    return expr
 
 
 def generate_monte_carlo_process_dfe_experiment(program: Program, qubits: List[int], benchmarker: BenchmarkConnection,
-                                                n_terms: int = 200) -> DFEExperiment:
+                                                n_terms: int = 200) -> TomographyExperiment:
     """
     Estimate process fidelity by randomly sampled direct fidelity estimation.
 
@@ -297,45 +283,45 @@ def generate_monte_carlo_process_dfe_experiment(program: Program, qubits: List[i
     :return: a DFE experiment object
     :rtype: ``DFEExperiment`
     """
-    exp = TomographyExperiment(list(
+    expr = TomographyExperiment(list(
         _monte_carlo_dfe(program=program, qubits=qubits,
                          in_states=[None, plusX, minusX, plusY, minusY, plusZ, minusZ],
                          n_terms=n_terms, benchmarker=benchmarker)),
         program=program, qubits=qubits)
-    return DFEExperiment(exp, 'monte carlo, process')
+    return expr
 
 
-def acquire_dfe_data(qc: QuantumComputer, exp: DFEExperiment, n_shots=10_000, active_reset=False) -> DFEData:
+def acquire_dfe_data(qc: QuantumComputer, expr: TomographyExperiment, n_shots=10_000, active_reset=False) -> DFEData:
     """
     Acquire data necessary for direct fidelity estimate (DFE).
 
     :param qc: A quantum computer object where the experiment will run.
-    :param exp: A direct fidelity experiment (``DFEExperiment``) object describing the experiments to be run.
+    :param expr: A partial tomography(``TomographyExperiment``) object describing the experiments to be run.
     :param n_shots: The minimum number of shots to be taken in each experiment (including calibration).
     :param active_reset: Boolean flag indicating whether experiments should terminate with an active reset instruction
         (this can make experiments a lot faster).
     :return: a DFE data object
     :rtype: ``DFEData`
     """
-    res = list(measure_observables(qc, exp.experiments, n_shots=n_shots, active_reset=active_reset))
+    res = list(measure_observables(qc, expr, n_shots=n_shots, active_reset=active_reset))
     return DFEData(results=res,
-                   in_states=[str(exp[0].in_state) for exp in exp.experiments],
-                   program=exp.experiments.program,
-                   out_pauli=[str(exp[0].out_operator) for exp in exp.experiments],
+                   in_states=[str(e[0].in_state) for e in expr],
+                   program=expr.program,
+                   out_pauli=[str(e[0].out_operator) for e in expr],
                    pauli_point_est=np.array([r.expectation for r in res]),
                    pauli_std_err=np.array([r.stddev for r in res]),
                    cal_point_est=np.array([r.calibration_expectation for r in res]),
                    cal_std_err=np.array([r.calibration_stddev for r in res]),
-                   dimension=2**len(exp.experiments.qubits),
-                   qubits=exp.experiments.qubits,
-                   kind=exp.kind)
+                   dimension=2**len(expr.qubits),
+                   qubits=expr.qubits)
 
 
-def estimate_dfe(data: DFEData) -> DFEEstimate:
+def estimate_dfe(data: DFEData, kind: str) -> DFEEstimate:
     """
     Analyse data from experiments to obtain a direct fidelity estimate (DFE).
 
     :param data: A ``DFEData`` object containing raw experimental results.
+    :param kind: A string describing the kind of DFE data being analysed ('state' or 'process')
     :return: a DFE estimate object
     :rtype: ``DFEEstimate`
 
@@ -344,10 +330,10 @@ def estimate_dfe(data: DFEData) -> DFEEstimate:
     p_variance = np.sum(data.pauli_std_err**2)
     d = data.dimension
 
-    if 'state' in data.kind:
+    if kind == 'state':
         mean_est = p_mean
         var_est = p_variance / len(data.results) ** 2
-    elif 'process' in data.kind:
+    elif kind == 'process':
         # TODO: double check this
         mean_est = (d**2 * p_mean + d)/(d**2+d)
         v = p_variance / len(data.results) ** 2
