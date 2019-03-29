@@ -291,7 +291,8 @@ def generate_monte_carlo_process_dfe_experiment(program: Program, qubits: List[i
     return expr
 
 
-def acquire_dfe_data(qc: QuantumComputer, expr: TomographyExperiment, n_shots=10_000, active_reset=False) -> DFEData:
+def acquire_dfe_data(qc: QuantumComputer, expr: TomographyExperiment, n_shots=10_000, active_reset=False,
+                     mitigate_readout_errors=True) -> DFEData:
     """
     Acquire data necessary for direct fidelity estimate (DFE).
 
@@ -300,10 +301,17 @@ def acquire_dfe_data(qc: QuantumComputer, expr: TomographyExperiment, n_shots=10
     :param n_shots: The minimum number of shots to be taken in each experiment (including calibration).
     :param active_reset: Boolean flag indicating whether experiments should terminate with an active reset instruction
         (this can make experiments a lot faster).
+    :param mitigate_readout_errors: Boolean flag indicating whether bias due to imperfect readout should be corrected
+        for
     :return: a DFE data object
     :rtype: ``DFEData`
     """
-    res = list(measure_observables(qc, expr, n_shots=n_shots, active_reset=active_reset))
+    if mitigate_readout_errors:
+        res = list(measure_observables(qc, expr, n_shots=n_shots, active_reset=active_reset))
+    else:
+        res = list(measure_observables(qc, expr, n_shots=n_shots, active_reset=active_reset, readout_symmetrize=None,
+                                       calibrate_readout=None))
+
     return DFEData(results=res,
                    in_states=[str(e[0].in_state) for e in expr],
                    program=expr.program,
