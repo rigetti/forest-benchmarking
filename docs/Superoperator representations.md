@@ -119,6 +119,8 @@ $\begin{align}
 ## Examples
 
 ### Pauli Channels
+Pauli channels are nice because they are diagonal in two representations and they have the *depolarlizing channel* as a speical case. 
+
 In the operator sum representation a single qubit Pauli channel is defined as  
 $$\mathcal E(\rho) = (1-p_x-p_y-p_z) I \rho I + p_x X\rho X + p_y Y \rho Y + p_z Z \rho Z$$
 where $p_x,p_y,p_z\ge 0$ and $p_x+p_y+p_z\le 1$.
@@ -127,6 +129,11 @@ If we define $p' = p_x+p_y+p_z$ then
 
 $$\mathcal E(\rho) = (1-p') I \rho I + p_x X\rho X + p_y Y \rho Y + p_z Z \rho Z$$
 
+The Pauli channel specializes to the depolarizing channel when 
+$$ p' = \frac 3 4 p \quad {\rm and}\quad p_x=p_y=p_z = p
+$$
+for $0\le p \le 1$.
+ 
 **Kraus** 
 
 The Kraus operators used in the operator sum representation are
@@ -198,8 +205,8 @@ p_x +p_y & 0 & 0 & (1-p')+p_z
 **Choi**
 
 $$\begin{align}
-\mathcal C &= \frac 1 d ( |M_0\rangle\rangle\langle\langle M_0|+|M_1\rangle\rangle\langle\langle M_1|+|M_2\rangle\rangle\langle\langle M_2|+|M_3\rangle\rangle\langle\langle M_3|)\\\\
-&=
+\mathcal C &= \frac 1 2 ( |M_0\rangle\rangle\langle\langle M_0|+|M_1\rangle\rangle\langle\langle M_1|+|M_2\rangle\rangle\langle\langle M_2|+|M_3\rangle\rangle\langle\langle M_3|)\\\\
+&= \frac 1 2
 \begin{pmatrix}  
 (1-p')+p_z & 0 & 0 & (1-p')-p_z \\\\
 0 & p_x+p_y & p_x-p_y & 0\\\\ 
@@ -208,8 +215,74 @@ $$\begin{align}
 \end{pmatrix}
 \end{align}$$
 
+### Amplitude Damping or the $T_1$ channel
+Amplitude damping is an energy dissipation (or relaxation) process. If a qubit it in it's excited state $|1\rangle$ it may emit energy, a photon, and transition to the ground state $|0\rangle$. In device physics an experiment that measures the decay over some time $t$, with functional form $\exp(-\Gamma t)$, is known as a $T_1$ experiment (where $T_1 = 1/\Gamma$).
 
-## Unitary Channels or Gates
+From the perspective of quantum channels the amplitude damping channel is interesting as is an example of a non-unital channel i.e. one that does not have the identity matrix as a fixed point $\mathcal E_{AD} (I) \neq I$.
+
+**Kraus** 
+
+The Kraus operators are
+$$\begin{align}
+M_0 &=   \sqrt{I - \gamma \sigma_+\sigma_-}
+= \begin{pmatrix}  
+1 & 0 \\\\
+0 & \sqrt{1-\gamma}
+\end{pmatrix}
+\\\\
+M_1&=\sqrt{\gamma}\sigma_- 
+=\begin{pmatrix}  
+0 & \sqrt{\gamma} \\\\
+0 & 0
+\end{pmatrix}
+\end{align}$$
+where $\sigma_- = (\sigma_+)^\dagger= \frac 1 2 (X +i Y) =|0\rangle \langle 1| $. To relate this channel to a $T_1$ process we make the decay rate time dependant $\gamma(t) = \exp(-\Gamma t)$.
+
+**Process or $\chi$ matrix**
+
+$$ \chi(AD) = [\chi_{ij}] = \frac 1 4\begin{pmatrix}  
+(1+\sqrt{1-\gamma})^2 & 0       & 0        & \gamma \\\\
+0 						  & \gamma  & -i\gamma & 0\\\\ 
+0 						  & i\gamma & \gamma   & 0\\\\ 
+\gamma 				  & 0  & 0        & (-1+\sqrt{1-\gamma})^2
+\end{pmatrix}$$
+
+**Pauli Transfer matrix**
+$$
+R_{AD}= [(R_{AD})_{i,j}] =
+\begin{pmatrix}  
+1 & 0 & 0 & 0 \\\\
+0 & \sqrt{1-\gamma} & 0 & 0 \\\\ 
+0 & 0 & \sqrt{1-\gamma} & 0 \\\\ 
+\gamma & 0 & 0 & 1-\gamma 
+\end{pmatrix}$$
+
+**Superoperator**
+$$
+\begin{pmatrix}  
+1 & 0 & 0 & \gamma \\\\
+0 & \sqrt{1-\gamma} & 0 & 0\\\\ 
+0 & 0  & \sqrt{1-\gamma} & 0\\\\ 
+0 & 0 & 0 & 1-\gamma 
+\end{pmatrix}
+$$
+
+
+**Choi**
+
+$$\begin{align}
+\mathcal C &= \frac 1 2 ( |M_0\rangle\rangle\langle\langle M_0|+|M_1\rangle\rangle\langle\langle M_1|)\\\\
+&=\frac 1 2
+\begin{pmatrix}  
+1 & 0 & 0 & \sqrt{1-\gamma} \\\\
+0 & 0 & 0 & 0\\\\ 
+0 & 0  & \gamma & 0\\\\ 
+\sqrt{1-\gamma} & 0 & 0 & 1-\gamma 
+\end{pmatrix}
+\end{align}$$
+
+
+### Unitary Channels or Gates
 As an example we look two single qubit channels $R_z(\theta) = \exp(-i \theta Z/2)$ and $H$. The Hadamard is is a nice channel to examine as it transforms $X$ and $Z$ to each other
 $$\begin{align}
 H Z H^\dagger &=X\\\\
