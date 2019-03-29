@@ -63,7 +63,7 @@ We choose to represent the process matrix in the Pauli basis. The $n$ qubit Paul
 
 So we expand each of the Kraus operators in this basis 
 
-$M_k = \sum^{d^2}_{k=1}c_{ij}\,P_j$ 
+$M_k = \sum^{d^2}_{j=1}c_{kj}\,P_j$ 
 
 where $\mathcal P_j \in \mathcal P ^{\otimes n}$.
 
@@ -97,16 +97,24 @@ Define $ | \eta \rangle = \frac{1}{\sqrt{d}}\sum_{i=0}^{d-1}|i,i \rangle $
 
 One can show that 
 
-$|A\rangle \rangle = {\rm vec}(A) = \sqrt{d} (I\otimes A) |\eta\rangle$
+$|A\rangle \rangle = {\rm vec}(A) = \sqrt{d} (I\otimes A) |\eta\rangle$.
 
 The Choi state is 
 
 $\begin{align}
-\mathcal C &= I\otimes \mathcal E |\eta \rangle \langle \eta| \\\\
+\mathcal C &= I\otimes \mathcal E (|\eta \rangle \langle \eta|) \\\\
 &=\sum_i (I \otimes M_i) |\eta \rangle \langle \eta  | ( I \otimes M_i^\dagger)\\\\
 & = \frac{1}{d} \sum_i {\rm vec}(M_i)  {\rm vec} (M_i) ^\dagger \\\\
-& = \frac{1}{d} \sum_i |M_i\rangle \rangle \langle\langle M_i | 
+& = \frac{1}{d} \sum_i |M_i\rangle \rangle \langle\langle M_i |. 
 \end{align}$
+
+An often qouted, but less convenient equivalent expression is
+
+$\begin{align}
+\mathcal C &= I\otimes \mathcal E (|\eta \rangle \langle \eta|) \\\\
+&=\sum_{ij} |i\rangle \langle j| \otimes  \mathcal E (|i \rangle \langle j | ).
+\end{align}$
+
 
 ## Examples
 
@@ -121,12 +129,12 @@ $$\mathcal E(\rho) = (1-p') I \rho I + p_x X\rho X + p_y Y \rho Y + p_z Z \rho Z
 
 **Kraus** 
 
-The Kraus operators are
+The Kraus operators used in the operator sum representation are
 $$\begin{align}
 M_0 &= \sqrt{1-p'}I \\\\
 M_1 &= \sqrt{p_x}X \\\\
 M_2 &= \sqrt{p_y'}Y \\\\
-M_3 &= \sqrt{p_z}Z
+M_3 &= \sqrt{p_z}Z.
 \end{align}$$
 
 **Process or $\chi$ matrix**
@@ -187,13 +195,148 @@ $$
 p_x +p_y & 0 & 0 & (1-p')+p_z 
 \end{pmatrix} $$
 
+**Choi**
+
+$$\begin{align}
+\mathcal C &= \frac 1 d ( |M_0\rangle\rangle\langle\langle M_0|+|M_1\rangle\rangle\langle\langle M_1|+|M_2\rangle\rangle\langle\langle M_2|+|M_3\rangle\rangle\langle\langle M_3|)\\\\
+&=
+\begin{pmatrix}  
+(1-p')+p_z & 0 & 0 & (1-p')-p_z \\\\
+0 & p_x+p_y & p_x-p_y & 0\\\\ 
+0 & p_x-p_y  & p_x+p_y & 0\\\\ 
+(1-p')-p_z & 0 & 0 & (1-p')+p_z 
+\end{pmatrix}
+\end{align}$$
+
+
+## Unitary Channels or Gates
+As an example we look two single qubit channels $R_z(\theta) = \exp(-i \theta Z/2)$ and $H$. The Hadamard is is a nice channel to examine as it transforms $X$ and $Z$ to each other
+$$\begin{align}
+H Z H^\dagger &=X\\\\
+H X H^\dagger &= Z
+\end{align}$$ 
+which can be easily seen in some of the channel representations.
+
+**Kraus** 
+
+As the channel is unitary there is only one Kraus operators used in the operator sum representation. However we express them in the Pauli basis to make some of the below manipulations easier
+$$\begin{align}
+R_z(\theta) &= \cos(\theta/2) I - i \sin(\theta/2) Z\\\\
+&= \begin{pmatrix}  
+e^{-i\theta/2} & 0 \\\\
+0 & e^{i\theta /2}
+\end{pmatrix}
+\\\\
+H &= \frac{1}{\sqrt{2}} (X+Z)\\\\
+&=\frac{1}{\sqrt{2}} 
+ \begin{pmatrix}  
+1 & 1 \\\\
+1 & -1
+\end{pmatrix}
+\end{align}$$
+
+**Process or $\chi$ matrix**
+
+$$ \chi(R_z) = [\chi_{ij}] = \frac 1 2\begin{pmatrix}  
+1+\cos(\theta) & 0 & 0 & i \sin(\theta) \\\\
+0 & 0 & 0 & 0\\\\ 
+0 & 0  & 0 & 0\\\\ 
+-i\sin(\theta) & 0 & 0 & 1-\cos(\theta) 
+\end{pmatrix}$$
+
+$$ \chi(H) = [\chi_{ij}] = \frac 1 2\begin{pmatrix}  
+0 & 0 & 0 & 0 \\\\
+0 & 1 & 0 & 1\\\\ 
+0 & 0 & 0 & 0\\\\ 
+0 & 1 & 0 & 1 
+\end{pmatrix}$$
+
+**Pauli Transfer matrix**
+$$
+R_{R_z(\theta)}= [(R_{R_z(\theta)})_{i,j}] =
+\begin{pmatrix}  
+1 & 0 & 0 & 0 \\\\
+0 & \cos(\theta) & -\sin(\theta) & 0 \\\\ 
+0 & \sin(\theta) & \cos(\theta) & 0 \\\\ 
+0 & 0 & 0 & 1 
+\end{pmatrix}$$
+
+$$
+R_{H}= [(R_{H})_{i,j}] =
+\frac 1 2\begin{pmatrix}  
+1 & 0 & 0 & 0 \\\\
+0 & 0 & 0 & 1 \\\\ 
+0 & 0 & -1 & 0 \\\\ 
+0 & 1 & 0 & 0
+\end{pmatrix}$$
+
+**Superoperator**
+$$ \mathcal R_z(\theta) =  R_z(\theta)^*\otimes  R_z(\theta)=
+\begin{pmatrix}  
+1 & 0 & 0 & 0 \\\\
+0 & e^{i\theta} & 0 & 0\\\\ 
+0 & 0  & e^{-i\theta} & 0\\\\ 
+0 & 0 & 0 & 1 
+\end{pmatrix} 
+$$
+
+$$ \mathcal H = H^*\otimes H=\frac 1 2
+\begin{pmatrix}  
+1 & 1 & 1 & 1 \\\\
+1 & -1 & 1 & -1\\\\ 
+1 & 1  & -1 &-1\\\\ 
+1 & -1 & -1 & 1 
+\end{pmatrix} 
+$$
+
+**Choi**
+
+$$\begin{align}
+\mathcal C_{R_z} &= \frac 1 2  |R_z(\theta)\rangle\rangle\langle\langle R_z(\theta)|\\\\
+&=\frac 1 2
+\begin{pmatrix}  
+1 & 0 & 0 & e^{-i\theta} \\\\
+0 & 0 & 0 & 0\\\\ 
+0 & 0 & 0 & 0\\\\ 
+e^{i\theta} & 0 & 0 & 1 
+\end{pmatrix}
+\end{align}$$
+
+$$\begin{align}
+\mathcal C_H &= \frac 1 2  |H\rangle\rangle\langle\langle H|\\\\
+&=\frac 1 2
+\begin{pmatrix}  
+1  & 1  &  1 & -1 \\\\
+1  & 1  &  1 & -1\\\\ 
+1  & 1  &  1 & -1\\\\ 
+-1 & -1 & -1 &  1 
+\end{pmatrix}
+\end{align}$$
 
 ## References
 
 [IGST] Introduction to Quantum Gate Set Tomography   
-Greenbaum, arXiv:1509.02921, (2015)  
+Greenbaum,   
+arXiv:1509.02921, (2015)  
 https://arxiv.org/abs/1509.02921     
 
 [QN] Quantum Nescimus. Improving the characterization of quantum systems from limited information  
-Harper, PhD thesis University of Sydney, 2018  
-https://ses.library.usyd.edu.au/handle/2123/17896  
+Harper,  
+PhD thesis University of Sydney, 2018  
+https://ses.library.usyd.edu.au/handle/2123/17896 
+
+[GRAPTN] Tensor networks and graphical calculus for open quantum systems  
+Wood et al.,  
+Quant. Inf. Comp. 15, 0579-0811 (2015)  
+https://arxiv.org/abs/1111.6950 
+
+[MATQO] On the Matrix Representation of Quantum Operations  
+Nambu et al.,  
+arXiv: 0504091 (2005)  
+https://arxiv.org/abs/quant-ph/0504091
+
+[DUAL] On duality between quantum maps and quantum states  
+Zyczkowski et al.,  
+Open Syst. Inf. Dyn. 11, 3 (2004)  
+https://dx.doi.org/10.1023/B:OPSY.0000024753.05661.c2  
+https://arxiv.org/abs/quant-ph/0401119 
