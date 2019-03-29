@@ -320,31 +320,26 @@ def estimate_dfe(data: DFEData, kind: str) -> DFEEstimate:
     """
     Analyse data from experiments to obtain a direct fidelity estimate (DFE).
 
-    State fidelity between the experimental state :math:`\sigma` and the ideal (pure) state :math:`\rho` is defined
-    as :math:`F(\sigma,\rho)=\mathrm{tr}~\sigma\rho` [Joz].
+    State fidelity between the experimental state σ and the ideal (pure) state ρ (both states represented by density
+    matrices) is defined as F(σ,ρ)=tr σ⋅ρ [Joz].
 
-    The direct fidelity estimate for a state is given by the average expected value
-    of the Pauli operators in the stabilizer group of the ideal pure state (i.e., Eqn. 1 of [DFE1]).
+    The direct fidelity estimate for a state is given by the average expected value of the Pauli operators in the
+    stabilizer group of the ideal pure state (i.e., Eqn. 1 of [DFE1]).
 
-    The average gate fidelity between the experimental process :math:`\mathcal E` and the ideal (unitary)
-    process :math:`\mathcal U` is defined as
-    :math:`\overline{F}(\mathcal{E},\mathcal{U})=\frac{\mathrm{tr}\mathcal{E}\mathcal{U}^\dagger + d}{d^2+d}`
-    where the processes are represented by linear superoperators acting of vectorized density matrices,
-    and :math:`d` is the dimension of the Hilbert space :math:`\mathcal{E}` and :math:`\mathcal{U}` act on. See
-    [Nie] for details.
+    The average gate fidelity between the experimental process ℰ and the ideal (unitary) process 𝒰 is defined as
+    F(ℰ,𝒰) = (tr ℰ 𝒰⁺ + d)/(d^2+d) where the processes are represented by linear superoperators acting of vectorized
+    density matrices, and d is the dimension of the Hilbert space ℰ and 𝒰 act on (which ⁺ represents the Hermitian
+    conjugate). See [Nie] for details.
 
-    The average gate fidelity can be re-written as
-    :math:`\overline{F}(\mathcal{E},\mathcal{U})=\frac{d^2\mathrm{tr}J(\mathcal{E})J(\mathcal{U}) + d}{d^2+d}`
-    where :math:`J(\cdot)` is the Choi-Jamiolkoski representation of the superoperator in the argument. Since the
-    Choi-Jamiolkowski representation is given by a density operator, the connection to the calculation of state fidelity
-    becomes apparent: :math:`F(J(\mathcal{E})J(\mathcal{U}))=\mathrm{tr}J(\mathcal{E})J(\mathcal{U})` is the state
-    fidelity between Choi-Jamiolkoski states.
+    The average gate fidelity can be re-written a F(ℰ,𝒰)=(d^2 tr J(ℰ)J(𝒰) + d)/(d^2+d) where J() is the
+    Choi-Jamiolkoski representation of the superoperator in the argument. Since the Choi-Jamiolkowski representation
+    is given by a density operator, the connection to the calculation of state fidelity becomes apparent:
+    F(J(ℰ),J(𝒰))=tr J(ℰ)⋅J(𝒰) is the state fidelity between Choi-Jamiolkoski states.
 
-    Noting that the Choi-Jamiolkoski state is prepared by acting on half of a maximally entangled
-    state with the process in question, the direct fidelity estimate of the Choi-Jamiolkoski state is given by the
-    average expected value of a Pauli operator resulting from applying the ideal unitary :math:`\mathcal U`
-    to a Pauli operator :math:`P_i`, for the state resulting from applying the ideal unitary to a stabilizer state
-    that has :math:`P_i` in its stabilizer group.
+    Noting that the Choi-Jamiolkoski state is prepared by acting on half of a maximally entangled state with the
+    process in question, the direct fidelity estimate of the Choi-Jamiolkoski state is given by the average expected
+    value of a Pauli operator resulting from applying the ideal unitary 𝒰 to a Pauli operator Pᵢ, for the state
+    resulting from applying the ideal unitary to a stabilizer state that has Pᵢ in its stabilizer group.
 
     [Joz]  Fidelity for Mixed Quantum States
            Jozsa, Journal of Modern Optics, 41:12, 2315-2323 (1994)
