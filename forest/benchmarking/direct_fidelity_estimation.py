@@ -347,7 +347,9 @@ def estimate_dfe(data: DFEData, kind: str) -> DFEEstimate:
     Noting that the Choi-Jamiolkoski state is prepared by acting on half of a maximally entangled state with the
     process in question, the direct fidelity estimate of the Choi-Jamiolkoski state is given by the average expected
     value of a Pauli operator resulting from applying the ideal unitary 𝒰 to a Pauli operator Pᵢ, for the state
-    resulting from applying the ideal unitary to a stabilizer state that has Pᵢ in its stabilizer group.
+    resulting from applying the ideal unitary to a stabilizer state that has Pᵢ in its stabilizer group (one must be
+    careful to prepare states that have both +1 and -1 eigenstates of the operator in question, to emulate the random
+    state preparation corresponding to measuring half of a maximally entangled state).
 
     [Joz]  Fidelity for Mixed Quantum States
            Jozsa, Journal of Modern Optics, 41:12, 2315-2323 (1994)
