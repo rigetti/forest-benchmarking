@@ -29,16 +29,16 @@ class DFEData:
     out_pauli: List[str]
     """The expected output Pauli operators after the program acts on the corresponding `in_pauli`"""
 
-    pauli_point_est: List[float]
+    pauli_point_est: np.ndarray
     """Point estimate of Pauli operators"""
 
-    pauli_std_err: List[float]
+    pauli_std_err: np.ndarray
     """Estimate of std error in the point estimate"""
 
-    cal_point_est: List[float]
+    cal_point_est: np.ndarray
     """Point estimate of readout calibration for Pauli operators"""
 
-    cal_std_err: List[float]
+    cal_std_err: np.ndarray
     """Estimate of std error in the point estimate of readout calibration for Pauli operators"""
 
     dimension: int
