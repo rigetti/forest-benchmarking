@@ -2,7 +2,7 @@
 
 This document summarizes our conventions for the different Superoperator representations and how to convert between a subset of representations.
 
-At the bottom of the document you can find a list of references if you need more information.
+At the bottom of the document you can find a list of references if you need more information. These references explain, for example, when how to determine if a channel is unital or completely postive in the different representations.
 
 ## `vec` and `unvec`
 
@@ -124,6 +124,112 @@ $\begin{align}
 
 
 ## Examples
+
+### Unitary Channels or Gates
+As an example we look two single qubit channels $R_z(\theta) = \exp(-i \theta Z/2)$ and $H$. The Hadamard is is a nice channel to examine as it transforms $X$ and $Z$ to each other
+$$\begin{align}
+H Z H^\dagger &=X\\\\
+H X H^\dagger &= Z
+\end{align}$$ 
+which can be easily seen in some of the channel representations.
+
+**Kraus** 
+
+As the channel is unitary there is only one Kraus operators used in the operator sum representation. However we express them in the Pauli basis to make some of the below manipulations easier
+$$\begin{align}
+R_z(\theta) &= \cos(\theta/2) I - i \sin(\theta/2) Z\\\\
+&= \begin{pmatrix}  
+e^{-i\theta/2} & 0 \\\\
+0 & e^{i\theta /2}
+\end{pmatrix}
+\\\\
+H &= \frac{1}{\sqrt{2}} (X+Z)\\\\
+&=\frac{1}{\sqrt{2}} 
+ \begin{pmatrix}  
+1 & 1 \\\\
+1 & -1
+\end{pmatrix}
+\end{align}$$
+
+**Process or $\chi$ matrix**
+
+$$ \chi(R_z) = [\chi_{ij}] = \frac 1 2\begin{pmatrix}  
+1+\cos(\theta) & 0 & 0 & i \sin(\theta) \\\\
+0 & 0 & 0 & 0\\\\ 
+0 & 0  & 0 & 0\\\\ 
+-i\sin(\theta) & 0 & 0 & 1-\cos(\theta) 
+\end{pmatrix}$$
+
+$$ \chi(H) = [\chi_{ij}] = \frac 1 2\begin{pmatrix}  
+0 & 0 & 0 & 0 \\\\
+0 & 1 & 0 & 1\\\\ 
+0 & 0 & 0 & 0\\\\ 
+0 & 1 & 0 & 1 
+\end{pmatrix}$$
+
+**Pauli Transfer matrix**
+$$
+R_{R_z(\theta)}= [(R_{R_z(\theta)})_{i,j}] =
+\begin{pmatrix}  
+1 & 0 & 0 & 0 \\\\
+0 & \cos(\theta) & -\sin(\theta) & 0 \\\\ 
+0 & \sin(\theta) & \cos(\theta) & 0 \\\\ 
+0 & 0 & 0 & 1 
+\end{pmatrix}$$
+
+$$
+R_{H}= [(R_{H})_{i,j}] =
+\frac 1 2\begin{pmatrix}  
+1 & 0 & 0 & 0 \\\\
+0 & 0 & 0 & 1 \\\\ 
+0 & 0 & -1 & 0 \\\\ 
+0 & 1 & 0 & 0
+\end{pmatrix}$$
+
+**Superoperator**
+$$ \mathcal R_z(\theta) =  R_z(\theta)^*\otimes  R_z(\theta)=
+\begin{pmatrix}  
+1 & 0 & 0 & 0 \\\\
+0 & e^{i\theta} & 0 & 0\\\\ 
+0 & 0  & e^{-i\theta} & 0\\\\ 
+0 & 0 & 0 & 1 
+\end{pmatrix} 
+$$
+
+$$ \mathcal H = H^*\otimes H=\frac 1 2
+\begin{pmatrix}  
+1 & 1 & 1 & 1 \\\\
+1 & -1 & 1 & -1\\\\ 
+1 & 1  & -1 &-1\\\\ 
+1 & -1 & -1 & 1 
+\end{pmatrix} 
+$$
+
+**Choi**
+
+$$\begin{align}
+\mathcal C_{R_z} &= \frac 1 2  |R_z(\theta)\rangle\rangle\langle\langle R_z(\theta)|\\\\
+&=\frac 1 2
+\begin{pmatrix}  
+1 & 0 & 0 & e^{-i\theta} \\\\
+0 & 0 & 0 & 0\\\\ 
+0 & 0 & 0 & 0\\\\ 
+e^{i\theta} & 0 & 0 & 1 
+\end{pmatrix}
+\end{align}$$
+
+$$\begin{align}
+\mathcal C_H &= \frac 1 2  |H\rangle\rangle\langle\langle H|\\\\
+&=\frac 1 2
+\begin{pmatrix}  
+1  & 1  &  1 & -1 \\\\
+1  & 1  &  1 & -1\\\\ 
+1  & 1  &  1 & -1\\\\ 
+-1 & -1 & -1 &  1 
+\end{pmatrix}
+\end{align}$$
+
+
 
 ### Pauli Channels
 Pauli channels are nice because they are diagonal in two representations and they have the *depolarlizing channel* as a speical case. 
@@ -289,109 +395,6 @@ $$\begin{align}
 \end{align}$$
 
 
-### Unitary Channels or Gates
-As an example we look two single qubit channels $R_z(\theta) = \exp(-i \theta Z/2)$ and $H$. The Hadamard is is a nice channel to examine as it transforms $X$ and $Z$ to each other
-$$\begin{align}
-H Z H^\dagger &=X\\\\
-H X H^\dagger &= Z
-\end{align}$$ 
-which can be easily seen in some of the channel representations.
-
-**Kraus** 
-
-As the channel is unitary there is only one Kraus operators used in the operator sum representation. However we express them in the Pauli basis to make some of the below manipulations easier
-$$\begin{align}
-R_z(\theta) &= \cos(\theta/2) I - i \sin(\theta/2) Z\\\\
-&= \begin{pmatrix}  
-e^{-i\theta/2} & 0 \\\\
-0 & e^{i\theta /2}
-\end{pmatrix}
-\\\\
-H &= \frac{1}{\sqrt{2}} (X+Z)\\\\
-&=\frac{1}{\sqrt{2}} 
- \begin{pmatrix}  
-1 & 1 \\\\
-1 & -1
-\end{pmatrix}
-\end{align}$$
-
-**Process or $\chi$ matrix**
-
-$$ \chi(R_z) = [\chi_{ij}] = \frac 1 2\begin{pmatrix}  
-1+\cos(\theta) & 0 & 0 & i \sin(\theta) \\\\
-0 & 0 & 0 & 0\\\\ 
-0 & 0  & 0 & 0\\\\ 
--i\sin(\theta) & 0 & 0 & 1-\cos(\theta) 
-\end{pmatrix}$$
-
-$$ \chi(H) = [\chi_{ij}] = \frac 1 2\begin{pmatrix}  
-0 & 0 & 0 & 0 \\\\
-0 & 1 & 0 & 1\\\\ 
-0 & 0 & 0 & 0\\\\ 
-0 & 1 & 0 & 1 
-\end{pmatrix}$$
-
-**Pauli Transfer matrix**
-$$
-R_{R_z(\theta)}= [(R_{R_z(\theta)})_{i,j}] =
-\begin{pmatrix}  
-1 & 0 & 0 & 0 \\\\
-0 & \cos(\theta) & -\sin(\theta) & 0 \\\\ 
-0 & \sin(\theta) & \cos(\theta) & 0 \\\\ 
-0 & 0 & 0 & 1 
-\end{pmatrix}$$
-
-$$
-R_{H}= [(R_{H})_{i,j}] =
-\frac 1 2\begin{pmatrix}  
-1 & 0 & 0 & 0 \\\\
-0 & 0 & 0 & 1 \\\\ 
-0 & 0 & -1 & 0 \\\\ 
-0 & 1 & 0 & 0
-\end{pmatrix}$$
-
-**Superoperator**
-$$ \mathcal R_z(\theta) =  R_z(\theta)^*\otimes  R_z(\theta)=
-\begin{pmatrix}  
-1 & 0 & 0 & 0 \\\\
-0 & e^{i\theta} & 0 & 0\\\\ 
-0 & 0  & e^{-i\theta} & 0\\\\ 
-0 & 0 & 0 & 1 
-\end{pmatrix} 
-$$
-
-$$ \mathcal H = H^*\otimes H=\frac 1 2
-\begin{pmatrix}  
-1 & 1 & 1 & 1 \\\\
-1 & -1 & 1 & -1\\\\ 
-1 & 1  & -1 &-1\\\\ 
-1 & -1 & -1 & 1 
-\end{pmatrix} 
-$$
-
-**Choi**
-
-$$\begin{align}
-\mathcal C_{R_z} &= \frac 1 2  |R_z(\theta)\rangle\rangle\langle\langle R_z(\theta)|\\\\
-&=\frac 1 2
-\begin{pmatrix}  
-1 & 0 & 0 & e^{-i\theta} \\\\
-0 & 0 & 0 & 0\\\\ 
-0 & 0 & 0 & 0\\\\ 
-e^{i\theta} & 0 & 0 & 1 
-\end{pmatrix}
-\end{align}$$
-
-$$\begin{align}
-\mathcal C_H &= \frac 1 2  |H\rangle\rangle\langle\langle H|\\\\
-&=\frac 1 2
-\begin{pmatrix}  
-1  & 1  &  1 & -1 \\\\
-1  & 1  &  1 & -1\\\\ 
-1  & 1  &  1 & -1\\\\ 
--1 & -1 & -1 &  1 
-\end{pmatrix}
-\end{align}$$
 
 ## References
 
