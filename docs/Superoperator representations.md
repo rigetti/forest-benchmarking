@@ -1,6 +1,6 @@
 # Superoperator representations
 
-This document summarizes different Superoperator representations and how to convert between a subset of representations.
+This document summarizes our conventions for the different Superoperator representations and how to convert between a subset of representations.
 
 At the bottom of the document you can find a list of references if you need more information.
 
@@ -28,15 +28,14 @@ $|A\rangle \rangle := {\rm vec_r}(A) = (a_{11}, a_{12}, \ldots, a_{1m}, a_{21},\
 
 Note that ${\rm vec}(A) = {\rm vec_r}(A^T)$. In any case we will **not** use this row convention.
 
-For matricies $A,B,C$ some useful results related to vectorization are
+### Matrix multiplication in vectorized form
 
-${\rm vec}(ABC) = (C^T\otimes A) {\rm vec}(B)\quad$ [Eq.1]
+For matricies $A,B,C$ 
 
-$ {\rm vec}([A,X])= (I\otimes A - A^T\otimes I) {\rm vec}(X)$
-
-${\rm vec}(ABC) = (I\otimes AB) {\rm vec}( C ) = (C^T B^T\otimes I) {\rm vec}(A)$
-
-${\rm vec}(AB) = (I\otimes A) {\rm vec}(B) = (B^T\otimes I) {\rm vec}(A)$.  
+$$\begin{align}
+{\rm vec}(ABC) = (C^T\otimes A) {\rm vec}(B), \quad (1)
+\end{align}$$
+which is sometimes called Roth's lemma.
 
 Eq. 1 is useful in representing quantum operations on mixed quantum states. For example consider 
 $$ \rho' = U \rho U^\dagger.$$
@@ -48,6 +47,14 @@ so
 $$ |\rho'\rangle \rangle = \mathcal U |\rho\rangle\rangle,
 $$
 where $\mathcal U = U^*\otimes U$. 
+
+Some other useful results related to vectorization are
+
+$ {\rm vec}([A,X])= (I\otimes A - A^T\otimes I) {\rm vec}(X)$
+
+${\rm vec}(ABC) = (I\otimes AB) {\rm vec}( C ) = (C^T B^T\otimes I) {\rm vec}(A)$
+
+${\rm vec}(AB) = (I\otimes A) {\rm vec}(B) = (B^T\otimes I) {\rm vec}(A)$.  
 
 ## Quantum channels in the Kraus decomposition (or operator-sum representation)
 A completely positive map on the state $\rho$ can be written using a set of Kraus operators $\{ M_k \}$ as
