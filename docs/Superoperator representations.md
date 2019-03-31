@@ -1,11 +1,11 @@
 # Superoperator representations
 
-This document summarizes our conventions for the different Superoperator representations and how to convert between a subset of representations.
+This document summarizes our conventions for the different superoperator representations. We show how to apply the channels to states in these represenations and how to convert channels between a subset of representations.
 
 At the bottom of the document you can find a list of references if you need more information. These references explain, for example, when how to determine if a channel is unital or completely postive in the different representations.
 
 ## `vec` and `unvec`
-
+Consider an $m\times m$ matrix
 $$ A = [a_{ij}] = \begin{pmatrix}  
 a_{11} & a_{12} & \ldots & a_{1m} \\\\
 a_{21} & a_{22} & \ldots & a_{2m}\\\\ 
@@ -16,28 +16,24 @@ where $i$ is a row and $j$ is a column index.
 
 We define `vec` to be column stacking
 
-$ {\rm vec}(A) = (a_{11},a_{21},\ldots,a_{m1},a_{12},\ldots,a_{mm})^T$
+$$ |A\rangle \rangle :={\rm vec}(A) = (a_{11},a_{21},\ldots,a_{m1},a_{12},\ldots,a_{mm})^T \quad (1) $$
 
 were $T$ denotes a transpose. Clearly an inverse operation, `unvec` can be defined so that 
 
-$ {\rm unvec}\big ( {\rm vec}(A) \big ) = A$.
+$$ {\rm unvec}\big ( {\rm vec}(A) \big ) = A.$$
 
-Similarly we can define a row vectorization to be row stacking
-
-$|A\rangle \rangle := {\rm vec_r}(A) = (a_{11}, a_{12}, \ldots, a_{1m}, a_{21},\ldots, a_{mm})^T.$
-
-Note that ${\rm vec}(A) = {\rm vec_r}(A^T)$. In any case we will **not** use this row convention.
+Similarly we can define a row vectorization to be row stacking $ {\rm vec_r}(A) = (a_{11}, a_{12}, \ldots, a_{1m}, a_{21},\ldots, a_{mm})^T$. Note that ${\rm vec}(A) = {\rm vec_r}(A^T)$. In any case we will **not** use this row convention.
 
 ### Matrix multiplication in vectorized form
 
 For matricies $A,B,C$ 
 
 $$\begin{align}
-{\rm vec}(ABC) = (C^T\otimes A) {\rm vec}(B), \quad (1)
+{\rm vec}(ABC) = (C^T\otimes A) {\rm vec}(B), \quad (2)
 \end{align}$$
 which is sometimes called Roth's lemma.
 
-Eq. 1 is useful in representing quantum operations on mixed quantum states. For example consider 
+Eq. 2 is useful in representing quantum operations on mixed quantum states. For example consider 
 $$ \rho' = U \rho U^\dagger.$$
 We can use Eq. 1 to write this as
 
@@ -60,7 +56,8 @@ ${\rm vec}(AB) = (I\otimes A) {\rm vec}(B) = (B^T\otimes I) {\rm vec}(A)$.
 A completely positive map on the state $\rho$ can be written using a set of Kraus operators $\{ M_k \}$ as
 
 
-$\mathcal E (\rho) = \sum_{k=1}^N M_k \rho M_k^\dagger $.
+$$\rho' =\mathcal E (\rho) = \sum_{k=1}^N M_k \rho M_k^\dagger, $$
+where $\rho'$ is the state at the output of the channel.
 
 If $\sum_k M_k^\dagger M_k= I $ the map is trace preserving. It turns out that $N\le d^2$ where $d$ is the Hilbert space dimension e.g. $d=2^n$ for $n$ qubits.
 
@@ -78,15 +75,29 @@ Now the channel $\mathcal E$ can be written as
 
 $\mathcal E (\rho) = \sum_{i,j=1}^{d^2} \chi_{i,j} P_i\rho P_j ,$
 
-where $\chi_{i,j} = \sum_k c_{k,i} c_{k,j}^*$ is an element of the process matrix $\chi$. The process matrix is a Hermitian and positive semidefinite of size $d^2 \times d^2$. 
+where 
+
+$$\chi_{i,j} = \sum_k c_{k,i} c_{k,j}^*$$ 
+
+is an element of the process matrix $\chi$. The process matrix is a Hermitian and positive semidefinite of size $d^2 \times d^2$. 
 
 
 ## Kraus to Pauli Transfer matrix
-The Pauli Liouville or Pauli transfer matrix representation of the channel $\mathcal E$ is denoted by $R_{\mathcal E}$. The matrix elements are
+We begin by defining the Pauli vector representation of the state $\rho$ 
+
+$$ |\rho \rangle \rangle = \sum_j c_j |P_j\rangle \rangle$$
+
+where $P_j \in \mathcal P^{\otimes n}$ and $c_j = (1/d) \langle\langle P_j|\rho \rangle\rangle$.
+
+The Pauli-Liouville or Pauli transfer matrix representation of the channel $\mathcal E$ is denoted by $R_{\mathcal E}$. The matrix elements are
 
 $$(R_{\mathcal E})_{i,j} = \frac 1 d {\rm Tr}[P_i \mathcal E(P_j)].$$
 
 Trace preservation implies $(R_{\mathcal E})_{0,j} = \delta_{0,j}$, i.e. the first row is one and all zeros. Unitality implies $(R_{\mathcal E})_{i,0} = \delta_{i,0}$, the first column is one and all zeros.
+
+In this representation the channel is applied to the state by multiplication
+
+$$|\rho' \rangle \rangle = R_{\mathcal E} |\rho \rangle \rangle$$
 
 
 ## Kraus to Superoperator
