@@ -3,101 +3,23 @@ from typing import Iterable, List, Tuple, Sequence
 
 import numpy as np
 from lmfit import Model
-from numpy import bincount
 from numpy import pi
-from pyquil.operator_estimation import measure_observables, \
-    TomographyExperiment as PyQuilTomographyExperiment
 from scipy.stats import beta
 
 from pyquil.api import BenchmarkConnection, QuantumComputer, get_benchmarker
 from pyquil.gates import CZ, RX, RZ
 from pyquil.quilbase import Gate
-from pyquil.quil import merge_programs
 from pyquil import Program
-from pyquil.quilatom import QubitPlaceholder
+from pyquil.operator_estimation import ExperimentSetting, zeros_state
 
 from forest.benchmarking.tomography import _state_tomo_settings
-from forest.benchmarking.tomography import generate_state_tomography_experiment, acquire_tomography_data
+from forest.benchmarking.utils import all_pauli_z_terms
 from forest.benchmarking.compilation import basic_compile
-
-from dataclasses import dataclass
+from forest.benchmarking.stratified_experiment import StratifiedExperiment, Layer, Component, \
+acquire_stratified_data
 
 
 bm = get_benchmarker()
-
-
-@dataclass()
-class Component:
-    """
-    A component is the low-level structure of a StratifiedExperiment that stores a sequence of
-    gates that will be run on a qc.
-
-    In the case of standard rb, a component is simply the rb Clifford sequence whose end
-    result will be measured in the computational basis. For unitarity, a component sequence will
-    be run with 4^n different measurements.
-
-    Note that in standard rb the result of interest for a given sequence is the "survival
-    probability" which is essentially just the shifted z expectation of the sequence end-state.
-    In unitarity the result of interest for a sequence is a purity--this is calculated from the
-    expectations of the 4^n expectations that are stored in the 4^n ExperimentResults individual
-    expectations.
-    """
-    sequence: Tuple[Program]
-    # add list of ExperimentSettings here? Good for unitarity and RPE, though not necessary for RB.
-    # Would allow natural use of measure_observables, labeling measurement types, symmetrized ro.
-    # Perhaps a component should actually only house a single ExperimentSetting and its
-    # corresponding ExperimentResult (+ metadata)? The distinction is whether to think of a
-    # component as a single sequence being measured with different operators or as a single
-    # runnable program with a single expectation.
-    measure_qubits: Tuple[int]
-    num_shots: int = None
-    results: np.ndarray = None  # raw shots for rb, but list of ExperimentResults for unitarity
-    mean: int = None  # currently also houses purity for unitarity
-    stddev: int = None  # currently alos houses purity_error for unitarity
-
-
-    def __str__(self):
-        return '[' + ', '.join([str(instr) for instr in self.sequence[0]]) + '] ... [' + \
-               ', '.join([str(instr) for instr in self.sequence[-1]]) + ']'
-
-
-@dataclass(order=True)
-class Layer:
-    """
-    A Layer is the mid-level structure of a StratifiedExperiment that collects all of the
-    individual qc-runnable components of a particular depth.
-
-    Each component may operate on the same qubits, and so in general may not be parallelizable.
-    For both rb and unitarity a particular layer will contain num_sequences_per_depth many
-    components, a component just acting as a container for each sequence; in the case of
-    unitarity a component consists of 4^n different programs that will need to be run,
-    one for each pauli operator.
-
-    """
-    depth: int
-    components: Tuple[Component]
-
-    def __str__(self):
-        return f'Depth {self.depth}:\n' + '\n'.join([str(comp) for comp in self.components]) + '\n'
-
-
-@dataclass
-class StratifiedExperiment:
-    """
-    This is the high-level structure that captures everything about an experiment on a particular
-    qubit or pair of qubits.
-
-    A StratifiedExperiment is composed of several layers of increasing depth. Simultaneous RB would
-    involve making a StratifiedExperiment for each of the qubits you want to characterize and
-    passing all of these experiments to the acquire_data method which sorts out which can be run
-    together.
-    """
-    layers: Tuple[Layer]
-    qubits: Tuple[int]
-    exp_type: str
-
-    def __str__(self):
-        return '\n'.join([str(lyr) for lyr in self.layers]) + '\n'
 
 
 def oneq_rb_gateset(qubit: int) -> Gate:
@@ -146,8 +68,10 @@ def generate_rb_sequence(qubits: Sequence[int], depth: int,  interleaved_gate: P
     """
     Generate a complete randomized benchmarking sequence.
 
+    :param qubits:
     :param depth: The total number of Cliffords in the sequence (including inverse)
     :param random_seed: Random seed passed to compiler to seed sequence generation.
+    :param interleaved_gate:
     :return:
     """
     if depth < 2:
@@ -174,14 +98,17 @@ def generate_rb_experiment(qubits: Sequence[int], depths: List[int], num_sequenc
     layers = []  # we will have len(depths) many layers, one layer per depth.
     for depth in depths:
         components = []  # each layer will have num_sequences many components.
-        for _ in range(num_sequences):
+        for idx in range(num_sequences):
             if random_seed is not None:  # need to change the base seed for each sequence generated
                 random_seed += 1
 
             # a sequence is just a list of Cliffords, with last Clifford inverting the sequence
             sequence = generate_rb_sequence(qubits, depth, interleaved_gate, random_seed)
-            components.append(Component(tuple(sequence), qubits))
-        layers.append(Layer(depth, components))
+            settings = [ExperimentSetting(zeros_state(qubits), op)
+                        for op in all_pauli_z_terms(qubits)]
+            components.append(Component(tuple(sequence), tuple(settings), tuple(qubits),
+                                        f'Seq{idx}'))
+        layers.append(Layer(depth, tuple(components)))
 
     exp_type = "RB"
     if interleaved_gate is not None:
@@ -190,95 +117,126 @@ def generate_rb_experiment(qubits: Sequence[int], depths: List[int], num_sequenc
     return StratifiedExperiment(tuple(layers), tuple(qubits), exp_type)
 
 
-def merge_sequences(sequences: list) -> list:
+def generate_unitarity_experiment(qubits: Sequence[int], depths: List[int], num_sequences: int,
+                                  use_self_inv_seqs = False, random_seed: int = None) \
+        -> StratifiedExperiment:
     """
-    Takes a list of equal-length "sequences" (lists of Programs) and merges them element-wise,
-    returning the merged outcome.
+    Essentially the same as generate_rb_experiment, just stripping off last gate, no option for
+    interleaving.
 
-    :param sequences: List of equal-length Lists of Programs
-    :return: A single List of Programs
+    :param qubits: qubits for a single isolated unitary rb experiment
+    :param depths:
+    :param num_sequences:
+    :param use_self_inv_seqs:
+    :param random_seed:
+    :return:
     """
-    depth = len(sequences[0])
-    assert all([len(s) == depth for s in sequences])
-    return [merge_programs([seq[idx] for seq in sequences]) for idx in range(depth)]
+    layers = []
+    for depth in depths:
+        components = []
+        for idx in range(num_sequences):
+            if random_seed is not None:
+                random_seed += 1
+
+            if use_self_inv_seqs:
+                sequence = generate_rb_sequence(qubits, depth, random_seed)
+            else:  # provide larger depth and strip inverse from end of each sequence
+                sequence = generate_rb_sequence(qubits, depth + 1, random_seed)[:-1]
+            settings = _state_tomo_settings(qubits)
+            components.append(Component(tuple(sequence), tuple(settings), tuple(qubits),
+                                        f'Seq{idx}'))
+        layers.append(Layer(depth, tuple(components)))
+
+    exp_type = "URB"
+
+    return StratifiedExperiment(tuple(layers), tuple(qubits), exp_type)
 
 
-def survival_statistics(bitstrings):
+def populate_rb_survival_statistics(expt: StratifiedExperiment):
     """
-    Calculate the mean and variance of the estimated probability of the ground state given shot
-    data on one or more bits.
+    Calculate the mean and variance of the estimated probability of the zeros state given the
+    expectation of all operators with Z terms.
 
-    For binary classified data with N counts of 1 and M counts of 0, these
-    can be estimated using the mean and variance of the beta distribution beta(N+1, M+1) where the
-    +1 is used to incorporate an unbiased Bayes prior.
+    We first convert the operator expectation values into a density matrix, then take the (0, 0)
+    component of this matrix as the probability of the all zeros state. For binary classified data
+    with N counts of 1 and M counts of 0, these can be estimated using the mean and variance of
+    the beta distribution beta(N+1, M+1) where the +1 is used to incorporate an unbiased Bayes
+    prior.
 
-    :param ndarray bitstrings: A 2D numpy array of repetitions x bit-arrays.
-    :return: (survival mean, sqrt(survival variance))
+    :param expt: A StratifiedExperiment whose Components have been populated with results.
+    :return:
     """
-    survived = np.sum(bitstrings, axis=1) == 0
+    for layer in expt.layers:
+        for component in layer.components:
+            # exclude operators that include x or y; no change for a standard rb experiment
+            z_terms = [result for result in component.results
+                       if 'X' not in result.setting.out_operator.compact_str()
+                       and 'Y' not in result.setting.out_operator.compact_str()]
 
-    # count obmurrences of 000...0 and anything besides 000...0
-    n_died, n_survived = bincount(survived, minlength=2)
+            # This assumes inclusion of I term with expectation 1 to make dim many total terms
+            assert 2**len(component.qubits) == len(z_terms)
+            # get the fraction of all zero outcomes 00...00
+            fraction_survived = np.mean([result.expectation for result in z_terms])
+            num_survived = fraction_survived * component.num_shots
+            num_died =  component.num_shots - num_survived  # the number of non-zero results
 
-    # mean and variance given by beta distribution with a uniform prior
-    survival_mean = beta.mean(n_survived + 1, n_died + 1)
-    survival_var = beta.var(n_survived + 1, n_died + 1)
-    return survival_mean, np.sqrt(survival_var)
+            # mean and variance given by beta distribution with a uniform prior
+            survival_mean = beta.mean(num_survived + 1, num_died + 1)
+            survival_var = beta.var(num_survived + 1, num_died + 1)
+
+            survival_stats = {"Survival": (survival_mean, np.sqrt(survival_var))}
+            component.estimates = survival_stats
 
 
-# do we want num_shots specified at run time or experiment creation?
+def populate_unitarity_purity_statistics(expt: StratifiedExperiment):
+    """
+    Calculate the mean and variance of the estimated probability of the zeros state given the
+    expectation of all operators with Z terms.
+
+    We first convert the operator expectation values into a density matrix, then take the (0, 0)
+    component of this matrix as the probability of the all zeros state. For binary classified data
+    with N counts of 1 and M counts of 0, these can be estimated using the mean and variance of
+    the beta distribution beta(N+1, M+1) where the +1 is used to incorporate an unbiased Bayes
+    prior.
+
+    :param expt: A StratifiedExperiment whose Components have been populated with results.
+    :return:
+    """
+    for layer in expt.layers:
+        for component in layer.components:
+            # This assumes inclusion of I term with expectation 1 to make dim**2 many total terms
+            dim = 2**len(component.qubits)
+            assert dim**2 == len(component.results), "Ensure identity term is included."
+
+            expectations = np.array([result.expectation for result in component.results])
+            variances = np.array([result.stddev**2 for result in component.results])
+
+            shifted_purity = estimate_purity(dim, expectations)
+            shifted_purity_error = estimate_purity_err(dim, expectations, variances)
+            shifted_purity_stats = {"Shifted Purity": (shifted_purity, shifted_purity_error)}
+            component.estimates = shifted_purity_stats
+
+
 def acquire_rb_data(qc, experiments: Sequence[StratifiedExperiment], num_shots: int = 500):
-    """
-    Takes in StratifiedExperiments and simultaneously runs individual Components of separate
-    experiments that are in Layers of equal depth.
-
-    Currently assumes all experiments act on different qubits, that each experiment is
-    comprised of layers with the same depths, and that each layer is comprised of the same number of
-    components.
-
-    :param qc:
-    :param experiments:
-    :param num_shots:
-    :return: Currently mutates the input StratifiedExperiments.
-    """
-    # make a copy of each experiment, or return a separate results dataclass?
-    # copies = [copy.deepcopy(expt) for expt in experiments]
-
     if not isinstance(experiments, Sequence):
         experiments = [experiments]
+    compile_method = qc.compiler.quil_to_native_quil
+    qc.compiler.quil_to_native_quil = basic_compile
+    acquire_stratified_data(qc, experiments, num_shots)
+    qc.compiler.quil_to_native_quil = compile_method  # restore the original compilation
+    for expt in experiments:
+        populate_rb_survival_statistics(expt) # populate with relevant estimates
 
-    # iterate over all of the layers of equal depth together.
-    for layers in zip(*[expt.layers for expt in experiments]):
-        # assert len(layers) == len(experiments)
-        # assert all([layer.depth = layers[0].depth for layer in layers ])
 
-        # iterate over each slice of components across the combined layers.
-        for components in zip(*[layer.components for layer in layers]):
-            # merge each of the sequences of all the components so that the nth gate of each
-            # sequence happens in the merged sequence at the nth step. (can't just sum sequences)
-            sequence = merge_sequences([component.sequence for component in components])
-            measure_qubits = [q for component in components for q in component.measure_qubits]
-
-            # basic compile probably not necessary here, but in general may be for other modules.
-            program = basic_compile(merge_programs(sequence))
-            # add measurements of the collection of qubits across all the components
-            ro = program.declare("ro", "BIT", len(measure_qubits))
-            for idx, qubit in enumerate(measure_qubits):
-                program.measure(qubit, ro[idx])
-            program.wrap_in_numshots_loop(num_shots)
-            # run the merged sequence program
-            exe = qc.compiler.native_quil_to_executable(program)
-            results = qc.run(exe)
-
-            # separate the results and store them in the respective components,
-            # along with mean and stddev
-            offset = 0
-            for component in components:
-                component.num_shots = num_shots
-                component.results = results[:, offset: offset + len(component.measure_qubits)]
-                component.mean, component.stddev = survival_statistics(component.results)
-
-    # return copies? return separate Results datastructure similar to ExperimentResults?
+def acquire_unitarity_data(qc, experiments: Sequence[StratifiedExperiment], num_shots: int = 500):
+    if not isinstance(experiments, Sequence):
+        experiments = [experiments]
+    compile_method = qc.compiler.quil_to_native_quil
+    qc.compiler.quil_to_native_quil = basic_compile
+    acquire_stratified_data(qc, experiments, num_shots)
+    qc.compiler.quil_to_native_quil = compile_method  # restore the original compilation
+    for expt in experiments:
+        populate_unitarity_purity_statistics(expt) # populate with relevant estimates
 
 
 def standard_rb(x, baseline, amplitude, decay):
@@ -340,8 +298,10 @@ def fit_rb_results(experiment):
     :return:
     """
     depths = [layer.depth for layer in experiment.layers for _ in layer.components]
-    survivals = [comp.mean for layer in experiment.layers for comp in layer.components]
-    weights = [1/comp.stddev for layer in experiment.layers for comp in layer.components]
+    survivals = [comp.estimates["Survival"][0] for layer in experiment.layers for comp in
+                 layer.components]
+    weights = [1/comp.estimates["Survival"][1] for layer in experiment.layers for comp in
+               layer.components]
     return fit_standard_rb(depths, survivals, np.asarray(weights))
 
 
@@ -350,56 +310,29 @@ def fit_rb_results(experiment):
 ########
 
 
-def generate_unitarity_experiment(qubits: Sequence[int], depths: List[int], num_sequences: int,
-                           random_seed: int = None) -> StratifiedExperiment:
-    """
-    Essentially the same as generate_rb_experiment, just stripping off last gate, no option for
-    interleaving.
-
-    :param qubits: qubits for a single isolated unitary rb experiment
-    :param depths:
-    :param num_sequences:
-    :param random_seed:
-    :return:
-    """
-    layers = []
-    for depth in depths:
-        components = []
-        for _ in range(num_sequences):
-            if random_seed is not None:
-                random_seed += 1
-
-            sequence = generate_rb_sequence(qubits, depth + 1, random_seed)[:-1]  # strip inverse
-            components.append(Component(tuple(sequence), qubits))
-        layers.append(Layer(depth, components))
-
-    exp_type = "URB"
-
-    return StratifiedExperiment(tuple(layers), tuple(qubits), exp_type)
-
-
-def estimate_purity(D: int, op_expect: np.ndarray, renorm: bool=True):
+def estimate_purity(dim: int, op_expect: np.ndarray, renorm: bool=True):
     """
     The renormalized, or 'shifted', purity is given in equation (10) of [ECN]
     where d is the dimension of the Hilbert space, 2**num_qubits
 
-    :param D: dimension of the hilbert space
+    :param dim: dimension of the hilbert space
     :param op_expect: array of estimated expectations of each operator being measured
     :param renorm: flag that renormalizes result to be between 0 and 1
     :return: purity given the operator expectations
     """
-    purity = (1 / D) * (1 + np.sum(op_expect * op_expect))
+    # assumes op_expect includes expectation of I with value 1.
+    purity = (1 / dim) * np.sum(op_expect * op_expect)
     if renorm:
-        purity = (D / (D - 1.0)) * (purity - 1.0 / D)
+        purity = (dim / (dim - 1.0)) * (purity - 1.0 / dim)
     return purity
 
 
-def estimate_purity_err(D: int, op_expect: np.ndarray, op_expect_var: np.ndarray, renorm=True):
+def estimate_purity_err(dim: int, op_expect: np.ndarray, op_expect_var: np.ndarray, renorm=True):
     """
     Propagate the observed variance in operator expectation to an error estimate on the purity.
     This assumes that each operator expectation is independent.
 
-    :param D: dimension of the Hilbert space
+    :param dim: dimension of the Hilbert space
     :param op_expect: array of estimated expectations of each operator being measured
     :param op_expect_var: array of estimated variance for each operator expectation
     :param renorm: flag that provides error for the renormalized purity
@@ -411,84 +344,13 @@ def estimate_purity_err(D: int, op_expect: np.ndarray, op_expect_var: np.ndarray
     need_second_order = np.isclose([0.]*len(var_of_square_op_expect), var_of_square_op_expect, atol=1e-6)
     var_of_square_op_expect[need_second_order] = op_expect_var[need_second_order]**2
 
-    purity_var = (1 / D) ** 2 * (np.sum(var_of_square_op_expect))
+    purity_var = (1 / dim) ** 2 * (np.sum(var_of_square_op_expect))
 
     if renorm:
-        purity_var = (D / (D - 1.0)) ** 2 * purity_var
+        purity_var = (dim / (dim - 1.0)) ** 2 * purity_var
 
     return np.sqrt(purity_var)
 
-
-def acquire_unitarity_data(qc, experiments, num_shots: int = 500):
-    """
-
-
-    :param qc:
-    :param experiments:
-    :param num_shots:
-    :return:
-    """
-    # make a copy of each experiment, or return a separate results dataclass?
-    # copies = [copy.deepcopy(expt) for expt in experiments]
-
-    if not isinstance(experiments, Sequence):
-        experiments = [experiments]
-
-    for layers in zip(*[expt.layers for expt in experiments]):
-        for components in zip(*[layer.components for layer in layers]):
-            sequence = merge_sequences([component.sequence for component in components])
-            program = basic_compile(merge_programs(sequence))
-            # diverges from standard rb at this point
-
-            # we need to essentially perform a simultaneous tomography experiment for each of the
-            # component sequences, where each pauli observable of the same type is run
-            # simultaneously on different qubits. (This is notably NOT the same as one big
-            # tomography experiment on all of the qubits, which has exponential scaling)
-            # Unfortunately, we can't currently run different PyquilTomographyExperiments
-            # simultaneously with measure_observables--we can only run different ExperimentSettings
-            # within the SAME PyquilTomographyExperiment. Instead of making a bunch of
-            # TomographyExperiments we directly work with the exp_settings that comprise each.
-
-            # handles mixing 1q and 2q experiments simultaneously.
-            max_num_settings = 4**max([len(component.measure_qubits) for component in components])
-
-            # the inner list here will consist of experiments with the same observable on
-            # different qubits. (not exactly if 1q and 2q or mixed, but same idea)
-            parallel_settings = [[] for _ in range(max_num_settings)]
-            # this will help us keep track of which components a result should be associated with.
-            indices = [[] for _ in range(max_num_settings)]
-            qubits = []
-            # get all of the exp_settings that would comprise a tomography experiment on each
-            # component. Add each component to its corresponding inner list of parallel_settings.
-            for idx, component in enumerate(components):
-                exp_settings = _state_tomo_settings(component.measure_qubits)
-                for setting, settings, idxs in zip(exp_settings, parallel_settings, indices):
-                    settings.append(setting)  # group parallel settings
-                    idxs.append(idx)
-                qubits.append(component.measure_qubits)
-
-            # this is a TomographyExperiment which runs each inner list of parallel_settings in
-            # parallel for the program.
-            tomo_expt = PyQuilTomographyExperiment(settings=parallel_settings, program=program,
-                                                  qubits=qubits)
-            # this is a flat list of results, no grouping is given. This is why we made 'indices'
-            expt_results = measure_observables(qc, tomo_expt, num_shots)
-
-            # regroup each result into its corresponding component.
-            component_results = [[] for _ in components]
-            for comp_idx, result in zip([idx for group in indices for idx in group], expt_results):
-                component_results[comp_idx].append(result)
-
-            for component, results in zip(components, component_results):
-                # results aren't quite the same as standard rb. We /could/ cast standard rb in the
-                # form of ExperimentSettings and use measure observables for the sake of unity.
-                component.results = results[1:]
-                exps = np.asarray([res.expectation for res in results[1:]])
-                variances = np.asarray([res.stddev**2 for res in results[1:]])
-                # the intermediate result is not a mean, but this is semantically where it should go
-                component.mean  = estimate_purity(2**len(component.measure_qubits), exps)
-                component.stddev  = estimate_purity_err(2**len(component.measure_qubits), exps,
-                                                        variances)
 
 def unitarity_fn(x, baseline, amplitude, unitarity):
     """
@@ -535,8 +397,10 @@ def fit_unitarity(depths, shifted_purities, weights=None):
 def fit_unitarity_results(experiment):
     # almost identitical to fit_rb_results, could probably be combined by examining the expt.type
     depths = [layer.depth for layer in experiment.layers for _ in layer.components]
-    shifted_purities = [comp.mean for layer in experiment.layers for comp in layer.components]
-    weights = [1/comp.stddev for layer in experiment.layers for comp in layer.components]
+    shifted_purities = [comp.estimates["Shifted Purity"][0] for layer in experiment.layers for comp
+                        in layer.components]
+    weights = [1/comp.estimates["Shifted Purity"][1] for layer in experiment.layers for comp in
+               layer.components]
     return fit_unitarity(depths, shifted_purities, np.asarray(weights))
 
 

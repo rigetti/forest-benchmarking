@@ -145,16 +145,16 @@ def str_to_pauli_term(pauli_str: str, qubit_labels=None):
     >>> str_to_pauli_term('XY', [])
 
     :param str pauli_str: The input string, made of of 'I', 'X', 'Y' or 'Z'
-    :param set qubit_labels: The integer labels for the qubits in the string, given in reverse
-    order. If None, default to the range of the length of pauli_str.
+    :param qubit_labels: The integer labels for the qubits in the string
+        If None, default to the range of the length of pauli_str.
     :return: the corresponding PauliTerm
     :rtype: pyquil.paulis.PauliTerm
     """
+    # TODO: why was this reversed?
     if qubit_labels is None:
-        labels_list = [qubit for qubit in reversed(range(len(pauli_str)))]
-    else:
-        labels_list = sorted(qubit_labels)[::-1]
-    pauli_term = PauliTerm.from_list(list(zip(pauli_str, labels_list)))
+        qubit_labels = [qubit for qubit in range(len(pauli_str))]
+
+    pauli_term = PauliTerm.from_list(list(zip(pauli_str, qubit_labels)))
     return pauli_term
 
 
@@ -197,33 +197,30 @@ def all_sic_terms(qubit_count: int, qubit_labels=None):
     return [tuple([op[q] + '_' + str(qubit) for q, qubit in enumerate(qubit_labels)]) for op in labels]
 
 
-def all_pauli_terms(qubit_count: int, qubit_labels=None):
+def all_pauli_terms(qubits: Sequence):
     """
     Generate list of all Pauli terms (with weight > 0) on N qubits.
 
-    :param int qubit_count: The number of qubits
-    :param set qubit_labels: The integer labels for the qubits
+    :param qubits: The integer labels for the qubits
     :return: list of `PauliTerm`s
     :rtype: list
     """
     # we exclude the all identity string since that maps to no preparation and no measurement
-    all_ixyz_strs = [''.join(x) for x in itertools.product('IXYZ', repeat=qubit_count)][1:]
-    list_of_terms = [str_to_pauli_term(s, qubit_labels) for s in all_ixyz_strs]
+    all_ixyz_strs = [''.join(x) for x in itertools.product('IXYZ', repeat=len(qubits))][1:]
+    list_of_terms = [str_to_pauli_term(s, qubits) for s in all_ixyz_strs]
     return list_of_terms
 
 
-def all_pauli_z_terms(qubit_count: int, qubit_labels=None):
+def all_pauli_z_terms(qubits: Sequence):
     """
-    Generate list of all Pauli Z terms (with weight > 0) on N qubits
+    Generate list of all Pauli Z terms (with weight >= 0) on N qubits
 
-    :param int n: The number of qubits
-    :param set qubit_labels: The integer labels for the qubits
+    :param qubits: The integer labels for the qubits
     :return: list of `PauliTerm`s
     :rtype: list
     """
-    # we exclude the all identity string since that maps to no preparation and no measurement
-    all_iz_strs = [''.join(x) for x in itertools.product('IZ', repeat=qubit_count)][1:]
-    list_of_terms = [str_to_pauli_term(s, qubit_labels) for s in all_iz_strs]
+    all_iz_strs = [''.join(x) for x in itertools.product('IZ', repeat=len(qubits))]
+    list_of_terms = [str_to_pauli_term(s, qubits) for s in all_iz_strs]
     return list_of_terms
 
 
