@@ -191,7 +191,7 @@ def _get_simultaneous_components(layers: Sequence[Layer]):
     # get the largest groups of nodes with shared edges, as each can be run simultaneously
     _, cliques = clique_removal(g)
 
-    return permutation([[components[idx] for idx in clique] for clique in cliques])
+    return [[components[idx] for idx in clique] for clique in cliques]
 
 
 def _partition_settings(components: Sequence[Component]):
@@ -214,8 +214,15 @@ def acquire_stratified_data(qc, experiments: Sequence[StratifiedExperiment], num
     Takes in StratifiedExperiments and simultaneously runs individual Components of separate
     experiments that are in Layers of equal depth.
 
-    Currently assumes that each experiment is comprised of layers with the same depths, and that
-    each layer is comprised of the same number of components.
+    First, we group all the Layers that share a depth. Within one such group, we then group all
+    of the Components that act on disjoint sets of qubits and so can be run simultaneously; this
+    is done irrespective of experiment type
+    TODO: add support for requiring same experiment type or even same component label.
+    For each of these groups we form a single simultaneous program that is run on the qc
+    and randomly partition measurement settings to be measured simultaneously on this program
+    until all of the required measurements for each component are taken (note this might mean
+    that the sequences of components with fewer measurements are simply run without being
+    measured for some runs).
 
     :param qc:
     :param experiments:
@@ -238,7 +245,7 @@ def acquire_stratified_data(qc, experiments: Sequence[StratifiedExperiment], num
         # experiments of the same type act on different qubits, then there is currently no
         # guarantee that experiments of the same type will be run simultaneously or that other
         # experiments will be uniformly randomly comingled into simultaneous groups...
-        component_groups = _get_simultaneous_components(dgroup)
+        component_groups = permutation(_get_simultaneous_components(dgroup))
         for cgroup in component_groups:
 
             sequence = merge_sequences([component.sequence for component in cgroup])
