@@ -1,4 +1,4 @@
-from typing import Union, List, Tuple
+from typing import Union, List, Tuple, Sequence
 
 import numpy as np
 import pandas as pd
@@ -9,6 +9,12 @@ from pyquil.api import QuantumComputer
 from pyquil.gates import RX, RZ, CZ, MEASURE
 from pyquil.quil import Program
 from pyquil.quilbase import Pragma
+from pyquil.operator_estimation import ExperimentSetting, zeros_state
+
+from forest.benchmarking.utils import all_pauli_z_terms
+from forest.benchmarking.randomized_benchmarking import populate_rb_survival_statistics
+from forest_benchmarking.stratified_experiment import StratifiedExperiment, Layer, Component, \
+    acquire_stratified_data
 
 MILLISECOND = 1e-6  # A millisecond (ms) is an SI unit of time
 MICROSECOND = 1e-6  # A microsecond (us) is an SI unit of time
@@ -24,92 +30,51 @@ GHZ = 1e9  # GHz
 #   T1
 # ==================================================================================================
 
-def generate_single_t1_experiment(qubits: Union[int, List[int]],
-                                  time: float,
-                                  n_shots: int = 1000) -> Program:
+
+def generate_t1_experiment(qubit: int,
+                           stop_time: float,
+                           num_points: int = 15) -> StratifiedExperiment:
     """
-    Return a t1 program in native Quil for a single time point.
-
-    :param qubits: Which qubits to measure.
-    :param time: The decay time before measurement.
-    :param n_shots: The number of shots to average over for the data point.
-    :return: A T1 Program.
-    """
-    program = Program()
-
-    try:
-        len(qubits)
-    except TypeError:
-        qubits = [qubits]
-
-    ro = program.declare('ro', 'BIT', len(qubits))
-    for q in qubits:
-        program += RX(np.pi, q)
-        program += Pragma('DELAY', [q], str(time))
-    for i in range(len(qubits)):
-        program += MEASURE(qubits[i], ro[i])
-    program.wrap_in_numshots_loop(n_shots)
-    return program
-
-
-def generate_t1_experiments(qubits: Union[int, List[int]],
-                            stop_time: float,
-                            n_shots: int = 1000,
-                            n_points: int = 15) -> pd.DataFrame:
-    """
-    Return a DataFrame containing programs which ran in sequence constitute a t1 experiment to
+    Return a StratifiedExperiment containing programs which constitute a t1 experiment to
     measure the decay time from the excited state to ground state.
 
-    :param qubits: Which qubits to measure.
+    :param qubit: Which qubit to measure.
     :param stop_time: The maximum decay time to measure at.
-    :param n_shots: The number of shots to average over for each data point.
     :param num_points: The number of points for each t1 curve.
     :return: A dataframe with columns: time, t1 program
     """
-    start_time = 0
-    time_and_programs = []
+    times = np.linspace(0, stop_time, num_points)
+    layers = []
+    for t in times:
+        t = round(t, 7)  # enforce 100ns boundaries
+        sequence = ([Program(RX(np.pi, qubit))], [Program(Pragma('DELAY', [qubit], str(t)))])
+        settings = (ExperimentSetting(zeros_state([qubit]), op) for op in all_pauli_z_terms([
+            qubit]))
+        components = (Component(sequence, settings, [qubit], "TIME"+str(t*MICROSECOND)+"us"), )
 
-    for t in np.linspace(start_time, stop_time, n_points):
-        t = round(t, 7)  # try to keep time on 100ns boundaries
-        time_and_programs.append({
-            'Time': t,
-            'Program': generate_single_t1_experiment(qubits, t, n_shots)
-        })
-    return pd.DataFrame(time_and_programs)
+        # the depth is time in units of [100ns]
+        layers.append(Layer(t * 1e7,components))
+
+    return StratifiedExperiment(tuple(layers), [qubit], "T1")
 
 
-def acquire_t1_data(qc: QuantumComputer,
-                    t1_experiment: pd.DataFrame,
-                    ) -> pd.DataFrame:
+def acquire_t1_data(qc: QuantumComputer, experiments: Sequence[StratifiedExperiment], num_shots):
     """
     Execute experiments to measure the T1 decay time of 1 or more qubits.
 
     :param qc: The QuantumComputer to run the experiment on
-    :param t1_experiment: A pandas DataFrame with columns: time, t1 program
-    :return: pandas DataFrame
+    :param experiments:
+    :param num_shots
+    :return:
     """
-    results = []
-
-    for index, row in t1_experiment.iterrows():
-        t = row['Time']
-        program = row['Program']
-
-        executable = qc.compiler.native_quil_to_executable(program)
-        bitstrings = qc.run(executable)
-
-        qubits = list(program.get_qubits())
-        for i in range(len(qubits)):
-            avg = np.mean(bitstrings[:, i])
-            results.append({
-                'Qubit': qubits[i],
-                'Time': t,
-                'Num_bitstrings': len(bitstrings),
-                'Average': float(avg),
-                'Program': program,
-            })
-
-    df = pd.DataFrame(results)
-    return df
+    if not isinstance(experiments, Sequence):
+        experiments = [experiments]
+    # compile_method = qc.compiler.quil_to_native_quil  #TODO: remove these lines
+    acquire_stratified_data(qc, experiments, num_shots)
+    # qc.compiler.quil_to_native_quil = compile_method  # restore the original compilation
+    for expt in experiments:
+        # TODO: this is essentially the right analysis, but the labels are wrong
+        populate_rb_survival_statistics(expt) # populate with relevant estimates
 
 
 def estimate_t1(df: pd.DataFrame):
