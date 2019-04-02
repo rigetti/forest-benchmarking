@@ -114,67 +114,58 @@ class StratifiedExperiment:
     """
     layers: Tuple[Layer]
     qubits: Tuple[int]
-    exp_type: str
+    expt_type: str
 
     def __str__(self):
         return '\n'.join([str(lyr) for lyr in self.layers]) + '\n'
 
 
-def determine_simultaneous_expt_grouping(experiments: Sequence[StratifiedExperiment]) \
-        -> List[Set[int]]:
-    """
-    Determines a grouping of experiments acting on disjoint sets of qubits that can be run
-    simultaneously.
+def _group_allowed_types(expts, allowed_parallel_types):
+    parallelizable_groups = []
+    expt_type_group_idx = {}
+    for expt in expts:
+        if expt.expt_type not in expt_type_group_idx.keys():
+            group_idx = len(parallelizable_groups)
+            parallelizable_groups.append([expt])
+            expt_type_group_idx[expt.expt_type] = group_idx
+            for allowed_groups in allowed_parallel_types:
+                if expt.expt_type in allowed_groups:
+                    for other_type in allowed_groups:
+                        expt_type_group_idx[other_type] = group_idx
+                break
+        else:
+            parallelizable_groups[expt_type_group_idx[expt.expt_type]].append(expt)
 
-    :param experiments:
-    :return: a list of the simultaneous groups, each specified by a set of indices of each grouped
-        experiment in experiments
-    """
-    g = nx.Graph()
-    nodes = np.arange(len(experiments))
-    g.add_nodes_from(nodes)
-    qubits = [set(expt.qubits) for expt in experiments]
-
-    for node1 in nodes:
-        qbs1 = qubits[node1]
-        for node2 in nodes[node1+1:]:
-            if len(qbs1.intersection(qubits[node2])) == 0:
-                # no shared qubits so add edge
-                g.add_edge(node1, node2)
-
-    # get the largest groups of nodes with shared edges, as each can be run simultaneously
-    _, cliqs = clique_removal(g)
-
-    return cliqs
+    return parallelizable_groups
 
 
-def merge_sequences(sequences: list) -> list:
-    """
-    Takes a list of equal-length "sequences" (lists of Programs) and merges them element-wise,
-    returning the merged outcome.
+def _group_by_depth(experiment_groups: Sequence[Sequence[StratifiedExperiment]]):
 
-    :param sequences: List of equal-length Lists of Programs
-    :return: A single List of Programs
-    """
-    depth = len(sequences[0])
-    assert all([len(s) == depth for s in sequences])
-    return [merge_programs([seq[idx] for seq in sequences]) for idx in range(depth)]
+    depth_groups = {}
+    for expt_group in experiment_groups:
+        # first go through all of the experiments in allowed type groups and make subgroups by depth
+        type_groups = {}
+        for expt in expt_group:
+            for layer in expt.layers:
+                if layer.depth in type_groups.keys():
+                    type_groups[layer.depth].append(layer)
+                else:
+                    type_groups[layer.depth] = [layer]
 
-
-def _group_by_depth(experiments: Sequence[StratifiedExperiment]):
-    groups = {}
-    for expt in experiments:
-        for layer in expt.layers:
-            if layer.depth in groups.keys():
-                groups[layer.depth].append(layer)
+        # now aggregate the subgroups by depth
+        for depth, type_group in type_groups.items():
+            if depth in depth_groups.keys():
+                depth_groups[depth].append(type_group)
             else:
-                groups[layer.depth] = [layer]
-    return groups
+                depth_groups[depth] = [type_group]
+
+    return [group for group in depth_groups.values()]
 
 
 def _get_simultaneous_components(layers: Sequence[Layer]):
     #TODO: consider e.g. running two short components serially in parallel with one longer component
-    components = [component for layer in layers for component in layer.components]
+    #TODO: any reason this should or shouldn't be randomized?
+    components = permutation([component for layer in layers for component in layer.components])
 
     g = nx.Graph()
     nodes = np.arange(len(components))
@@ -209,7 +200,51 @@ def _partition_settings(components: Sequence[Component]):
     return groups, idx_maps
 
 
-def acquire_stratified_data(qc, experiments: Sequence[StratifiedExperiment], num_shots: int = 500):
+def merge_sequences(sequences: list) -> list:
+    """
+    Takes a list of equal-length "sequences" (lists of Programs) and merges them element-wise,
+    returning the merged outcome.
+
+    :param sequences: List of equal-length Lists of Programs
+    :return: A single List of Programs
+    """
+    depth = len(sequences[0])
+    assert all([len(s) == depth for s in sequences])
+    return [merge_programs([seq[idx] for seq in sequences]) for idx in range(depth)]
+
+
+def _run_component_group(qc, group, num_shots):
+    sequence = merge_sequences([component.sequence for component in group])
+    qubits = [q for component in group for q in component.qubits]
+
+    # basic compile probably not necessary here, but in general may be for other modules.
+    program = merge_programs(sequence)
+
+    all_results = [[] for _ in group]
+    for settings, idx_map  in zip(*_partition_settings(group)):
+        single_expt = PyQuilTomographyExperiment([settings], program, qubits)
+        group_results = list(measure_observables(qc, single_expt, num_shots))
+
+        for idx, result in enumerate(group_results):
+            all_results[idx_map[idx]].append(result)
+
+    for component, results in zip(group, all_results):
+        component.results = results
+        component.num_shots = num_shots
+
+        # defer to component.estimates for now
+        # component.mean = np.mean([result.expectation for result in results])
+        # # TODO: check this... stderr? covariance for IX, XI, XX?
+        # var = np.sum([result.stddev**2 for result in results]) / len(results)**2
+        # component.stderr = np.sqrt(var)
+
+
+def acquire_stratified_data(qc, experiments: Sequence[StratifiedExperiment], num_shots: int = 500,
+                            parallelize_components: bool = True,
+                            allowed_parallel_types: Sequence[Sequence[str]] = [[]],
+                            randomize_components_within_depth = False,
+                            randomize_layers_within_depth = False,
+                            randomize_all_components = True):
     """
     Takes in StratifiedExperiments and simultaneously runs individual Components of separate
     experiments that are in Layers of equal depth.
@@ -227,6 +262,21 @@ def acquire_stratified_data(qc, experiments: Sequence[StratifiedExperiment], num
     :param qc:
     :param experiments:
     :param num_shots:
+    :param parallelize_components: if true, components of equal depth will be run in parallel
+        wherever possible. Components may be run in parallel if they act on disjoint sets of
+        qubits, and if they do not rely on a DELAY pragma. You may require that grouping of
+        experiments only occur for certain types; see param allowed_parallel_types and method
+        _group_by_depth
+    :param allowed_parallel_types: by default, when parallelize_components is set to true only
+        components in experiments of the same type will ever possibly be run in parallel. If
+        allowed_parallel_types is specified then components whose experiment types share an inner
+        list may be run in parallel. Note that running a T1/T2 experiment in parallel with any other
+        type may affect results since measurement of all qubits occurs at the end of each program;
+        if the non T1/T2 experiment sequences take more time than the DELAY time specified,
+        the T1/T2 results will not match the intended delay time.
+    :param randomize_components_within_depth: if true all components that
+    :param randomize_layers_within_depth:
+    :param randomize_all_components:
     :return: Currently mutates the input StratifiedExperiments.
     """
     # make a copy of each experiment, or return a separate results dataclass?
@@ -235,39 +285,45 @@ def acquire_stratified_data(qc, experiments: Sequence[StratifiedExperiment], num
     if not isinstance(experiments, Sequence):
         experiments = [experiments]
 
-    depth_groups = _group_by_depth(experiments)
+    if parallelize_components:
+        expts_by_type_group = _group_allowed_types(experiments, allowed_parallel_types)
+    else:
+        expts_by_type_group = [[expt] for expt in experiments]
 
-    # could shuffle depths too, permutation(depth_groups.items())
-    for depth, dgroup in depth_groups.items():
-        # currently, get back groups of components in random order
-        # e.g. if we are passed unitarity, irb, and t1 experiments acting on the *same* qubit then
-        # the sequences for each will be comingled in random order and run serially. If multiple
-        # experiments of the same type act on different qubits, then there is currently no
-        # guarantee that experiments of the same type will be run simultaneously or that other
-        # experiments will be uniformly randomly comingled into simultaneous groups...
-        component_groups = permutation(_get_simultaneous_components(dgroup))
-        for cgroup in component_groups:
+    # TODO: any reason to suppply option for not randomizing order of depths?
+    # for each depth get a list of groups of layers from experiment types that can be parallelized
+    parallelizable_groups_by_depth = permutation(_group_by_depth(expts_by_type_group))
 
-            sequence = merge_sequences([component.sequence for component in cgroup])
-            qubits = [q for component in cgroup for q in component.qubits]
+    all_simultaneous_component_groups = []
+    for parallelizable_groups in parallelizable_groups_by_depth:  # iterate over each depth
 
-            # basic compile probably not necessary here, but in general may be for other modules.
-            program = merge_programs(sequence)
+        if randomize_layers_within_depth:  # randomize (groups) of layers within this depth
+            parallelizable_groups = permutation(parallelizable_groups)
 
-            all_results = [[] for _ in cgroup]
-            for settings, idx_map  in zip(*_partition_settings(cgroup)):
-                single_expt = PyQuilTomographyExperiment([settings], program, qubits)
-                group_results = list(measure_observables(qc, single_expt, num_shots))
+        component_groups_by_depth = []
+        # iterate over each parallelizable group of layers
+        for layers in parallelizable_groups:
 
-                for idx, result in enumerate(group_results):
-                    all_results[idx_map[idx]].append(result)
+            if parallelize_components:
+                # form groups of components acting on separate qubits that can be run in parallel
+                component_groups = _get_simultaneous_components(layers)
+            else:
+                # put each component in its own component group. All components are run serially.
+                component_groups = [[component] for layer in layers
+                                    for component in layer.components]
+            # form a flat list of all component groups at this depth
+            component_groups_by_depth += component_groups
 
-            for component, results in zip(cgroup, all_results):
-                component.results = results
-                component.num_shots = num_shots
+        if randomize_components_within_depth:
+            # randomize components within this depth; this overrides randomize_layers_within_depth
+            component_groups_by_depth = permutation(component_groups_by_depth)
+        # form a flat list of each group of simultaneous components that will be run.
+        all_simultaneous_component_groups += component_groups_by_depth
 
-                # defer to component.estimates for now
-                # component.mean = np.mean([result.expectation for result in results])
-                # # TODO: check this... stderr? covariance for IX, XI, XX?
-                # var = np.sum([result.stddev**2 for result in results]) / len(results)**2
-                # component.stderr = np.sqrt(var)
+    if randomize_all_components:
+        # shuffle all of the components; any randomization before this is moot since components
+        # will be run in random order irrespective of depth or layer.
+        all_simultaneous_component_groups = permutation(all_simultaneous_component_groups)
+
+    for cgroup in all_simultaneous_component_groups:
+        _run_component_group(qc, cgroup, num_shots)
