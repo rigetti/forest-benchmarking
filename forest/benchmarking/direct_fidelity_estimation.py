@@ -103,10 +103,6 @@ def _exhaustive_dfe(program: Program, qubits: Sequence[int], in_states,
 
         if len(i_st) == 0:
             continue
-            # yield ExperimentSetting(
-            #     in_state=i_st, # need a don't care prep here
-            #     out_operator=PauliTerm(), # need an identity measurement
-            # )
 
         yield ExperimentSetting(
             in_state=i_st,
@@ -220,10 +216,6 @@ def _monte_carlo_dfe(program: Program, qubits: Sequence[int], in_states: list, n
             i_st = functools.reduce(mul, (in_states[si](qubits[i])
                                           for i, si in enumerate(second_try_st_inds)
                                           if in_states[si] is not None), TensorProductState())
-            # yield ExperimentSetting(
-            #     in_state=i_st, # need a don't care prep here
-            #     out_operator=PauliTerm(), # need an identity measurement
-            # )
 
         yield ExperimentSetting(
             in_state=i_st,
