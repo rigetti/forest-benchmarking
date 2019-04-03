@@ -377,7 +377,7 @@ def estimate_dfe(data: DFEData, kind: str) -> DFEEstimate:
     """
     d = data.dimension
 
-    # The subtlety in estimation the fidelity from a set of expectations of Pauli operators is that it is essential
+    # The subtlety in estimating the fidelity from a set of expectations of Pauli operators is that it is essential
     # to include the expectation of the identity in the calculation -- without it the fidelity estimate will be biased
     # downwards.
 
@@ -389,7 +389,7 @@ def estimate_dfe(data: DFEData, kind: str) -> DFEEstimate:
 
     # The mean expected value for the (non-trivial) Pauli operators that are measured must be scaled
     # as well -- each non-trivial Pauli should be selected 1 in every d or d**2 times (depending on whether we do
-    # states or processes), but if we choose Pauli ops uniformly from the d-1 or d**2-1 times non-trivial Paulis, we
+    # states or processes), but if we choose Pauli ops uniformly from the d-1 or d**2-1 non-trivial Paulis, we
     # again introduce a bias. So the mean expected value of non-trivial Paulis that are sampled must be weighted
     # by d-1/d (for states) or d**2-1/d**2 (for processes). Similarly, variance estimates must be scaled appropriately.
 
