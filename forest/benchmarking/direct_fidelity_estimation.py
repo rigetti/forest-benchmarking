@@ -103,6 +103,10 @@ def _exhaustive_dfe(program: Program, qubits: Sequence[int], in_states,
 
         if len(i_st) == 0:
             continue
+            # yield ExperimentSetting(
+            #     in_state=i_st, # need a don't care prep here
+            #     out_operator=PauliTerm(), # need an identity measurement
+            # )
 
         yield ExperimentSetting(
             in_state=i_st,
@@ -208,12 +212,18 @@ def _monte_carlo_dfe(program: Program, qubits: Sequence[int], in_states: list, n
         i_st = functools.reduce(mul, (in_states[si](qubits[i])
                                       for i, si in enumerate(st_inds)
                                       if in_states[si] is not None), TensorProductState())
+
+        # TODO: we should not pick a new one, we should just return a trivial experiment
         while len(i_st) == 0:
             # pick a new one
             second_try_st_inds = np.random.randint(len(in_states), size=len(qubits))
             i_st = functools.reduce(mul, (in_states[si](qubits[i])
                                           for i, si in enumerate(second_try_st_inds)
                                           if in_states[si] is not None), TensorProductState())
+            # yield ExperimentSetting(
+            #     in_state=i_st, # need a don't care prep here
+            #     out_operator=PauliTerm(), # need an identity measurement
+            # )
 
         yield ExperimentSetting(
             in_state=i_st,
@@ -373,16 +383,26 @@ def estimate_dfe(data: DFEData, kind: str) -> DFEEstimate:
     :rtype: ``DFEEstimate`
 
     """
-    p_mean = np.mean(data.pauli_point_est)
-    p_variance = np.sum(data.pauli_std_err**2) / len(data.results) ** 2
     d = data.dimension
 
+    # TODO: rewrite this explanation
+    # The problem in the care of process DFE is that we want to emulate sampling from the 4^N
+    # different Pauli operators, and projecting the "reference" half onto a random (product)
+    # eigenstate. We sample from these preparations, but the I^N I^N case should always occur
+    # with weight 1/4^N. When doing exhaustive sampling we should actually average different
+    # random eigenstates for the same operator together, but the process correction should always
+    # come with a weight of 1/d**2
+
+    # TODO: explain all the additive biases and the multiplicative factors
     if kind == 'state':
-        mean_est = p_mean
-        var_est = p_variance
+        # introduce bias due to measuring the identity
+        mean_est = (d-1)/d * np.mean(data.pauli_point_est) + 1.0/d
+        var_est = (d-1)**2/d**2 * np.sum(data.pauli_std_err**2) / len(data.pauli_point_est) ** 2
     elif kind == 'process':
+        # introduce bias due to measuring the identity
+        p_mean = (d**2-1)/d**2 * np.mean(data.pauli_point_est) + 1.0/d**2
         mean_est = (d**2 * p_mean + d)/(d**2+d)
-        var_est = d**2/(d+1)**2 * p_variance
+        var_est = d**2/(d+1)**2 * (d**2-1)**2/d**4 * np.sum(data.pauli_std_err**2) / len(data.pauli_point_est) ** 4
     else:
         raise ValueError('DFEdata can only be of kind \'state\' or \'process\'.')
 
