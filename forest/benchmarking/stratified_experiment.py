@@ -28,17 +28,12 @@ class Component:
     expectations.
     """
     sequence: Tuple[Program]
-    experiments: Tuple[ExperimentSetting]
+    settings: Tuple[ExperimentSetting]
     qubits: Tuple[int]
     label: str = None
     num_shots: int = None
     results: Tuple[ExperimentResult] = None
     estimates: Dict[str, Tuple[float, float]] = None
-
-    # these probably aren't very useful to keep track of
-    # mean: float = None
-    # stderr: float = None
-
 
     def __str__(self):
         output = self.label + '['
@@ -115,12 +110,13 @@ class StratifiedExperiment:
     layers: Tuple[Layer]
     qubits: Tuple[int]
     expt_type: str
+    estimates: Dict[str, Tuple[float, float]] = None
 
     def __str__(self):
         return '\n'.join([str(lyr) for lyr in self.layers]) + '\n'
 
 
-def _group_allowed_types(expts, allowed_parallel_types):
+def _group_allowed_types(expts, allowed_parallel_types = None):
     parallelizable_groups = []
     expt_type_group_idx = {}
     for expt in expts:
@@ -128,11 +124,14 @@ def _group_allowed_types(expts, allowed_parallel_types):
             group_idx = len(parallelizable_groups)
             parallelizable_groups.append([expt])
             expt_type_group_idx[expt.expt_type] = group_idx
-            for allowed_groups in allowed_parallel_types:
-                if expt.expt_type in allowed_groups:
-                    for other_type in allowed_groups:
-                        expt_type_group_idx[other_type] = group_idx
-                break
+
+            if allowed_parallel_types is not None:
+                # form allowed groups of experiments based on experiment type
+                for allowed_groups in allowed_parallel_types:  # search for group
+                    if expt.expt_type in allowed_groups:
+                        for other_type in allowed_groups:  # set group index for all members
+                            expt_type_group_idx[other_type] = group_idx
+                    break  # found group, so stop looking
         else:
             parallelizable_groups[expt_type_group_idx[expt.expt_type]].append(expt)
 
@@ -187,8 +186,8 @@ def _get_simultaneous_components(layers: Sequence[Layer]):
 
 def _partition_settings(components: Sequence[Component]):
     # assume components act on separate qubits
-    settings_pool = [permutation(component.experiments) for component in components]
-    max_num_settings = max([len(component.experiments) for component in components])
+    settings_pool = [permutation(component.settings) for component in components]
+    max_num_settings = max([len(component.settings) for component in components])
     groups = []
     idx_maps = []
     for idx in range(max_num_settings):
@@ -241,7 +240,7 @@ def _run_component_group(qc, group, num_shots):
 
 def acquire_stratified_data(qc, experiments: Sequence[StratifiedExperiment], num_shots: int = 500,
                             parallelize_components: bool = True,
-                            allowed_parallel_types: Sequence[Sequence[str]] = [[]],
+                            allowed_parallel_types: Sequence[Sequence[str]] = None,
                             randomize_components_within_depth = False,
                             randomize_layers_within_depth = False,
                             randomize_all_components = True):
@@ -274,7 +273,7 @@ def acquire_stratified_data(qc, experiments: Sequence[StratifiedExperiment], num
         type may affect results since measurement of all qubits occurs at the end of each program;
         if the non T1/T2 experiment sequences take more time than the DELAY time specified,
         the T1/T2 results will not match the intended delay time.
-    :param randomize_components_within_depth: if true all components that
+    :param randomize_components_within_depth:
     :param randomize_layers_within_depth:
     :param randomize_all_components:
     :return: Currently mutates the input StratifiedExperiments.

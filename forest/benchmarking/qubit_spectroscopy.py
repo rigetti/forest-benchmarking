@@ -13,12 +13,13 @@ from pyquil.operator_estimation import ExperimentSetting, zeros_state
 
 from forest.benchmarking.utils import all_pauli_z_terms
 from forest.benchmarking.randomized_benchmarking import populate_rb_survival_statistics
-from forest_benchmarking.stratified_experiment import StratifiedExperiment, Layer, Component, \
+from forest.benchmarking.stratified_experiment import StratifiedExperiment, Layer, Component, \
     acquire_stratified_data
 
 MILLISECOND = 1e-6  # A millisecond (ms) is an SI unit of time
 MICROSECOND = 1e-6  # A microsecond (us) is an SI unit of time
 NANOSECOND = 1e-9  # A nanosecond (ns) is an SI unit of time
+USEC_PER_DEPTH = .1
 
 # A Hertz (Hz) is a derived unit of frequency in SI Units; 1 Hz is defined as one cycle per second.
 KHZ = 1e3  # kHz
@@ -31,29 +32,25 @@ GHZ = 1e9  # GHz
 # ==================================================================================================
 
 
-def generate_t1_experiment(qubit: int,
-                           stop_time: float,
-                           num_points: int = 15) -> StratifiedExperiment:
+def generate_t1_experiment(qubit: int, times: Sequence[float]) -> StratifiedExperiment:
     """
     Return a StratifiedExperiment containing programs which constitute a t1 experiment to
     measure the decay time from the excited state to ground state.
 
     :param qubit: Which qubit to measure.
-    :param stop_time: The maximum decay time to measure at.
-    :param num_points: The number of points for each t1 curve.
+    :param times: The times at which to measure, given in seconds.
     :return: A dataframe with columns: time, t1 program
     """
-    times = np.linspace(0, stop_time, num_points)
     layers = []
-    for t in times:
-        t = round(t, 7)  # enforce 100ns boundaries
-        sequence = ([Program(RX(np.pi, qubit))], [Program(Pragma('DELAY', [qubit], str(t)))])
-        settings = (ExperimentSetting(zeros_state([qubit]), op) for op in all_pauli_z_terms([
+    for t in sorted(times):
+        t = round(t/MICROSECOND, 1)  # convert to us and enforce 100ns boundaries
+        sequence = ([Program(RX(np.pi, qubit)), Program(Pragma('DELAY', [qubit], str(t)))])
+        settings = tuple(ExperimentSetting(zeros_state([qubit]), op) for op in all_pauli_z_terms([
             qubit]))
-        components = (Component(sequence, settings, [qubit], "TIME"+str(t*MICROSECOND)+"us"), )
+        components = (Component(sequence, settings, [qubit], "T"+str(t)+"us"), )
 
         # the depth is time in units of [100ns]
-        layers.append(Layer(t * 1e7,components))
+        layers.append(Layer(int(round(t / USEC_PER_DEPTH)), components))
 
     return StratifiedExperiment(tuple(layers), [qubit], "T1")
 
@@ -73,8 +70,13 @@ def acquire_t1_data(qc: QuantumComputer, experiments: Sequence[StratifiedExperim
     acquire_stratified_data(qc, experiments, num_shots)
     # qc.compiler.quil_to_native_quil = compile_method  # restore the original compilation
     for expt in experiments:
-        # TODO: this is essentially the right analysis, but the labels are wrong
+        # TODO: standardize survival to mean 0s survival? Change label?
         populate_rb_survival_statistics(expt) # populate with relevant estimates
+        for layer in expt.layers:
+            prob0, err = layer.components[0].estimates["Survival"]
+            # TODO: standardize estimate organization, labels
+            # TODO: allow addition to estimates or always over-write?
+            layer.estimates = {"Fraction One": (1- prob0, err)}
 
 
 def estimate_t1(experiment: StratifiedExperiment):
@@ -84,56 +86,42 @@ def estimate_t1(experiment: StratifiedExperiment):
     :param experiment:
     :return: pandas DataFrame
     """
-    x_data = [layer.depth * 1e7 for layer in experiment.layers]  # times in seconds
-    y_data = [1 - layer.component.estimates["Survival"] for layer in experiment.layers]
+    x_data = [layer.depth * USEC_PER_DEPTH for layer in experiment.layers]  # times in u-seconds
+    y_data = [layer.estimates["Fraction One"][0] for layer in experiment.layers]
 
     try:
         fit_params, fit_params_errs = fit_to_exponential_decay_curve(x_data, y_data)
-
-        return fit_params[1] / MICROSECOND  # the t1 estimate
-        #TODO: what am I going to do with these?
-            # 'Fit_params': fit_params,
-            # 'Fit_params_errs': fit_params_errs,
+        #TODO: check if estimates exists?
+        experiment.estimates = {"T1": (fit_params[1], fit_params_errs[1])}
+        return fit_params, fit_params_errs
     except RuntimeError:
         return 'Could not fit to experimental data to get t1 estimate'
 
 
-def plot_t1_estimate_over_data(df: pd.DataFrame,
-                               df_est: pd.DataFrame,
-                               qubits: list = None,
+def plot_t1_estimate_over_data(experiments: Union[StratifiedExperiment,
+                                                  Sequence[StratifiedExperiment]],
+                               fit_params,
+                               fit_params_errs, # TODO: plot err bars, make like rb
                                filename: str = None) -> None:
     """
-    Plot T1 experimental data and estimated value of T1 as and exponential decay curve.
+    Plot T1 experimental data and estimated value of T1 as an exponential decay curve.
 
-    :param df: A pandas DataFrame experimental results to plot
-    :param df_est: A pandas DataFrame with estimates of T1.
-    :param qubits: A list of qubits that you actually want plotted. The default is all qubits.
-    :param qc_type: String indicating whether QVM or QPU was used to collect data.
+    :param experiments: A list of experiments with T1 data.
+    :param filename: String indicating whether QVM or QPU was used to collect data.
     :return: None
     """
-    if qubits is None:
-        qubits = df['Qubit'].unique().tolist()
+    if isinstance(experiments, StratifiedExperiment):
+        experiments = [experiments]
 
-    # check the user specified valid qubits
-    for qbx in qubits:
-        if qbx not in df['Qubit'].unique():
-            raise ValueError("The list of qubits does not match the ones you experimented on.")
+    for expt in experiments:
+        q = expt.qubits[0]
 
-    for q in qubits:
-        df2 = df[df['Qubit'] == q].sort_values('Time')
-        x_data = df2['Time']
-        y_data = df2['Average']
+        times = [layer.depth * USEC_PER_DEPTH for layer in expt.layers]  # times in u-seconds
+        zero_survival = [layer.estimates["Fraction One"][0] for layer in expt.layers]
 
-        plt.plot(x_data / MICROSECOND, y_data, 'o-', label=f"QC{q} T1 data")
-
-        row = df_est[df_est['Qubit'] == q]
-
-        if row['Fit_params'].values[0] is None:
-            print(f"T1 estimate did not succeed for qubit {q}")
-        else:
-            fit_params = (row['Fit_params'].values)[0]
-            plt.plot(x_data / MICROSECOND, exponential_decay_curve(x_data, *fit_params),
-                     label=f"QC{q} fit: T1={fit_params[1] / MICROSECOND:.2f}us")
+        plt.plot(times, zero_survival, 'o-', label=f"QC{q} T1 data")
+        plt.plot(times, exponential_decay_curve(times, *fit_params),
+                 label=f"QC{q} fit: T1={fit_params[1]:.2f}us")
 
     plt.xlabel("Time [us]")
     plt.ylabel(r"Pr($|1\rangle$)")
