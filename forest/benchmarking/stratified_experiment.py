@@ -1,4 +1,4 @@
-from typing import Tuple, Sequence, List, Set, Dict
+from typing import Tuple, Sequence, List, Set, Dict, Any
 import numpy as np
 from numpy.random import permutation
 import networkx as nx
@@ -111,6 +111,7 @@ class StratifiedExperiment:
     qubits: Tuple[int]
     expt_type: str
     estimates: Dict[str, Tuple[float, float]] = None
+    meta_data: Dict[str, Any] = None
 
     def __str__(self):
         return '\n'.join([str(lyr) for lyr in self.layers]) + '\n'

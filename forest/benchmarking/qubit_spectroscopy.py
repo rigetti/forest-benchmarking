@@ -43,14 +43,15 @@ def generate_t1_experiment(qubit: int, times: Sequence[float]) -> StratifiedExpe
     """
     layers = []
     for t in sorted(times):
-        t = round(t/MICROSECOND, 1)  # convert to us and enforce 100ns boundaries
+        t = round(t, 7)  # enforce 100ns boundaries
         sequence = ([Program(RX(np.pi, qubit)), Program(Pragma('DELAY', [qubit], str(t)))])
         settings = tuple(ExperimentSetting(zeros_state([qubit]), op) for op in all_pauli_z_terms([
             qubit]))
-        components = (Component(sequence, settings, [qubit], "T"+str(t)+"us"), )
+        t_in_us = t/MICROSECOND
+        components = (Component(sequence, settings, [qubit], "T"+str(t_in_us)+"us"), )
 
         # the depth is time in units of [100ns]
-        layers.append(Layer(int(round(t / USEC_PER_DEPTH)), components))
+        layers.append(Layer(int(round(t_in_us / USEC_PER_DEPTH)), components))
 
     return StratifiedExperiment(tuple(layers), [qubit], "T1")
 
@@ -66,9 +67,7 @@ def acquire_t1_data(qc: QuantumComputer, experiments: Sequence[StratifiedExperim
     """
     if not isinstance(experiments, Sequence):
         experiments = [experiments]
-    # compile_method = qc.compiler.quil_to_native_quil  #TODO: remove these lines
     acquire_stratified_data(qc, experiments, num_shots)
-    # qc.compiler.quil_to_native_quil = compile_method  # restore the original compilation
     for expt in experiments:
         # TODO: standardize survival to mean 0s survival? Change label?
         populate_rb_survival_statistics(expt) # populate with relevant estimates
@@ -89,19 +88,16 @@ def estimate_t1(experiment: StratifiedExperiment):
     x_data = [layer.depth * USEC_PER_DEPTH for layer in experiment.layers]  # times in u-seconds
     y_data = [layer.estimates["Fraction One"][0] for layer in experiment.layers]
 
-    try:
-        fit_params, fit_params_errs = fit_to_exponential_decay_curve(x_data, y_data)
-        #TODO: check if estimates exists?
-        experiment.estimates = {"T1": (fit_params[1], fit_params_errs[1])}
-        return fit_params, fit_params_errs
-    except RuntimeError:
-        return 'Could not fit to experimental data to get t1 estimate'
+    fit_params, fit_params_errs = fit_to_exponential_decay_curve(np.array(x_data), np.array(y_data))
+    #TODO: check if estimates exists?
+    experiment.estimates = {"T1": (fit_params[1], fit_params_errs[1])}
+    return fit_params, fit_params_errs
 
 
 def plot_t1_estimate_over_data(experiments: Union[StratifiedExperiment,
                                                   Sequence[StratifiedExperiment]],
-                               fit_params,
-                               fit_params_errs, # TODO: plot err bars, make like rb
+                               expts_fit_params,
+                               expts_fit_params_errs, # TODO: plot err bars, make like rb
                                filename: str = None) -> None:
     """
     Plot T1 experimental data and estimated value of T1 as an exponential decay curve.
@@ -112,15 +108,19 @@ def plot_t1_estimate_over_data(experiments: Union[StratifiedExperiment,
     """
     if isinstance(experiments, StratifiedExperiment):
         experiments = [experiments]
+    if isinstance(expts_fit_params[0], float):
+        expts_fit_params = [expts_fit_params]
+        expts_fit_params_errs = [expts_fit_params_errs]
 
-    for expt in experiments:
+    for expt, fit_params, fit_params_errs in zip(experiments, expts_fit_params,
+                                                 expts_fit_params_errs):
         q = expt.qubits[0]
 
         times = [layer.depth * USEC_PER_DEPTH for layer in expt.layers]  # times in u-seconds
         zero_survival = [layer.estimates["Fraction One"][0] for layer in expt.layers]
 
         plt.plot(times, zero_survival, 'o-', label=f"QC{q} T1 data")
-        plt.plot(times, exponential_decay_curve(times, *fit_params),
+        plt.plot(times, exponential_decay_curve(np.array(times), *fit_params),
                  label=f"QC{q} fit: T1={fit_params[1]:.2f}us")
 
     plt.xlabel("Time [us]")
@@ -137,258 +137,150 @@ def plot_t1_estimate_over_data(experiments: Union[StratifiedExperiment,
 # ==================================================================================================
 #   T2 star and T2 echo functions
 # ==================================================================================================
-def generate_single_t2_star_experiment(qubits: Union[int, List[int]],
-                                       time: float,
-                                       detuning: float,
-                                       n_shots: int = 1000) -> Program:
+def generate_t2_star_experiment(qubit: int, times: Sequence[float], detuning: float = 5e6) \
+        -> StratifiedExperiment:
     """
-    Return a T2 star program in native Quil for a single time point.
-
-    :param qubits: Which qubits to measure.
-    :param time: The decay time before measurement.
-    :param detuning: The additional detuning frequency about the z axis.
-    :param n_shots: The number of shots to average over for the data point.
-    :return: A T2 Program.
-    """
-    program = Program()
-
-    try:
-        len(qubits)
-    except TypeError:
-        qubits = [qubits]
-
-    ro = program.declare('ro', 'BIT', len(qubits))
-    for q in qubits:
-        program += RX(np.pi / 2, q)
-        program += Pragma('DELAY', [q], str(time))
-        program += RZ(2 * np.pi * time * detuning, q)
-        program += RX(np.pi / 2, q)
-    for i in range(len(qubits)):
-        program += MEASURE(qubits[i], ro[i])
-    program.wrap_in_numshots_loop(n_shots)
-    return program
-
-
-def generate_t2_star_experiments(qubits: Union[int, List[int]],
-                                 stop_time: float,
-                                 detuning: float = 5e6,
-                                 n_shots: int = 1000,
-                                 num_points: int = 15)  -> pd.DataFrame:
-    """
-    Return a DataFrame containing programs which ran in sequence constitute a T2 star
+    Return a StratifiedExperiment containing programs which ran in sequence constitute a T2 star
     experiment to measure the T2 star coherence decay time.
 
-    :param qubits: Which qubits to measure.
-    :param stop_time: The maximum decay time to measure at.
+    :param qubit: Which qubit to measure.
+    :param times: The times at which to measure.
     :param detuning: The additional detuning frequency about the z axis.
-    :param n_shots: The number of shots to average over for each data point.
-    :param num_points: The number of points for each T2 curve.
     :return: pandas DataFrame with columns: time, program, detuning
     """
-    start_time = 0
-    time_and_programs = []
-    for t in np.linspace(start_time, stop_time, num_points):
+    layers = []
+    for t in times:
         # TODO: avoid aliasing while being mindful of the 20ns resolution in the QCS stack
-        time_and_programs.append({
-            'Time': t,
-            'Program': generate_single_t2_star_experiment(qubits, t, detuning, n_shots=n_shots),
-            'Detuning': detuning,
-        })
-    return pd.DataFrame(time_and_programs)
+        t = round(t, 7)  # enforce 100ns boundaries
+        sequence = ([Program(RX(np.pi / 2, qubit)),  # prep
+                     Program(Pragma('DELAY', [qubit], str(t))) # delay and measure
+                     + RZ(2 * np.pi * t * detuning, qubit) + RX(np.pi / 2, qubit)])
+        settings = tuple(ExperimentSetting(zeros_state([qubit]), op)
+                         for op in all_pauli_z_terms([qubit]))
+        t_in_us = round(t/MICROSECOND,1)
+        components = (Component(sequence, settings, [qubit], "T"+str(t_in_us)+"us"), )
+
+        # the depth is time in units of [100ns]
+        layers.append(Layer(int(round(t_in_us / USEC_PER_DEPTH)), components))
+
+    return StratifiedExperiment(tuple(layers), [qubit], "T2star", meta_data={'Detuning': detuning})
 
 
-def generate_single_t2_echo_experiment(qubits: Union[int, List[int]],
-                                       time: float,
-                                       detuning: float,
-                                       n_shots: int = 1000) -> Program:
+def generate_t2_echo_experiment(qubit: int, times: Sequence[float], detuning: float = 5e6) \
+        -> StratifiedExperiment:
     """
-    Return a T2 echo program in native Quil for a single time point.
+    Return a StratifiedExperiment containing programs which ran in sequence constitute a T2 star
+    experiment to measure the T2 star coherence decay time.
 
-    :param qubits: Which qubits to measure.
-    :param time: The decay time before measurement.
+    :param qubit: Which qubit to measure.
+    :param times: The times at which to measure.
     :param detuning: The additional detuning frequency about the z axis.
-    :param n_shots: The number of shots to average over for the data point.
-    :return: A T2 Program.
-    """
-    program = Program()
-
-    try:
-        len(qubits)
-    except TypeError:
-        qubits = [qubits]
-
-    ro = program.declare('ro', 'BIT', len(qubits))
-    for q in qubits:
-        # prepare plus state |+>
-        program += RX(np.pi / 2, q)
-        # wait half of the delay
-        program += Pragma('DELAY', [q], str(time / 2))
-        # apply an X gate compiled out of RX(90)
-        program += RX(np.pi / 2, q)
-        program += RX(np.pi / 2, q)
-        # wait the other half of the delay
-        program += Pragma('DELAY', [q], str(time / 2))
-        program += RZ(2 * np.pi * time * detuning, q)
-        program += RX(np.pi / 2, q)
-    for i in range(len(qubits)):
-        program += MEASURE(qubits[i], ro[i])
-    program.wrap_in_numshots_loop(n_shots)
-    return program
-
-
-def generate_t2_echo_experiments(qubits: Union[int, List[int]],
-                                 stop_time: float,
-                                 detuning: float = 5e6,
-                                 n_shots: int = 1000,
-                                 num_points: int = 15) -> pd.DataFrame:
-    """
-    Return a DataFrame containing programs which ran in sequence constitute a T2 echo
-    experiment to measure the T2 echo coherence decay time.
-
-    :param qubits: Which qubits to measure.
-    :param stop_time: The maximum decay time to measure at.
-    :param detuning: The additional detuning frequency about the z axis.
-    :param n_shots: The number of shots to average over for each data point.
-    :param num_points: The number of points for each T2 curve.
     :return: pandas DataFrame with columns: time, program, detuning
     """
-    start_time = 0
-    time_and_programs = []
-    for t in np.linspace(start_time, stop_time, num_points):
+    layers = []
+    for t in times:
         # TODO: avoid aliasing while being mindful of the 20ns resolution in the QCS stack
-        time_and_programs.append({
-            'Time': t,
-            'Program': generate_single_t2_echo_experiment(qubits, t, detuning, n_shots=n_shots),
-            'Detuning': detuning,
-        })
-    return pd.DataFrame(time_and_programs)
+        t = round(t, 7)  # enforce 100ns boundaries
+
+        half_delay = Pragma('DELAY', [qubit], str(t/2))
+        echo_prog = Program([half_delay, RX(np.pi / 2, qubit), RX(np.pi / 2, qubit), half_delay])
+        sequence = ([Program(RX(np.pi / 2, qubit)), # prep
+                     # delay/echo/delay and measure
+                     echo_prog + RZ(2 * np.pi * t * detuning, qubit) + RX(np.pi / 2, qubit)])
+
+        settings = tuple(ExperimentSetting(zeros_state([qubit]), op)
+                         for op in all_pauli_z_terms([qubit]))
+        t_in_us = round(t/MICROSECOND,1)
+        components = (Component(sequence, settings, [qubit], "T"+str(t_in_us)+"us"), )
+
+        # the depth is time in units of [100ns]
+        layers.append(Layer(int(round(t_in_us / USEC_PER_DEPTH)), components))
+
+    return StratifiedExperiment(tuple(layers), [qubit], "T2echo", meta_data={'Detuning': detuning})
 
 
-def acquire_t2_data(qc: QuantumComputer,
-                    t2_experiment: pd.DataFrame) -> pd.DataFrame:
+def acquire_t2_data(qc: QuantumComputer, experiments: Sequence[StratifiedExperiment], num_shots):
     """
-    Execute experiments to measure the T2 star or T2 echo decay time of 1 or more qubits.
+    Execute experiments to measure the T2 time of one or more qubits.
 
     :param qc: The QuantumComputer to run the experiment on
-    :param t2_experiment: A pandas DataFrame containing: time, T2 program
-    :return: pandas DataFrame containing T2 results, and detuning used in creating experiments for
-    those results.
+    :param experiments:
+    :param num_shots
+    :return:
     """
-    results = []
-
-    for index, row in t2_experiment.iterrows():
-        t = row['Time']
-        program = row['Program']
-        detuning = row['Detuning']
-        executable = qc.compiler.native_quil_to_executable(program)
-        bitstrings = qc.run(executable)
-
-        qubits = list(program.get_qubits())
-        for i in range(len(qubits)):
-            avg = np.mean(bitstrings[:, i])
-            results.append({
-                'Qubit': qubits[i],
-                'Time': t,
-                'Num_bitstrings': len(bitstrings),
-                'Average': float(avg),
-                'Detuning': float(detuning),
-            })
-
-    return pd.DataFrame(results)
+    if not isinstance(experiments, Sequence):
+        experiments = [experiments]
+    acquire_stratified_data(qc, experiments, num_shots)
+    for expt in experiments:
+        # TODO: standardize survival to mean 0s survival? Change label?
+        populate_rb_survival_statistics(expt) # populate with relevant estimates
+        for layer in expt.layers:
+            prob0, err = layer.components[0].estimates["Survival"]
+            # TODO: standardize estimate organization, labels
+            # TODO: allow addition to estimates or always over-write?
+            layer.estimates = {"Fraction One": (1- prob0, err)}
 
 
-def estimate_t2(df: pd.DataFrame) -> pd.DataFrame:
+def estimate_t2(experiment: StratifiedExperiment):
     """
     Estimate T2 star or T2 echo from experimental data.
 
-    :param df: A pandas DataFrame with experimental T2 results
-    :param detuning: Detuning frequency used in experiment creation
-    :return: pandas DataFrame
+    :param experiment:
+    :return:
     """
-    results = []
-    for q in df['Qubit'].unique():
-        df2 = df[df['Qubit'] == q].sort_values('Time')
-        x_data = df2['Time']
-        y_data = df2['Average']
-        detuning = df2['Detuning'].values[0]
+    x_data = [layer.depth * USEC_PER_DEPTH for layer in experiment.layers]  # times in u-seconds
+    y_data = [layer.estimates["Fraction One"][0] for layer in experiment.layers]
+    detuning = experiment.meta_data['Detuning']
 
-        try:
-            fit_params, fit_params_errs = fit_to_exponentially_decaying_sinusoidal_curve(x_data,
-                                                                                         y_data,
-                                                                                         detuning)
-            results.append({
-                'Qubit': q,
-                'T2': fit_params[1] / MICROSECOND,
-                'Freq': fit_params[2] / MHZ,
-                'Fit_params': fit_params,
-                'Fit_params_errs': fit_params_errs,
-                'Message': None,
-            })
-        except RuntimeError:
-            print(f"Could not fit to experimental data for qubit {q}")
-            results.append({
-                'Qubit': q,
-                'T2': None,
-                'Freq': None,
-                'Fit_params': None,
-                'Fit_params_errs': None,
-                'Message': 'Could not fit to experimental data for qubit' + str(q),
-            })
-
-    return pd.DataFrame(results)
+    fit_params, fit_params_errs = fit_to_exponentially_decaying_sinusoidal_curve(np.array(x_data),
+                                                                                 np.array(y_data),
+                                                                                 detuning)
+    # TODO: check and perhaps change untis. Was done in seconds before...
+    experiment.estimates = {"T2": fit_params[1], "Freq": fit_params[2]}
+    return fit_params, fit_params_errs
 
 
-def plot_t2_estimate_over_data(df: pd.DataFrame,
-                               df_est: pd.DataFrame,
-                               qubits: list = None,
-                               t2_type: str = 'unknown',
+def plot_t2_estimate_over_data(experiments: Union[StratifiedExperiment,
+                                                  Sequence[StratifiedExperiment]],
+                               expts_fit_params,
+                               expts_fit_params_errs, # TODO: plot err bars, make like rb
                                filename: str = None) -> None:
     """
-    Plot T2 star or T2 echo experimental data and estimated value of T1 as and exponential decay
-    curve.
+    Plot T1 experimental data and estimated value of T1 as an exponential decay curve.
 
-    :param df: A pandas DataFrame containing experimental results to plot.
-    :param df_est: A pandas DataFrame containing estimates of T2.
-    :param qubits: A list of qubits that you actually want plotted. The default is all qubits.
-    :param detuning: Detuning frequency used in experiment creation.
-    :param t2_type: String either 'star' or 'echo'.
-    :param filename: String.
+    :param experiments: A list of experiments with T1 data.
+    :param filename: String indicating whether QVM or QPU was used to collect data.
     :return: None
     """
-    if qubits is None:
-        qubits = df['Qubit'].unique().tolist()
+    if isinstance(experiments, StratifiedExperiment):
+        experiments = [experiments]
+    if isinstance(expts_fit_params[0], float):
+        expts_fit_params = [expts_fit_params]
+        expts_fit_params_errs = [expts_fit_params_errs]
 
-    # check the user specified valid qubits
-    for qbx in qubits:
-        if qbx not in df['Qubit'].unique():
-            raise ValueError("The list of qubits does not match the ones you experimented on.")
+    for expt, fit_params, fit_params_errs in zip(experiments, expts_fit_params,
+                                                 expts_fit_params_errs):
+        q = expt.qubits[0]
 
-    for q in qubits:
-        df2 = df[df['Qubit'] == q].sort_values('Time')
-        x_data = df2['Time']
-        y_data = df2['Average']
+        times = [layer.depth * USEC_PER_DEPTH for layer in expt.layers]  # times in u-seconds
+        zero_survival = [layer.estimates["Fraction One"][0] for layer in expt.layers]
 
-        plt.plot(x_data / MICROSECOND, y_data, 'o-', label=f"Qubit {q} T2 data")
+        plt.plot(times, zero_survival, 'o-', label=f"QC{q} T1 data")
+        plt.plot(times, exponentially_decaying_sinusoidal_curve(np.array(times), *fit_params),
+                 label=f"QC{q} fit: freq={fit_params[2] / MHZ:.2f}MHz, "
+                       f""f"T2={fit_params[1] / MICROSECOND:.2f}us")
 
-        row = df_est[df_est['Qubit'] == q]
-
-        if row['Fit_params'].values[0] is None:
-            print(f"T2 estimate did not succeed for qubit {q}")
-        else:
-            fit_params = row['Fit_params'].values[0]
-            plt.plot(x_data / MICROSECOND,
-                     exponentially_decaying_sinusoidal_curve(x_data, *fit_params),
-                     label=f"QC{q} fit: freq={fit_params[2] / MHZ:.2f}MHz, "
-                           f""f"T2={fit_params[1] / MICROSECOND:.2f}us")
-
-    plt.xlabel("Time [µs]")
-    plt.ylabel("Pr(1)")
-    if t2_type.lower() == 'star':
+    plt.xlabel("Time [us]")
+    plt.ylabel(r"Pr($|1\rangle$)")
+    expt_types = [expt.expt_type for expt in experiments]
+    if 'T2star' in expt_types and 'T2echo' in expt_types:
+        plt.title("$T_2$ (mixed type) decay")
+    elif 'T2echo' in expt_types:
         plt.title("$T_2^*$ (Ramsey) decay")
-    elif t2_type.lower() == 'echo':
+    elif 'T2echo' in expt_types:
         plt.title("$T_2$ (Echo) decay")
     else:
-        plt.title("$T_2$ (unknown) decay")
+        plt.title("Unknown Type decay")
 
     plt.legend(loc='best')
     plt.tight_layout()
