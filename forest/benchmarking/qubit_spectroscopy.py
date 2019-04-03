@@ -77,39 +77,25 @@ def acquire_t1_data(qc: QuantumComputer, experiments: Sequence[StratifiedExperim
         populate_rb_survival_statistics(expt) # populate with relevant estimates
 
 
-def estimate_t1(df: pd.DataFrame):
+def estimate_t1(experiment: StratifiedExperiment):
     """
     Estimate T1 from experimental data.
 
-    :param df: A pandas DataFrame of experimental T1 results to plot
+    :param experiment:
     :return: pandas DataFrame
     """
-    results = []
+    x_data = [layer.depth * 1e7 for layer in experiment.layers]  # times in seconds
+    y_data = [1 - layer.component.estimates["Survival"] for layer in experiment.layers]
 
-    for q in df['Qubit'].unique():
-        df2 = df[df['Qubit'] == q].sort_values('Time')
-        x_data = df2['Time']
-        y_data = df2['Average']
+    try:
+        fit_params, fit_params_errs = fit_to_exponential_decay_curve(x_data, y_data)
 
-        try:
-            fit_params, fit_params_errs = fit_to_exponential_decay_curve(x_data, y_data)
-            results.append({
-                'Qubit': q,
-                'T1': fit_params[1] / MICROSECOND,
-                'Fit_params': fit_params,
-                'Fit_params_errs': fit_params_errs,
-                'Message': None,
-            })
-        except RuntimeError:
-            print(f"Could not fit to experimental data for qubit {q}")
-            results.append({
-                'Qubit': q,
-                'T1': None,
-                'Fit_params': None,
-                'Fit_params_errs': None,
-                'Message': 'Could not fit to experimental data for qubit' + str(q),
-            })
-    return pd.DataFrame(results)
+        return fit_params[1] / MICROSECOND  # the t1 estimate
+        #TODO: what am I going to do with these?
+            # 'Fit_params': fit_params,
+            # 'Fit_params_errs': fit_params_errs,
+    except RuntimeError:
+        return 'Could not fit to experimental data to get t1 estimate'
 
 
 def plot_t1_estimate_over_data(df: pd.DataFrame,
