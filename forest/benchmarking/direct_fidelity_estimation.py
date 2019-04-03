@@ -385,15 +385,22 @@ def estimate_dfe(data: DFEData, kind: str) -> DFEEstimate:
     """
     d = data.dimension
 
-    # TODO: rewrite this explanation
-    # The problem in the care of process DFE is that we want to emulate sampling from the 4^N
-    # different Pauli operators, and projecting the "reference" half onto a random (product)
-    # eigenstate. We sample from these preparations, but the I^N I^N case should always occur
-    # with weight 1/4^N. When doing exhaustive sampling we should actually average different
-    # random eigenstates for the same operator together, but the process correction should always
-    # come with a weight of 1/d**2
+    # The subtlety in estimation the fidelity from a set of expectations of Pauli operators is that it is essential
+    # to include the expectation of the identity in the calculation -- without it the fidelity estimate will be biased
+    # downwards.
 
-    # TODO: explain all the additive biases and the multiplicative factors
+    # However, there is no need to estimate the expectation of the identity: it is an experiment that always
+    # yields 1 as a result, so its expectation is 1. This quantity must be included in the calculation with the proper
+    # weight, however. For state fidelity estimation, we should choose the identity to be measured one out of every
+    # d times. For process fidelity estimation, we should choose to prepare and measure the identity one out of every
+    # d**2 times.
+
+    # The mean expected value for the (non-trivial) Pauli operators that are measured must be scaled
+    # as well -- each non-trivial Pauli should be selected 1 in every d or d**2 times (depending on whether we do
+    # states or processes), but if we choose Pauli ops uniformly from the d-1 or d**2-1 times non-trivial Paulis, we
+    # again introduce a bias. So the mean expected value of non-trivial Paulis that are sampled must be weighted
+    # by d-1/d (for states) or d**2-1/d**2 (for processes). Similarly, variance estimates must be scaled appropriately.
+
     if kind == 'state':
         # introduce bias due to measuring the identity
         mean_est = (d-1)/d * np.mean(data.pauli_point_est) + 1.0/d
