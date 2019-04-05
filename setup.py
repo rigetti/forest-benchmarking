@@ -55,6 +55,7 @@ setup(
         'python-rapidjson',
         'cvxpy',
         'tqdm',
-        'gitpython'
+        'gitpython',
+        'matplotlib'
     ],
 )
