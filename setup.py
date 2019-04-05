@@ -33,6 +33,11 @@ def find_version(*file_paths):
     raise RuntimeError("Unable to find version string.")
 
 
+def find_forest_packages():
+    packages = find_packages(where='forest', exclude=('tests', 'tests.*'))
+    return [f'forest.{name}' for name in packages]
+
+
 setup(
     name='forest-benchmarking',
     version=find_version('forest/benchmarking', '__init__.py'),
@@ -41,7 +46,7 @@ setup(
     author='Rigetti',
     author_email='info@rigetti.com',
     license='Apache-2.0',
-    packages=find_packages(exclude=('tests', 'tests.*')),
+    packages=find_forest_packages(),
     long_description_content_type="text/markdown",
     long_description=open('README.md').read(),
     install_requires=[
