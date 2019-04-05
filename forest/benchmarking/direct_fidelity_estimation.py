@@ -400,7 +400,7 @@ def estimate_dfe(data: DFEData, kind: str) -> DFEEstimate:
         # introduce bias due to measuring the identity
         p_mean = (d**2-1)/d**2 * np.mean(data.pauli_point_est) + 1.0/d**2
         mean_est = (d**2 * p_mean + d)/(d**2+d)
-        var_est = d**2/(d+1)**2 * (d**2-1)**2/d**4 * np.sum(data.pauli_std_err**2) / len(data.pauli_point_est) ** 4
+        var_est = d**2/(d+1)**2 * (d**2-1)**2/d**4 * np.sum(data.pauli_std_err**2) / len(data.pauli_point_est) ** 2
     else:
         raise ValueError('DFEdata can only be of kind \'state\' or \'process\'.')
 
