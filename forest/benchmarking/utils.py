@@ -6,10 +6,6 @@ from datetime import date, datetime
 from git import Repo
 import numpy as np
 from numpy import pi
-import networkx as nx
-from networkx.algorithms.approximation.clique import clique_removal
-import pandas as pd
-from pandas import DataFrame
 
 from pyquil.gates import I, RX, RY, RZ
 from pyquil.paulis import PauliTerm
@@ -39,42 +35,6 @@ def int_to_bit_array(num: int, n_bits: int) -> Sequence[int]:
     :return:  an array of n_bits bits with right-most bit considered least significant.
     """
     return [num >> bit & 1 for bit in range(n_bits - 1, -1, -1)]
-
-
-def determine_simultaneous_grouping(experiments: Sequence[DataFrame],
-                                    equivalent_column_label: str = None) -> List[Set[int]]:
-    """
-    Determines a grouping of experiments acting on disjoint sets of qubits that can be run
-    simultaneously.
-
-    :param experiments:
-    :return: a list of the simultaneous groups, each specified by a set of indices of each grouped
-        experiment in experiments
-    """
-    g = nx.Graph()
-    nodes = np.arange(len(experiments))
-    g.add_nodes_from(nodes)
-    qubits = [expt["Qubits"].values[0] for expt in experiments]
-
-    need_equiv = None
-    if equivalent_column_label is not None:
-        need_equiv = [expt[equivalent_column_label].values for expt in experiments]
-
-    for node1 in nodes:
-        qbs1 = qubits[node1]
-        for node2 in nodes[node1+1:]:
-            if len(qbs1.intersection(qubits[node2])) == 0:
-                # check that the requested columns are equivalent
-                if equivalent_column_label is not None:
-                    if not np.array_equal(need_equiv[node1], need_equiv[node2]):
-                        continue
-                # no shared qubits, and requested columns are identical, so add edge
-                g.add_edge(node1, node2)
-
-    # get the largest groups of nodes with shared edges, as each can be run simultaneously
-    _, cliqs = clique_removal(g)
-
-    return cliqs
 
 
 def bloch_vector_to_standard_basis(theta: float, phi: float) -> Tuple[complex, complex]:
@@ -208,6 +168,22 @@ def all_pauli_terms(qubits: Sequence):
     # we exclude the all identity string since that maps to no preparation and no measurement
     all_ixyz_strs = [''.join(x) for x in itertools.product('IXYZ', repeat=len(qubits))][1:]
     list_of_terms = [str_to_pauli_term(s, qubits) for s in all_ixyz_strs]
+    return list_of_terms
+
+
+def all_pauli_choice_terms(qubits: Sequence, pauli_choice: str):
+    """
+    Generate list of all Pauli terms (with weight >= 0) on N qubits with choice pauli.
+
+    If pauli_choice is 'Z' then this is identical to all_pauli_z_terms
+
+    :param qubits: The integer labels for the qubits
+    :param pauli_choice: choice of which pauli to form combinations.
+    :return: list of `PauliTerm`s made from combinations of I and the given choice pauli
+    """
+    all_ichoice_strs = [''.join(x) for x in itertools.product('I' + pauli_choice.upper(),
+                                                              repeat=len(qubits))]
+    list_of_terms = [str_to_pauli_term(s, qubits) for s in all_ichoice_strs]
     return list_of_terms
 
 
@@ -518,54 +494,55 @@ def partial_trace(rho, keep, dims, optimize=False):
     return rho_a.reshape(Nkeep, Nkeep)
 
 
-def metadata_save(qc: QuantumComputer,
-                  repo_path: str = None,
-                  filename: str = None) -> pd.DataFrame:
-    '''
-    This helper function saves metadata related to your run on a Quantum computer.
-
-    Basic data saved includes the date and time. Additionally information related to the quantum
-    computer is saved: device name, topology, qubit labels, edges that have two qubit gates,
-    device specs
-
-    If a path is passed to this function information related to the Git Repository is saved,
-    specifically the repository: name, branch and commit.
-
-    :param qc: The QuantumComputer to run the experiment on.
-    :param repo_path: path to repository e.g. '../'
-    :param filename: The name of the file to write JSON-serialized results to.
-    :return: pandas DataFrame
-    '''
-
-    # Git related things
-    if repo_path is not None:
-        repo = Repo(repo_path)
-        branch = repo.active_branch
-        sha = repo.head.object.hexsha
-        short_sha = repo.git.rev_parse(sha, short=7)
-        the_repo = repo.git_dir
-        the_branch = branch.name
-        the_commit = short_sha
-    else:
-        the_repo = None
-        the_branch = None
-        the_commit = None
-
-    metadata = {
-        # Time and date
-        'Date': str(date.today()),
-        'Time': str(datetime.now().time()),
-        # Git stuff
-        'Repository': the_repo,
-        'Branch': the_branch,
-        'Git_commit': the_commit,
-        # QPU data
-        'Device_name': qc.name,
-        'Topology': qc.qubit_topology(),
-        'Qubits': list(qc.qubit_topology().nodes),
-        'Two_Qubit_Gates': list(qc.qubit_topology().edges),
-        'Device_Specs': qc.device.get_specs(),
-    }
-    if filename:
-        pd.DataFrame(metadata).to_json(filename)
-    return pd.DataFrame(metadata)
+# TODO: translate functionality to our data structure.
+# def metadata_save(qc: QuantumComputer,
+#                   repo_path: str = None,
+#                   filename: str = None) -> pd.DataFrame:
+#     '''
+#     This helper function saves metadata related to your run on a Quantum computer.
+#
+#     Basic data saved includes the date and time. Additionally information related to the quantum
+#     computer is saved: device name, topology, qubit labels, edges that have two qubit gates,
+#     device specs
+#
+#     If a path is passed to this function information related to the Git Repository is saved,
+#     specifically the repository: name, branch and commit.
+#
+#     :param qc: The QuantumComputer to run the experiment on.
+#     :param repo_path: path to repository e.g. '../'
+#     :param filename: The name of the file to write JSON-serialized results to.
+#     :return: pandas DataFrame
+#     '''
+#
+#     # Git related things
+#     if repo_path is not None:
+#         repo = Repo(repo_path)
+#         branch = repo.active_branch
+#         sha = repo.head.object.hexsha
+#         short_sha = repo.git.rev_parse(sha, short=7)
+#         the_repo = repo.git_dir
+#         the_branch = branch.name
+#         the_commit = short_sha
+#     else:
+#         the_repo = None
+#         the_branch = None
+#         the_commit = None
+#
+#     metadata = {
+#         # Time and date
+#         'Date': str(date.today()),
+#         'Time': str(datetime.now().time()),
+#         # Git stuff
+#         'Repository': the_repo,
+#         'Branch': the_branch,
+#         'Git_commit': the_commit,
+#         # QPU data
+#         'Device_name': qc.name,
+#         'Topology': qc.qubit_topology(),
+#         'Qubits': list(qc.qubit_topology().nodes),
+#         'Two_Qubit_Gates': list(qc.qubit_topology().edges),
+#         'Device_Specs': qc.device.get_specs(),
+#     }
+#     if filename:
+#         pd.DataFrame(metadata).to_json(filename)
+#     return pd.DataFrame(metadata)
