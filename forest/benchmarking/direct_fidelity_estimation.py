@@ -209,7 +209,6 @@ def _monte_carlo_dfe(program: Program, qubits: Sequence[int], in_states: list, n
                                       for i, si in enumerate(st_inds)
                                       if in_states[si] is not None), TensorProductState())
 
-        # TODO: we should not pick a new one, we should just return a trivial experiment
         while len(i_st) == 0:
             # pick a new one
             second_try_st_inds = np.random.randint(len(in_states), size=len(qubits))

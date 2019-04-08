@@ -6,12 +6,25 @@ A library for quantum characterization, verification, validation (QCVV), and ben
 
 ## Installation
 
-`forest-benchmarking` is a Python package.
-It is currently in pre-release and must be installed from `master`
+`forest-benchmarking` can be installed from source or via the Python package manager PyPI.
 
-    git clone https://github.com/rigetti/forest-benchmarking.git
-    cd forest-benchmarking/
-    pip install -e .
+**Note**: NumPy and SciPy must be pre-installed for installation to be successful, due to cvxpy.
+
+### Source
+
+```bash
+git clone https://github.com/rigetti/forest-benchmarking.git
+cd forest-benchmarking/
+pip install numpy scipy
+pip install -e .
+```
+
+### PyPI
+
+```bash
+pip install numpy scipy
+pip install forest-benchmarking
+```
 
 ## Library Philosophy
 
