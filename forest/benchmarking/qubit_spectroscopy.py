@@ -10,7 +10,7 @@ from pyquil.gates import RX, RZ, CZ, MEASURE
 from pyquil.quil import Program
 from pyquil.quilbase import Pragma
 from pyquil.paulis import PauliTerm
-from pyquil.operator_estimation import ExperimentSetting, zeros_state
+from pyquil.operator_estimation import ExperimentSetting, zeros_state, minusZ, plusX
 
 from forest.benchmarking.utils import transform_pauli_moments_to_bit
 from forest.benchmarking.stratified_experiment import StratifiedExperiment, Layer, \
@@ -44,8 +44,8 @@ def generate_t1_experiment(qubit: int, times: Sequence[float]) -> StratifiedExpe
     layers = []
     for t in times:
         t = round(t, 7)  # enforce 100ns boundaries
-        sequence = ([Program(RX(pi, qubit)), Program(Pragma('DELAY', [qubit], str(t)))])
-        settings = (ExperimentSetting(zeros_state([qubit]), PauliTerm('Z', qubit)), )
+        sequence = (Program(Pragma('DELAY', [qubit], str(t))), )
+        settings = (ExperimentSetting(minusZ(qubit), PauliTerm('Z', qubit)), )
         t_in_us = round(t/MICROSECOND, 1)
 
         # the depth is time in units of [100ns]
@@ -150,10 +150,10 @@ def generate_t2_star_experiment(qubit: int, times: Sequence[float], detuning: fl
     for t in times:
         # TODO: avoid aliasing while being mindful of the 20ns resolution in the QCS stack
         t = round(t, 7)  # enforce 100ns boundaries
-        sequence = ([Program(RX(pi / 2, qubit)),  # prep
-                     Program(Pragma('DELAY', [qubit], str(t))) # delay and measure
-                     + RZ(2 * pi * t * detuning, qubit) + RX(pi / 2, qubit)])
-        settings = (ExperimentSetting(zeros_state([qubit]), PauliTerm('Z', qubit)),)
+        # delay and measure
+        sequence = (Program(Pragma('DELAY', [qubit], str(t)))
+                            + RZ(2 * pi * t * detuning, qubit) + RX(pi / 2, qubit), )
+        settings = (ExperimentSetting(plusX(qubit), PauliTerm('Z', qubit)),)
         t_in_us = round(t / MICROSECOND, 1)
 
         # the depth is time in units of [100ns]
@@ -413,6 +413,7 @@ def generate_cz_phase_ramsey_experiment(cz_qubits: Sequence[int], measure_qubit:
     qubits = tuple(set(cz_qubits).union([measure_qubit]))
     layers = []
     for angle in angles:
+        # TODO: replace Z expectation with X expectation, remove prep and pre-measure?
         send_to_equator = Program(RX(pi/2, measure_qubit))
         apply_phase = Program(RZ(angle, measure_qubit))
         sequence = ([send_to_equator + CZ(*cz_qubits) + apply_phase + send_to_equator.dagger()])
