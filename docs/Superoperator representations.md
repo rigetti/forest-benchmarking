@@ -1,8 +1,8 @@
 # Superoperator representations
 
-This document summarizes our conventions for the different superoperator representations. We show how to apply the channels to states in these represenations and how to convert channels between a subset of representations.
+This document summarizes our conventions for the different superoperator representations. We show how to apply the channels to states in these represenations and how to convert channels between a subset of representations. By combining these conversion methods you can convert between any of the channel representations.
 
-At the bottom of the document you can find a list of references if you need more information. These references explain, for example, when how to determine if a channel is unital or completely postive in the different representations.
+At the bottom of the document there is a list of references with more information. These references explain, for example how to determine if a channel is unital or completely postive in the different representations.
 
 ## `vec` and `unvec`
 Consider an $m\times m$ matrix
