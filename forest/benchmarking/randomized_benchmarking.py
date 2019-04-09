@@ -15,8 +15,8 @@ from pyquil.operator_estimation import ExperimentSetting, zeros_state
 from forest.benchmarking.tomography import _state_tomo_settings
 from forest.benchmarking.utils import all_pauli_z_terms
 from forest.benchmarking.compilation import basic_compile
-from forest.benchmarking.stratified_experiment import StratifiedExperiment, Layer, Component, \
-acquire_stratified_data
+from forest.benchmarking.stratified_experiment import StratifiedExperiment, Layer, \
+    acquire_stratified_data
 
 
 bm = get_benchmarker()
@@ -83,7 +83,7 @@ def generate_rb_sequence(qubits: Sequence[int], depth: int,  interleaved_gate: P
     return programs
 
 
-def generate_rb_experiment(qubits: Sequence[int], depths: List[int], num_sequences: int,
+def generate_rb_experiment(qubits: Sequence[int], depths: Sequence[int], num_sequences: int,
                            interleaved_gate: Program = None, random_seed: int = None) \
         -> StratifiedExperiment:
     """
@@ -95,9 +95,8 @@ def generate_rb_experiment(qubits: Sequence[int], depths: List[int], num_sequenc
     :param random_seed:
     :return:
     """
-    layers = []  # we will have len(depths) many layers, one layer per depth.
+    layers = []  # we will have len(depths)*num_sequences many layers, one layer per sequence.
     for depth in depths:
-        components = []  # each layer will have num_sequences many components.
         for idx in range(num_sequences):
             if random_seed is not None:  # need to change the base seed for each sequence generated
                 random_seed += 1
@@ -106,18 +105,17 @@ def generate_rb_experiment(qubits: Sequence[int], depths: List[int], num_sequenc
             sequence = generate_rb_sequence(qubits, depth, interleaved_gate, random_seed)
             settings = [ExperimentSetting(zeros_state(qubits), op)
                         for op in all_pauli_z_terms(qubits)]
-            components.append(Component(tuple(sequence), tuple(settings), tuple(qubits),
-                                        f'Seq{idx}'))
-        layers.append(Layer(depth, tuple(components)))
+            layers.append(Layer(depth, tuple(sequence), tuple(settings), tuple(qubits),
+                                f'Seq{idx}'))
 
-    exp_type = "RB"
+    expt_type = "RB"
     if interleaved_gate is not None:
-        exp_type = "I" + exp_type  #interleaved rb.
+        expt_type = "I" + expt_type  #interleaved rb.
 
-    return StratifiedExperiment(tuple(layers), tuple(qubits), exp_type)
+    return StratifiedExperiment(tuple(layers), tuple(qubits), expt_type)
 
 
-def generate_unitarity_experiment(qubits: Sequence[int], depths: List[int], num_sequences: int,
+def generate_unitarity_experiment(qubits: Sequence[int], depths: Sequence[int], num_sequences: int,
                                   use_self_inv_seqs = False, random_seed: int = None) \
         -> StratifiedExperiment:
     """
@@ -131,9 +129,8 @@ def generate_unitarity_experiment(qubits: Sequence[int], depths: List[int], num_
     :param random_seed:
     :return:
     """
-    layers = []
+    layers = []  # we will have len(depths)*num_sequences many layers, one layer per sequence.
     for depth in depths:
-        components = []
         for idx in range(num_sequences):
             if random_seed is not None:
                 random_seed += 1
@@ -143,13 +140,12 @@ def generate_unitarity_experiment(qubits: Sequence[int], depths: List[int], num_
             else:  # provide larger depth and strip inverse from end of each sequence
                 sequence = generate_rb_sequence(qubits, depth + 1, random_seed)[:-1]
             settings = _state_tomo_settings(qubits)
-            components.append(Component(tuple(sequence), tuple(settings), tuple(qubits),
-                                        f'Seq{idx}'))
-        layers.append(Layer(depth, tuple(components)))
+            layers.append(Layer(depth, tuple(sequence), tuple(settings), tuple(qubits),
+                                f'Seq{idx}'))
 
-    exp_type = "URB"
+    expt_type = "URB"
 
-    return StratifiedExperiment(tuple(layers), tuple(qubits), exp_type)
+    return StratifiedExperiment(tuple(layers), tuple(qubits), expt_type)
 
 
 def populate_rb_survival_statistics(expt: StratifiedExperiment):
@@ -167,25 +163,24 @@ def populate_rb_survival_statistics(expt: StratifiedExperiment):
     :return:
     """
     for layer in expt.layers:
-        for component in layer.components:
-            # exclude operators that include x or y; no change for a standard rb experiment
-            z_terms = [result for result in component.results
-                       if 'X' not in result.setting.out_operator.compact_str()
-                       and 'Y' not in result.setting.out_operator.compact_str()]
+        # exclude operators that include x or y; no change for a standard rb experiment
+        z_terms = [result for result in layer.results
+                   if 'X' not in result.setting.out_operator.compact_str()
+                   and 'Y' not in result.setting.out_operator.compact_str()]
 
-            # This assumes inclusion of I term with expectation 1 to make dim many total terms
-            assert 2**len(component.qubits) == len(z_terms)
-            # get the fraction of all zero outcomes 00...00
-            fraction_survived = np.mean([result.expectation for result in z_terms])
-            num_survived = fraction_survived * component.num_shots
-            num_died =  component.num_shots - num_survived  # the number of non-zero results
+        # This assumes inclusion of I term with expectation 1 to make dim many total terms
+        assert 2**len(layer.qubits) == len(z_terms)
+        # get the fraction of all zero outcomes 00...00
+        fraction_survived = np.mean([result.expectation for result in z_terms])
+        num_survived = fraction_survived * layer.num_shots
+        num_died =  layer.num_shots - num_survived  # the number of non-zero results
 
-            # mean and variance given by beta distribution with a uniform prior
-            survival_mean = beta.mean(num_survived + 1, num_died + 1)
-            survival_var = beta.var(num_survived + 1, num_died + 1)
+        # mean and variance given by beta distribution with a uniform prior
+        survival_mean = beta.mean(num_survived + 1, num_died + 1)
+        survival_var = beta.var(num_survived + 1, num_died + 1)
 
-            survival_stats = {"Survival": (survival_mean, np.sqrt(survival_var))}
-            component.estimates = survival_stats
+        survival_stats = {"Survival": (survival_mean, np.sqrt(survival_var))}
+        layer.estimates = survival_stats
 
 
 def populate_unitarity_purity_statistics(expt: StratifiedExperiment):
@@ -203,18 +198,17 @@ def populate_unitarity_purity_statistics(expt: StratifiedExperiment):
     :return:
     """
     for layer in expt.layers:
-        for component in layer.components:
-            # This assumes inclusion of I term with expectation 1 to make dim**2 many total terms
-            dim = 2**len(component.qubits)
-            assert dim**2 == len(component.results), "Ensure identity term is included."
+        # This assumes inclusion of I term with expectation 1 to make dim**2 many total terms
+        dim = 2**len(layer.qubits)
+        assert dim**2 == len(layer.results), "Ensure identity term is included."
 
-            expectations = np.array([result.expectation for result in component.results])
-            variances = np.array([result.stddev**2 for result in component.results])
+        expectations = np.array([result.expectation for result in layer.results])
+        variances = np.array([result.stddev**2 for result in layer.results])
 
-            shifted_purity = estimate_purity(dim, expectations)
-            shifted_purity_error = estimate_purity_err(dim, expectations, variances)
-            shifted_purity_stats = {"Shifted Purity": (shifted_purity, shifted_purity_error)}
-            component.estimates = shifted_purity_stats
+        shifted_purity = estimate_purity(dim, expectations)
+        shifted_purity_error = estimate_purity_err(dim, expectations, variances)
+        shifted_purity_stats = {"Shifted Purity": (shifted_purity, shifted_purity_error)}
+        layer.estimates = shifted_purity_stats
 
 
 def acquire_rb_data(qc, experiments: Sequence[StratifiedExperiment], num_shots: int = 500):
@@ -297,11 +291,13 @@ def fit_rb_results(experiment):
     :param experiment:
     :return:
     """
-    depths = [layer.depth for layer in experiment.layers for _ in layer.components]
-    survivals = [comp.estimates["Survival"][0] for layer in experiment.layers for comp in
-                 layer.components]
-    weights = [1/comp.estimates["Survival"][1] for layer in experiment.layers for comp in
-               layer.components]
+    depths = []
+    survivals = []
+    weights = []
+    for layer in experiment.layers:
+        depths.append(layer.depth)
+        survivals.append(layer.estimates["Survival"][0])
+        weights.append(1/layer.estimates["Survival"][1])
     return fit_standard_rb(depths, survivals, np.asarray(weights))
 
 
@@ -395,16 +391,17 @@ def fit_unitarity(depths, shifted_purities, weights=None):
 
 
 def fit_unitarity_results(experiment):
-    # almost identitical to fit_rb_results, could probably be combined by examining the expt.type
-    depths = [layer.depth for layer in experiment.layers for _ in layer.components]
-    shifted_purities = [comp.estimates["Shifted Purity"][0] for layer in experiment.layers for comp
-                        in layer.components]
-    weights = [1/comp.estimates["Shifted Purity"][1] for layer in experiment.layers for comp in
-               layer.components]
+    depths = []
+    shifted_purities = []
+    weights = []
+    for layer in experiment.layers:
+        depths.append(layer.depth)
+        shifted_purities.append(layer.estimates["Shifted Purity"][0])
+        weights.append(1/layer.estimates["Shifted Purity"][1])
     return fit_unitarity(depths, shifted_purities, np.asarray(weights))
 
 
-def unitarity_to_RB_decay(unitarity, dimension):
+def unitarity_to_rb_decay(unitarity, dimension):
     """
     This allows comparison of measured unitarity and RB decays. This function provides an upper bound on the
     RB decay given the input unitarity, where the upperbound is saturated when no unitary errors are present,
@@ -478,7 +475,7 @@ def interleaved_gate_fidelity_bounds(irb_decay, rb_decay, dim, unitarity = None)
         # calculate bounds on the equivalent gate-only decay parameter
         decay_bounds = [sign * (sign * g * np.cos(theta) + np.sin(theta) * np.sqrt(1-g**2) ) for sign in pm]
         # convert decay bounds to bounds on fidelity of the gate
-        fidelity_bounds = [RB_decay_to_gate_fidelity(decay, dim) for decay in decay_bounds]
+        fidelity_bounds = [rb_decay_to_gate_fidelity(decay, dim) for decay in decay_bounds]
 
     else:
         # Equation 5 of [IRB]
@@ -519,7 +516,7 @@ def irb_decay_to_gate_infidelity(irb_decay, rb_decay, dim):
     return ((dim - 1) / dim) * (1 - irb_decay / rb_decay)
 
 
-def average_gate_infidelity_to_RB_decay(gate_infidelity, dimension):
+def average_gate_infidelity_to_rb_decay(gate_infidelity, dimension):
     """
     Inversion of eq. 5 of [RB] arxiv paper.
 
@@ -530,7 +527,7 @@ def average_gate_infidelity_to_RB_decay(gate_infidelity, dimension):
     return (gate_infidelity - 1 + 1/dimension)/(1/dimension -1)
 
 
-def RB_decay_to_gate_fidelity(rb_decay, dimension):
+def rb_decay_to_gate_fidelity(rb_decay, dimension):
     """
     Derived from eq. 5 of [RB] arxiv paper. Note that 'gate' here typically means an element of the Clifford group,
     which comprise standard rb sequences.
