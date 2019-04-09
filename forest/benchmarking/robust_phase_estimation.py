@@ -123,23 +123,23 @@ def change_of_basis_matrix_to_quil(qc: QuantumComputer, qubits: Sequence[int],
 def all_eigenvector_prep_meas_settings(qubits: Sequence[int], change_of_basis: Program):
     # experiment settings put initial state in superposition of computational basis
     # the prep and pre_meas programs simply convert between this and superposition of eigenvectors
-    prep_prog = change_of_basis
-    pre_meas_prog = change_of_basis.dagger()
+    prep_prog = Program(change_of_basis)
+    pre_meas_prog = Program(change_of_basis).dagger()
     init_state = reduce(mul, [plusX(q) for q in qubits], TensorProductState())
 
     settings = []
     for xy_q in qubits:
-        iz_qubits = [q for q in qubits if q != xy_q]
+        z_qubits = [q for q in qubits if q != xy_q]
         xy_terms = [PauliTerm('X', xy_q), PauliTerm('Y', xy_q)]
-        iz_terms = [[PauliTerm('I', xy_q)]]
-        iz_terms += [[PauliTerm('I', q), PauliTerm('Z', q)] for q in iz_qubits]
+        iz_terms = [PauliTerm('I', xy_q)]
+        iz_terms += [PauliTerm('Z', q) for q in z_qubits]
         settings += [ExperimentSetting(init_state, xy_term * term) for xy_term in xy_terms
-                     for term_pair in iz_terms for term in term_pair]
+                     for term in iz_terms]
     return prep_prog, pre_meas_prog, settings
 
 
-def fixed_and_rotate_prep_meas_settings(fix_qubit: Tuple[int, int], rotate_qubit: int,
-                                        change_of_basis: Program = None):
+def pick_two_eigenvecs_prep_meas_settings(fix_qubit: Tuple[int, int], rotate_qubit: int,
+                                          change_of_basis: Program = None):
     prep_prog = Program()
     if change_of_basis is not None:
         prep_prog += change_of_basis
@@ -158,7 +158,7 @@ def fixed_and_rotate_prep_meas_settings(fix_qubit: Tuple[int, int], rotate_qubit
                 rot_q_ops]
 
     # prepare superposition, return to z basis, then do the measurement settings.
-    return prep_prog, prep_prog.dagger(), settings
+    return prep_prog, Program(prep_prog).dagger(), settings
 
 
 def generate_rpe_experiment(rotation: Program, prep_prog: Program, pre_meas_prog: Program,
@@ -338,43 +338,40 @@ def _xci(h: int) -> float:
     return 2 * pi / (2 ** h)
 
 
-# def get_variance_upper_bound(experiment: DataFrame, multiplicative_factor: float = 1.0,
-#                              additive_error: float = None, results_label='Results') -> float:
-#     """
-#     Equation V.9 in [RPE]
-#
-#     :param experiment: a dataframe with RPE results. Importantly the bound follows from the number
-#         of shots at each iteration of the experiment, so the data frame needs to be populated with
-#         the desired number-of-shots-many results.
-#     :param multiplicative_factor: ad-hoc factor to multiply the number of shots per iteration. See
-#         num_trials() which computes the optimal number of shots per iteration.
-#     :param additive_error: estimate of the max additive error in the experiment, see num_trials()
-#     :param results_label: label for the column with results from which the variance is estimated
-#     :return: An upper bound of the variance of the angle estimate corresponding to the input
-#         experiments.
-#     """
-#     max_depth = max(experiment["Depth"].values)
-#     K = np.log2(max_depth).astype(int) + 1
-#
-#     M_js = []
-#     # 1 <= j <= K, where j is the one-indexed iteration number
-#     for j in range(1, K + 1):
-#         depth = 2 ** (j - 1)
-#         single_depth = experiment.groupby(["Depth"]).get_group(depth).set_index(
-#             'Measure Direction')
-#
-#         if results_label in experiment.columns.values:
-#             # use the actual nunber of shots taken
-#             M_j = len(single_depth.loc['X', results_label])
-#         else:
-#             # default prediction for standard parameters
-#             M_j = num_trials(depth, max_depth, 5/2, 1/2, multiplicative_factor, additive_error)
-#
-#         M_js += [M_j]
-#
-#     # note that M_js is 0 indexed but 1 <= j <= K, so M_j = M_js[j-1]
-#     return (1 - _p_max(M_js[K - 1])) * _xci(K + 1) ** 2 + sum(
-#         [_xci(i + 1) ** 2 * _p_max(M_j) for i, M_j in enumerate(M_js)])
+def get_variance_upper_bound(experiment: StratifiedExperiment, multiplicative_factor: float = 1.0,
+                             additive_error: float = None) -> float:
+    """
+    Equation V.9 in [RPE]
+
+    :param experiment: a dataframe with RPE results. Importantly the bound follows from the number
+        of shots at each iteration of the experiment, so the data frame needs to be populated with
+        the desired number-of-shots-many results.
+    :param multiplicative_factor: ad-hoc factor to multiply the number of shots per iteration. See
+        num_trials() which computes the optimal number of shots per iteration.
+    :param additive_error: estimate of the max additive error in the experiment, see num_trials()
+    :return: An upper bound of the variance of the angle estimate corresponding to the input
+        experiments.
+    """
+    max_depth = max([layer.depth for layer in experiment.layers])
+    K = np.log2(max_depth).astype(int) + 1
+
+    M_js = []
+    # 1 <= j <= K, where j is the one-indexed iteration number
+    # depth = 2 ** (j - 1)
+    for layer in experiment.layers:
+
+        if layer.num_shots is not None:
+            # use the actual nunber of shots taken
+            M_j = layer.num_shots
+        else:
+            # default prediction for standard parameters
+            M_j = num_trials(layer.depth, max_depth, 5/2, 1/2, multiplicative_factor,
+                             additive_error)
+        M_js.append(M_j)
+
+    # note that M_js is 0 indexed but 1 <= j <= K, so M_j = M_js[j-1]
+    return (1 - _p_max(M_js[K - 1])) * _xci(K + 1) ** 2 + sum(
+        [_xci(i + 1) ** 2 * _p_max(M_j) for i, M_j in enumerate(M_js)])
 
 
 def estimate_phase_from_moments(xs: List, ys: List, x_stds: List, y_stds: List,
@@ -442,6 +439,20 @@ def robust_phase_estimate(experiment: StratifiedExperiment) -> Union[float, Sequ
             2**(len(meas_qubits) - len(post_select_state) - 1)
         different relative phases estimated and returned.
     """
+
+    if len(experiment.qubits) == 1:
+        q = experiment.qubits[0]
+        x_results = [res for layer in experiment.layers for res in layer.results
+                     if res.setting.out_operator[q] == 'X']
+        y_results = [res for layer in experiment.layers for res in layer.results
+                     if res.setting.out_operator[q] == 'Y']
+        x_exps = [res.expectation for res in x_results]
+        y_exps = [res.expectation for res in y_results]
+        x_errs = [res.stddev for res in x_results]
+        y_errs = [res.stddev for res in y_results]
+        return estimate_phase_from_moments(x_exps, y_exps, x_errs, y_errs)
+
+    # estimating multiple phases, post-selecting, or ambiguous measurement qubit
     relative_phases = []
     for xy_q in experiment.qubits:
         expectations = []
@@ -450,56 +461,81 @@ def robust_phase_estimate(experiment: StratifiedExperiment) -> Union[float, Sequ
         for label in ['X', 'Y']:
             # organize operator results by z_qubit; there are up to 2 phase estimates per z_qubit
             results_by_z_qubit = {q: [] for q in z_qubits}
-            i_results = []  # there should be one i_result per layer for each label
+            i_results = []  # collect measurements of only x/y on the xy_q qubit
             for layer in experiment.layers:
                 results = [res for res in layer.results if res.setting.out_operator[xy_q] == label]
 
+                if len(results) == 0:
+                    # no xy data, so no measurement of rotation of this qubit
+                    break
+
+                # organize results into estimates of different phases based on which qubit has a Z
                 for res in results:
                     for z_q in z_qubits:
                         if res.setting.out_operator[z_q] == 'Z':
                             results_by_z_qubit[z_q].append(res)
                             break
+                    else:  # no Z on any qubit, so must only have the X/Y on the xy_q qubit
                         i_results.append(res)
+            if len(i_results) == 0:
+                # no xy data, so no measurement of rotation of this qubit
+                break
 
             xy_expectations = []
             xy_stddevs = []
-            for q, results, i_ress in zip(results_by_z_qubit.items(), i_results):
-                init_state = i_ress[0].setting.in_state[q]
 
-                # add i and z results, unless state was explicitly initialized to one (minus Z)
-                if not init_state == _OneQState('Z', 1, q):
-                    plus_phase_expectations = []
-                    plus_phase_stddevs = []
-                    for res, i_res in zip(results, i_ress):
-                        plus_phase_expectations.append(i_res.expectation + res.expectation)
+            if max([len(results) for results in results_by_z_qubit.values()]) == 0:
+                # there were no Z operators, so we are only interested in estimating the phase
+                # based on the `i_results' i.e. an X or Y on a single qubit.
+                # TODO: check if this miss-interprets a valid use-case. 1q, no post...?
+                selected_expectations = []
+                selected_stddevs = []
+                for i_res in i_results:
+                    selected_expectations.append(i_res.expectation)
+                    selected_stddevs.append(i_res.stddev)
+
+                xy_expectations.append(selected_expectations)
+                xy_stddevs.append(selected_stddevs)
+
+                expectations.append(xy_expectations)
+                stddevs.append(xy_stddevs)
+                continue  # relevant expectations have been collected, so go to next label
+
+            # we can get estimates for at most 2 possible phases; which depends on the in_state
+            for q, results in results_by_z_qubit.items():
+                in_state = i_results[0].setting.in_state[q]
+
+                for post_select_state in [0, 1]:
+                    if in_state == _OneQState('Z', 1 - post_select_state, q):
+                        # q is explicitly initialized to the orthogonal state, ignore this estimate
+                        continue
+
+                    selected_expectations = []
+                    selected_stddevs = []
+                    for res, i_res in zip(results, i_results):
+                        # we are essentially post-selecting by taking the sum or difference
+                        if post_select_state == 0:
+                            selected_expectations.append(i_res.expectation + res.expectation)
+                        else:
+                            selected_expectations.append(i_res.expectation - res.expectation)
+
                         # TODO: check error propogation
-                        rel_z = res.stddev/res.expectation
-                        rel_i = i_res.stddev/i_res.expectation
-                        plus_phase_stddevs.append(np.sqrt(rel_z**2 + rel_i**2))
+                        selected_stddevs.append(np.sqrt(res.stddev**2 + i_res.stddev**2))
 
-                    xy_expectations.append(plus_phase_expectations)
-                    xy_stddevs.append(plus_phase_stddevs)
-
-                # subtract i and z results, unless state was explicitly initialized to zero (plus Z)
-                if  not init_state ==  _OneQState('Z', 0, q):
-                    minus_phase_expectations = []
-                    minus_phase_stddevs = []
-                    for res, i_res in zip(results, i_ress):
-                        minus_phase_expectations.append(i_res.expectation - res.expectation)
-                        # TODO: check error propogation
-                        rel_z = res.stddev / res.expectation
-                        rel_i = i_res.stddev / i_res.expectation
-                        minus_phase_stddevs.append(np.sqrt(rel_z ** 2 + rel_i ** 2))
-
-                    xy_expectations.append(minus_phase_expectations)
-                    xy_stddevs.append(minus_phase_stddevs)
+                    xy_expectations.append(selected_expectations)
+                    xy_stddevs.append(selected_stddevs)
 
             expectations.append(xy_expectations)
             stddevs.append(xy_stddevs)
 
-        for (x_exps, y_exps), (x_errs, y_errs) in zip(*zip(expectations), *zip(stddevs)):
-            for x_exp, y_exp, x_err, y_err in zip(x_exps, y_exps, x_errs, y_errs):
-                relative_phases.append(estimate_phase_from_moments(x_exp, y_exp, x_err, y_err))
+        if len(expectations) == 0:
+            # no expectations, so no measurement of rotation of this qubit. Move on to next qubit.
+            continue
+
+        x_exps, y_exps = expectations
+        x_stddevs, y_stddevs = stddevs
+        for x_exp, y_exp, x_err, y_err in zip(x_exps, y_exps, x_stddevs,  y_stddevs):
+            relative_phases.append(estimate_phase_from_moments(x_exp, y_exp, x_err, y_err))
 
     return relative_phases
 
@@ -508,44 +544,46 @@ def robust_phase_estimate(experiment: StratifiedExperiment) -> Union[float, Sequ
 # Plotting
 #########
 
-#
-# def plot_rpe_iterations(experiments: DataFrame, expected_positions: List = None) -> plt.Axes:
-#     """
-#     Creates a polar plot of the estimated location of the state in the plane perpendicular to the
-#     axis of rotation for each iteration of RPE.
-#
-#     :param experiments: a dataframe with RPE results populated by a call to acquire_rpe_data
-#     :param expected_positions: a list of expected (radius, angle) pairs for each iteration
-#     :return: a matplotlib subplot visualizing each iteration of the RPE experiment
-#     """
-#     positions = []
-#     xs, ys, x_stds, y_stds = get_moments(experiments)
-#     # mutate positions, do not need the actual estimate
-#     estimate_phase_from_moments(xs, ys, x_stds, y_stds, positions)
-#     rs = [pos[0] for pos in positions]
-#     angles = [pos[1] for pos in positions]
-#
-#     ax = plt.subplot(111, projection='polar')
-#
-#     # observed
-#     ax.scatter(angles, rs)
-#     for j, (radius, angle) in enumerate(positions):
-#         ax.annotate("Ob" + str(j), (angle, radius), color='blue')
-#
-#     # expected
-#     if expected_positions:
-#         expected_rs = [pos[0] for pos in expected_positions]
-#         expected_angles = [pos[1] for pos in expected_positions]
-#         ax.scatter(expected_angles, expected_rs)
-#         for j, (radius, angle) in enumerate(expected_positions):
-#             ax.annotate("Ex" + str(j), (angle, radius), color='orange')
-#         ax.set_title("RPE Iterations Observed(O) and Expected(E)", va='bottom')
-#     else:
-#         ax.set_title("Observed Position per RPE Iteration")
-#
-#     ax.set_rmax(1.0)
-#     ax.set_rticks([0.5, 1])  # radial ticks
-#     ax.set_rlabel_position(-22.5)  # offset radial labels to lower right quadrant
-#     ax.grid(True)
-#
-#     return ax
+# TODO: provide more convenient entry for 2q experiments (xs,ys etc. are easy to get for 1q)
+def plot_rpe_iterations(xs, ys, x_stds, y_stds, expected_positions: List = None) -> plt.Axes:
+    """
+    Creates a polar plot of the estimated location of the state in the plane perpendicular to the
+    axis of rotation for each iteration of RPE.
+
+    :param xs: expectation value <X> operator for each iteration
+    :param ys: expectation value <Y> operator for each iteration
+    :param x_stds: standard deviation of the mean for 'xs'
+    :param y_stds: standard deviation of the mean for 'ys'
+    :param expected_positions: a list of expected (radius, angle) pairs for each iteration
+    :return: a matplotlib subplot visualizing each iteration of the RPE experiment
+    """
+    positions = []
+    # mutate positions, do not need the actual estimate
+    estimate_phase_from_moments(xs, ys, x_stds, y_stds, positions)
+    rs = [pos[0] for pos in positions]
+    angles = [pos[1] for pos in positions]
+
+    ax = plt.subplot(111, projection='polar')
+
+    # observed
+    ax.scatter(angles, rs)
+    for j, (radius, angle) in enumerate(positions):
+        ax.annotate("Ob" + str(j), (angle, radius), color='blue')
+
+    # expected
+    if expected_positions:
+        expected_rs = [pos[0] for pos in expected_positions]
+        expected_angles = [pos[1] for pos in expected_positions]
+        ax.scatter(expected_angles, expected_rs)
+        for j, (radius, angle) in enumerate(expected_positions):
+            ax.annotate("Ex" + str(j), (angle, radius), color='orange')
+        ax.set_title("RPE Iterations Observed(O) and Expected(E)", va='bottom')
+    else:
+        ax.set_title("Observed Position per RPE Iteration")
+
+    ax.set_rmax(1.0)
+    ax.set_rticks([0.5, 1])  # radial ticks
+    ax.set_rlabel_position(-22.5)  # offset radial labels to lower right quadrant
+    ax.grid(True)
+
+    return ax
