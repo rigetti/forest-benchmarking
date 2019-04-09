@@ -42,7 +42,8 @@ $$ {\rm vec}(\rho') = \{(U^\dagger)^T \otimes U \} {\rm vec}(\rho)
 so 
 $$ |\rho'\rangle \rangle = \mathcal U |\rho\rangle\rangle,
 $$
-where $\mathcal U = U^*\otimes U$. 
+where $\mathcal U = U^*\otimes U$. The nice thing about this is the operator (the state) has become a vector and the superoperator (the left right action of $U$) has become an operator. 
+
 
 Some other useful results related to vectorization are
 
@@ -50,7 +51,15 @@ $ {\rm vec}([A,X])= (I\otimes A - A^T\otimes I) {\rm vec}(X)$
 
 ${\rm vec}(ABC) = (I\otimes AB) {\rm vec}( C ) = (C^T B^T\otimes I) {\rm vec}(A)$
 
-${\rm vec}(AB) = (I\otimes A) {\rm vec}(B) = (B^T\otimes I) {\rm vec}(A)$.  
+${\rm vec}(AB) = (I\otimes A) {\rm vec}(B) = (B^T\otimes I) {\rm vec}(A)$. 
+
+
+## The $n$-qubit Pauli basis 
+ The $n$-qubit Pauli basis is denoted $\mathcal P^{\otimes n} $ where $\mathcal  P = \{ I, X, Y, Z \}$ are the usual Pauli matricies. It is an operator baisis for the $d = 2^n$ dimensional Hilbert space. There are $d^2 = 4^n$ operators. If one divides all the operators by $\sqrt{d}$ the basis is orthonormal with respect to the Hilbert-Schmidt inner product.
+ 
+It is often convenient to index the $d^2$ operators with a single label, e.g. $P_0=I^{\otimes n},\, \ldots,\, P_{d^2-1}= Z^{\otimes n}$  (or $P_1=I^{\otimes n}$ if you like 1 indexing). In anycase, as these operators are Hermitian and unitary they obey $P_i^2=I^{\otimes n}$.
+ 
+To be explicit, for two qubits $d=4$ and we have 16 operators e.g. $\{II,IX,IY,IZ,XI,XX,XY,...,ZZ\}$ were $II$ should be intepreted as $I\otimes I$ etc. 
 
 ## Quantum channels in the Kraus decomposition (or operator-sum representation)
 A completely positive map on the state $\rho$ can be written using a set of Kraus operators $\{ M_k \}$ as
@@ -62,10 +71,8 @@ where $\rho'$ is the state at the output of the channel.
 If $\sum_k M_k^\dagger M_k= I $ the map is trace preserving. It turns out that $N\le d^2$ where $d$ is the Hilbert space dimension e.g. $d=2^n$ for $n$ qubits.
 
 
-## Kraus to process matrix
-We choose to represent the process matrix in the Pauli basis. The $n$ qubit Pauli basis is denoted $\mathcal P^{\otimes n} $ where $\mathcal  P = \{ I, X, Y, Z \}$ are the usual Pauli matricies. For two qubits we have $\{II,IX,IY,IZ,XI,XX,...,ZZ\}$ were $II$ should be intepreted as $I\otimes I$ etc.
-
-So we expand each of the Kraus operators in this basis 
+## Kraus to process matrix (aka $\chi$ or chi matrix)
+We choose to represent the process matrix in the Pauli basis. So we expand each of the Kraus operators in the $n$ qubit Pauli basis 
 
 $M_k = \sum^{d^2}_{j=1}c_{kj}\,P_j$ 
 
@@ -79,7 +86,7 @@ where
 
 $$\chi_{i,j} = \sum_k c_{k,i} c_{k,j}^*$$ 
 
-is an element of the process matrix $\chi$. The process matrix is a Hermitian and positive semidefinite of size $d^2 \times d^2$. 
+is an element of the process matrix $\chi$  of size $d^2 \times d^2$. The if the channel is CP the process matrix is a Hermitian and positive semidefinite. 
 
 
 ## Kraus to Pauli Transfer matrix
@@ -126,12 +133,35 @@ $\begin{align}
 & = \frac{1}{d} \sum_i |M_i\rangle \rangle \langle\langle M_i |. 
 \end{align}$
 
-An often qouted, but less convenient equivalent expression is
+An often qouted equivalent expression is
 
 $\begin{align}
 \mathcal C &= I\otimes \mathcal E (|\eta \rangle \langle \eta|) \\\\
 &=\sum_{ij} |i\rangle \langle j| \otimes  \mathcal E (|i \rangle \langle j | ).
 \end{align}$
+
+
+## Choi to Pauli transfer matrix
+First we normalize the Choi representation
+
+$$\begin{align}
+\rho_{\mathcal E}=\frac 1 d \mathcal C = \frac 1 d \sum_{ij} |i\rangle \langle j| \otimes  \mathcal E (|i \rangle \langle j | )
+\end{align}$$ 
+
+Then the matrix elements of the Pauli transfer matrix representation of the channel can be obtained from the Choi state using
+
+$$(R_{\mathcal E})_{i,j} ={\rm Tr}[ \rho_{\mathcal E} \, P_j^T \otimes P_i].$$
+
+
+## Pauli transfer matrix to Choi
+We obtain the normalized Choi matrix using the 
+
+$$ \rho_{\mathcal E} = \frac{1}{d^2}\sum_{i,j=1}^{d^2} (R_{\mathcal E})_{i,j}  \, P_j^T \otimes P_i.$$
+
+
+## Process / $\chi$ matrix to Pauli transfer matrix
+
+$$(R_{\mathcal E})_{i,j} = \frac 1 d \sum_{k,l}\chi_{k,l} {\rm Tr}[ P_i P_k P_j P_l].$$
 
 
 ## Examples
