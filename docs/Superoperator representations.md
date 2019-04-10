@@ -557,6 +557,12 @@ Wood et al.,
 Quant. Inf. Comp. 15, 0579-0811 (2015)  
 https://arxiv.org/abs/1111.6950 
 
+[SVDMAT] Singular value decomposition and matrix reorderings in quantum information theory  
+Miszczak,  
+Int. J. Mod. Phys. C 22, No. 9, 897 (2011)  
+https://dx.doi.org/10.1142/S0129183111016683  
+https://arxiv.org/abs/1011.1585  
+
 [VECQO] Vectorization of quantum operations and its use  
 Gilchrist et al.,
 arXiv:0911.2539, (2009)  
