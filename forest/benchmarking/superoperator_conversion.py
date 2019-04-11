@@ -74,10 +74,11 @@ def kraus2process(kraus_ops: list):
     """
     if not isinstance(kraus_ops, (list, tuple)):
         kraus_ops = [kraus_ops]
+
     n_kraus_ops = len(kraus_ops)
     dim_squared = kraus_ops[0].size
     n_qubits = int(np.log2(np.sqrt(dim_squared)))
-    n_pauli_ops = len(list(n_qubit_pauli_basis(n_qubits)))
+    n_pauli_ops = dim_squared # reminder
 
     # decompose Kraus operators into Pauli basis and store coeffs c_{k,p}
     c_k_p = np.zeros((n_kraus_ops, n_pauli_ops), dtype=complex)
@@ -163,15 +164,61 @@ def kraus2choi(kraus_ops: list):
         choi += np.kron(temp, temp.conj().T)
     return choi
 
-# def process2pauli_liouville(chi_matrix: np.ndarray):
-#     r"""
-#     Converts a process matrix (is also known as a chi matrix) to
-#     the Pauli Liouville representation.
-#
-#     :param chi: a D^2 x D^2 matrix
-#     :return: dim**2 by dim**2 pauli-liouville matrix
-#     """
+def process2pauli_liouville(chi_matrix: np.ndarray):
+    r"""
+    Converts a process matrix (is also known as a chi matrix) to
+    the Pauli Liouville representation.
 
+    :param chi: a D^2 x D^2 process matrix
+    :return: dim**2 by dim**2 pauli-liouville matrix
+    """
+    dim = int(np.sqrt(chi_matrix.shape[0]))
+    n_qubits = int(np.log2(dim))
+    n_ops = dim**2
+
+    pl_matrix = np.zeros((dim**2, dim**2))
+
+    # loop over Pauli Liouville representaiton basis
+    for goodiesij in enumerate(zip(itertools.product(range(0, n_ops),range(0, n_ops)), itertools.product(n_qubit_pauli_basis(1),n_qubit_pauli_basis(1)))):
+        idx,jdx = goodiesij[1][0]
+        ((labi,Pi),(labj,Pj)) = goodiesij[1][1]
+        R_ij = 0
+        # sum over chi matrix elements
+        for goodieskl in enumerate(zip(itertools.product(range(0, n_ops),range(0, n_ops)), itertools.product(n_qubit_pauli_basis(1),n_qubit_pauli_basis(1)))):
+            kdx,ldx = goodieskl[1][0]
+            ((labk,Pk),(labl,Pl)) = goodieskl[1][1]
+            # (R_{\mathcal E})_{i,j} = \frac 1 d \sum_{k,l}\chi_{k,l} {\rm Tr}[ P_i P_k P_j P_l]
+            R_ij += chi_matrix[kdx,ldx]*np.trace(np.matmul(np.matmul(np.matmul(Pi, Pk), Pj), Pl))
+        pl_matrix[idx,jdx]=np.real(R_ij/dim)
+    return pl_matrix
+
+def process2kraus(chi_matrix: np.ndarray):
+    """
+    Converts a process matrix into a list of Kraus operators. (operators with small norm may be
+    excluded)
+
+    :param chi_matrix:  a D^2 x D^2 process matrix
+    :return: list of Kraus operators
+    """
+    return pauli_liouville2kraus(process2pauli_liouville(chi_matrix))
+
+def process2superop(chi_matrix: np.ndarray):
+    """
+    Converts a process matrix into a superoperator.
+
+    :param chi_matrix:  a D^2 x D^2 process matrix
+    :return: a dim**2 by dim**2 superoperator matrix
+    """
+    return pauli_liouville2superop(process2pauli_liouville(chi_matrix))
+
+def process2choi(chi_matrix: np.ndarray):
+    """
+    Converts a process matrix into a Choi matrix.
+
+    :param chi_matrix:  a D^2 x D^2 process matrix
+    :return: a dim**2 by dim**2 Choi matrix
+    """
+    return pauli_liouville2choi(process2pauli_liouville(chi_matrix))
 
 def superop2kraus(superop: np.ndarray):
     """
@@ -181,6 +228,15 @@ def superop2kraus(superop: np.ndarray):
     :return: list of Kraus operators
     """
     return choi2kraus(superop2choi(superop))
+
+def superop2process(superop: np.ndarray):
+    """
+    Converts a superoperator into a list of Kraus operators. (operators with small norm may be excluded)
+
+    :param superop: a dim**2 by dim**2 superoperator
+    :return: a D^2 x D^2 process matrix
+    """
+    return kraus2process(superop2kraus(superop))
 
 
 def superop2pauli_liouville(superop: np.ndarray):
@@ -215,6 +271,14 @@ def pauli_liouville2kraus(pl_matrix: np.ndarray):
     """
     return choi2kraus(pauli_liouville2choi(pl_matrix))
 
+def pauli_liouville2process(pl_matrix: np.ndarray):
+    """
+    Converts a pauli_liouville matrix into a process matrix. (operators with small norm may be excluded)
+
+    :param pl_matrix: a dim**2 by dim**2 pauli_liouville matrix
+    :return: a D^2 x D^2 process matrix
+    """
+    return kraus2process(pauli_liouville2kraus(pl_matrix))
 
 def pauli_liouville2superop(pl_matrix: np.ndarray):
     """
@@ -240,7 +304,8 @@ def pauli_liouville2choi(pl_matrix: np.ndarray):
 
 def choi2kraus(choi: np.ndarray, tol: float = 1e-9):
     """
-    Converts a choi matrix into a list of Kraus operators. (operators with small norm may be excluded)
+    Converts a Choi matrix into a list of Kraus operators. (operators with small norm may be
+    excluded)
 
     :param choi: a dim**2 by dim**2 choi matrix
     :param tol: optional threshold parameter for eigenvalues to be discarded
@@ -250,6 +315,13 @@ def choi2kraus(choi: np.ndarray, tol: float = 1e-9):
     return [np.lib.scimath.sqrt(eigval) * unvec(np.array([evec]).T) for eigval, evec in zip(eigvals, v.T) if
             abs(eigval) > tol]
 
+def choi2process(choi: np.ndarray):
+    """
+    Converts a Choi matrix into a process matrix. (operators with small norm may be excluded)
+    :param choi: a dim**2 by dim**2 choi matrix
+    :return: a dim**2 by dim**2 process matrix
+    """
+    return kraus2process(choi2kraus(choi))
 
 def choi2superop(choi: np.ndarray):
     """

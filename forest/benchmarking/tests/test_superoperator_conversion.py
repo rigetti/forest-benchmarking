@@ -136,13 +136,19 @@ def test_kraus2superop():
     assert np.allclose(kraus2superop(HADKraus), HADSuper)
     assert np.allclose(kraus2superop(IZKraus), IZSuper)
 
-
 def test_kraus2choi():
     p = np.random.rand()
     AdKraus = amplitude_damping_kraus(p)
     AdChoi = amplitude_damping_choi(p)
     assert np.allclose(kraus2choi(AdKraus),AdChoi)
     assert np.allclose(kraus2choi(HADKraus), HADChoi)
+
+def test_process2pauli_liouville():
+    p = np.random.rand()
+    AdProce = amplitude_damping_process(p)
+    AdPauli = amplitude_damping_pauli(p)
+    assert np.allclose(AdPauli, process2pauli_liouville(AdProce))
+    assert np.allclose(HADPauli, process2pauli_liouville(HADProce))
 
 def test_basis_transform_p_to_c():
     xz_pauli_basis = np.zeros((16, 1))
