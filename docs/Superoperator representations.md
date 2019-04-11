@@ -22,6 +22,8 @@ were $T$ denotes a transpose. Clearly an inverse operation, `unvec` can be defin
 
 $$ {\rm unvec}\big ( {\rm vec}(A) \big ) = A.$$
 
+Of course `unvec()` generally depends on the dimensions of $A$, which are not recoverable from `vec(A)`. We often focus on square A, but for generality, we require the dimensions for $A$, defaulting to the square root of the dimension of `vec(A)`. 
+
 Similarly we can define a row vectorization to be row stacking $ {\rm vec_r}(A) = (a_{11}, a_{12}, \ldots, a_{1m}, a_{21},\ldots, a_{mm})^T$. Note that ${\rm vec}(A) = {\rm vec_r}(A^T)$. In any case we will **not** use this row convention.
 
 ### Matrix multiplication in vectorized form
@@ -83,7 +85,7 @@ where $G$ and $\Gamma$ are matrices that act on $\mathbb H_A$ and $\mathbb H_B$ 
 ### A note on numerical implementations
 Most linear algebra (or tensor) libraries have the ablity to `reshape` a matrix and `swapaxes` (or sometimes it is called `permute_dims`). 
 
-If you are trying to reshuffle indicies usually the first job is to write your matrix in tensor form. This requires reshaping a $d_A^2\times d_B^2$ matrix into a $d_A\times d_A\times d_B \times d_B$ tensor. Next you `permute1_dims` or `swapaxes`. Often $d_A = d_B$ so we `reshape` to a Matrix that has the same dimensions as the orignal  $d_A^2\times d_A^2$ matix.
+If you are trying to reshuffle indicies usually the first job is to write your matrix in tensor form. This requires reshaping a $d_A^2\times d_B^2$ matrix into a $d_A\times d_A\times d_B \times d_B$ tensor. Next you `permute_dims` or `swapaxes`. Often $d_A = d_B$ so we `reshape` to a Matrix that has the same dimensions as the orignal  $d_A^2\times d_A^2$ matix.
 
 
 ## The $n$-qubit Pauli basis 
@@ -100,11 +102,10 @@ A completely positive map on the state $\rho$ can be written using a set of Krau
 $$\rho' =\mathcal E (\rho) = \sum_{k=1}^N M_k \rho M_k^\dagger, $$
 where $\rho'$ is the state at the output of the channel.
 
-If $\sum_k M_k^\dagger M_k= I $ the map is trace preserving. It turns out that $N\le d^2$ where $d$ is the Hilbert space dimension e.g. $d=2^n$ for $n$ qubits.
+If $\sum_k M_k^\dagger M_k= I $ the map is trace preserving. It turns out that $N\le d^2$ where $d$ is the Hilbert space dimension e.g. $d=2^n$ for $n$ qubits. Kraus operators are not necessarily unique, sometimes there is a unitary degree of freedom in the Kraus representation.
 
-
-## Kraus to process matrix (aka $\chi$ or chi matrix)
-We choose to represent the process matrix in the Pauli basis. So we expand each of the Kraus operators in the $n$ qubit Pauli basis 
+## Kraus to $\chi$ matrix (aka chi or process matrix)
+We choose to represent the $\chi$ matrix in the Pauli basis. So we expand each of the Kraus operators in the $n$ qubit Pauli basis 
 
 $M_k = \sum^{d^2}_{j=1}c_{kj}\,P_j$ 
 
@@ -118,10 +119,12 @@ where
 
 $$\chi_{i,j} = \sum_k c_{k,i} c_{k,j}^*$$ 
 
-is an element of the process matrix $\chi$  of size $d^2 \times d^2$. The if the channel is CP the process matrix is a Hermitian and positive semidefinite. 
+is an element of the process matrix $\chi$  of size $d^2 \times d^2$. The if the channel is CP the $\chi$ matrix is a Hermitian and positive semidefinite. 
 
+The $\chi$ matrix is can be related to the (yet to be defined) Choi matrix via a change of basis. Typically the Choi matrix is defined in the computational basis, while the $\chi$ matrix uses the Pauli basis. Moreover, they may have different normalization conventions.
 
-## Kraus to Pauli Transfer matrix
+## Kraus to Pauli-Liouville matrix (Pauli transfer matrix)
+
 We begin by defining the Pauli vector representation of the state $\rho$ 
 
 $$ |\rho \rangle \rangle = \sum_j c_j |P_j\rangle \rangle$$
@@ -149,6 +152,8 @@ Using the vec operator (see Eq. 1) this implies a superoperator
 $$\mathcal E = \sum_k (M_k^\dagger)^T \otimes M_k = \sum_k M_k^* \otimes M_k,$$
 which acts as $\mathcal E |\rho\rangle \rangle$ using Equation 2.
 
+**Note**  In quantum information a superoperator is an abstract concept. The object above is a concrete representation of the abstract concept in a particular basis. In the NMR community this particular construction is called the Liouville representation. This makes a lot of sense as it a change of basis from the Pauli-Liouville representation.
+
 ## Kraus to Choi
 
 Define $ | \eta \rangle = \frac{1}{\sqrt{d}}\sum_{i=0}^{d-1}|i,i \rangle $
@@ -159,12 +164,12 @@ $|A\rangle \rangle = {\rm vec}(A) = \sqrt{d} (I\otimes A) |\eta\rangle$.
 
 The Choi state is 
 
-$\begin{align}
+$$\begin{align}
 \mathcal C &= I\otimes \mathcal E (|\eta \rangle \langle \eta|) \\\\
 &=\sum_i (I \otimes M_i) |\eta \rangle \langle \eta  | ( I \otimes M_i^\dagger)\\\\
 & = \frac{1}{d} \sum_i {\rm vec}(M_i)  {\rm vec} (M_i) ^\dagger \\\\
 & = \frac{1}{d} \sum_i |M_i\rangle \rangle \langle\langle M_i |. 
-\end{align}$
+\end{align}$$
 
 An often qouted equivalent expression is
 
@@ -173,13 +178,11 @@ $\begin{align}
 &=\sum_{ij} |i\rangle \langle j| \otimes  \mathcal E (|i \rangle \langle j | ).
 \end{align}$
 
-## Process or $\chi$ matrix to Pauli transfer matrix
-
+## $\chi$ matrix to Pauli-Liouville matrix
 $$(R_{\mathcal E})_{i,j} = \frac 1 d \sum_{k,l}\chi_{k,l} {\rm Tr}[ P_i P_k P_j P_l].$$
 
-
-## Superoperator to Pauli transfer matrix
-The standard basis on $n$ qubits is called the computational basis. It is essentially all the strings $|c_1\rangle=|0..0\rangle$ through to $|c_{\rm max}\rangle = |1...1\rangle$. To convert between a superoperator and Pauli transfer matrix  representation we need to to a change of basis from the computational basis to the  Pauli basis. This is acheived by the unitary
+## Superoperator to Pauli-Liouville matrix
+The standard basis on $n$ qubits is called the computational basis. It is essentially all the strings $|c_1\rangle=|0..0\rangle$ through to $|c_{\rm max}\rangle = |1...1\rangle$. To convert between a superoperator and the Pauli-Liouville matrix representation we need to to a change of basis from the computational basis to the Pauli basis. This is acheived by the unitary
 
 $$ U_{c2p}= \sum_{k=1}|c_k\rangle\langle\langle P_k|.$$
 
@@ -195,8 +198,8 @@ $$ \mathcal C = R(\mathcal E).$$
 
 It turns out that $ \mathcal E = R(\mathcal C)$ which means that $\mathcal E= R(R(\mathcal E))$.
 
-## Pauli transfer matrix to Superoperator
-To convert between the Pauli transfer matrix and the superoperator representation we need to to a change of basis from the Pauli basis to the computational basis. This is acheived by the unitary
+## Pauli-Liouville matrix to Superoperator
+To convert between the Pauli-Liouville matrix and the superoperator representation we need to to a change of basis from the Pauli basis to the computational basis. This is acheived by the unitary
 
 $$ U_{p2c}= \sum_{k=1}|P_k\rangle\rangle \langle k|,$$
 which is simply $U_{c2p}^\dagger$.
@@ -206,7 +209,7 @@ The we have
 $$\mathcal E =  U_{p2c}R_{\mathcal E}U_{p2c}^\dagger.$$
 
 
-## Pauli transfer matrix to Choi
+## Pauli-Liouville to Choi
 We obtain the normalized Choi matrix using the expression
 
 $$ \rho_{\mathcal E} = \frac{1}{d^2}\sum_{i,j=1}^{d^2} (R_{\mathcal E})_{i,j}  \, P_j^T \otimes P_i.$$
@@ -222,14 +225,14 @@ $$ M_i = \sqrt{\lambda_i}\, {\rm unvec}\big (|M_i\rangle\rangle\big),$$
 
 For numerical implementation one usually puts a threshold on the eigenvalues, say $\lambda> 10^{-10}$, to prevent numerical instablities. 
 
-## Choi to Pauli transfer matrix
+## Choi to Pauli-Liouville
 First we normalize the Choi representation
 
 $$\begin{align}
 \rho_{\mathcal E}=\frac 1 d \mathcal C = \frac 1 d \sum_{ij} |i\rangle \langle j| \otimes  \mathcal E (|i \rangle \langle j | )
 \end{align}$$ 
 
-Then the matrix elements of the Pauli transfer matrix representation of the channel can be obtained from the Choi state using
+Then the matrix elements of the Pauli-Liouville matrix representation of the channel can be obtained from the Choi state using
 
 $$(R_{\mathcal E})_{i,j} ={\rm Tr}[ \rho_{\mathcal E} \, P_j^T \otimes P_i].$$
 
@@ -243,6 +246,12 @@ It turns out that $ \mathcal C = R(\mathcal E)$ which means that $\mathcal C= R(
   
 
 ## Examples: One qubit channels
+Some observations:  
+
+* The Choi matrix of a unitary process always has rank 1.
+* The superoperator / Liouville representation of a unitary process is always full rank.
+* The eigenvalues of a Choi matrix give you an upper bound to the probability a particular (canonical) Kraus operator will occur (generally that probability depends on the state). This is helpful when sampling Kraus operators (you can test for which occurred accoridng to the order of these eigenvalues).
+* The chi matrix (in the Pauli basis) is very convenient for computing the result of Pauli twirling or Clifford twirling the corresponding process.
 
 ### Unitary Channels or Gates
 As an example we look two single qubit channels $R_z(\theta) = \exp(-i \theta Z/2)$ and $H$. The Hadamard is is a nice channel to examine as it transforms $X$ and $Z$ to each other
@@ -270,7 +279,7 @@ H &= \frac{1}{\sqrt{2}} (X+Z)\\\\
 \end{pmatrix}
 \end{align}$$
 
-**Process or $\chi$ matrix**
+**$\chi$ matrix (process)**
 
 $$ \chi(R_z) = [\chi_{ij}] = \frac 1 2\begin{pmatrix}  
 1+\cos(\theta) & 0 & 0 & i \sin(\theta) \\\\
@@ -286,7 +295,7 @@ $$ \chi(H) = [\chi_{ij}] = \frac 1 2\begin{pmatrix}
 0 & 1 & 0 & 1 
 \end{pmatrix}$$
 
-**Pauli Transfer matrix**
+**Pauli-Liouville matrix**
 $$
 R_{R_z(\theta)}= [(R_{R_z(\theta)})_{i,j}] =
 \begin{pmatrix}  
@@ -305,7 +314,8 @@ R_{H}= [(R_{H})_{i,j}] =
 0 & 1 & 0 & 0
 \end{pmatrix}$$
 
-**Superoperator**
+**Superoperator**  
+
 $$ \mathcal R_z(\theta) =  R_z(\theta)^*\otimes  R_z(\theta)=
 \begin{pmatrix}  
 1 & 0 & 0 & 0 \\\\
@@ -324,7 +334,7 @@ $$ \mathcal H = H^*\otimes H=\frac 1 2
 \end{pmatrix} 
 $$
 
-**Choi**
+**Choi**  
 
 $$\begin{align}
 \mathcal C_{R_z} &= \frac 1 2  |R_z(\theta)\rangle\rangle\langle\langle R_z(\theta)|\\\\
@@ -376,7 +386,7 @@ M_2 &= \sqrt{p_y'}Y \\\\
 M_3 &= \sqrt{p_z}Z.
 \end{align}$$
 
-**Process or $\chi$ matrix**
+**$\chi$ matrix (process)**
 
 $$ \chi = [\chi_{ij}] = \begin{pmatrix}  
 (1-p') & 0 & 0 & 0 \\\\
@@ -385,7 +395,7 @@ $$ \chi = [\chi_{ij}] = \begin{pmatrix}
 0 & 0 & 0 & p_z 
 \end{pmatrix}$$
 
-**Pauli Transfer matrix**
+**Pauli-Liouville matrix**
 $$
 R_{\mathcal E}= [(R_{\mathcal E})_{i,j}] =
 \begin{pmatrix}  
@@ -470,7 +480,7 @@ M_1&=\sqrt{\gamma}\sigma_-
 \end{align}$$
 where $\sigma_- = (\sigma_+)^\dagger= \frac 1 2 (X +i Y) =|0\rangle \langle 1| $. To relate this channel to a $T_1$ process we make the decay rate time dependant $\gamma(t) = \exp(-\Gamma t)$.
 
-**Process or $\chi$ matrix**
+**$\chi$ matrix (process)**
 
 $$ \chi(AD) = [\chi_{ij}] = \frac 1 4\begin{pmatrix}  
 (1+\sqrt{1-\gamma})^2 & 0       & 0        & \gamma \\\\
@@ -479,7 +489,7 @@ $$ \chi(AD) = [\chi_{ij}] = \frac 1 4\begin{pmatrix}
 \gamma 				  & 0  & 0        & (-1+\sqrt{1-\gamma})^2
 \end{pmatrix}$$
 
-**Pauli Transfer matrix**
+**Pauli-Liouville matrix**
 $$
 R_{AD}= [(R_{AD})_{i,j}] =
 \begin{pmatrix}  
