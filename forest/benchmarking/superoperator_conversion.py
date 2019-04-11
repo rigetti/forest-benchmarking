@@ -152,13 +152,7 @@ def kraus2choi(kraus_ops: Sequence[np.ndarray]) -> np.ndarray:
         if len(kraus_ops[0].shape) < 2:  # first elem is not a matrix
             kraus_ops = [kraus_ops]
 
-    dim_squared = np.asarray(kraus_ops[0]).size
-    choi = np.zeros((dim_squared, dim_squared), dtype=complex)
-
-    for op in kraus_ops:
-        temp = vec(op)
-        choi += np.kron(temp, temp.conj().T)
-    return choi
+    return sum([vec(op) @ vec(op).conj().T for op in kraus_ops])
 
 
 def chi2pauli_liouville(chi_matrix: np.ndarray) -> np.ndarray:
