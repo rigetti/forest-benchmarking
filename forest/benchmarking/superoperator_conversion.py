@@ -25,6 +25,7 @@ Further references include:
        https://arxiv.org/abs/quant-ph/0401119
 
 """
+import itertools
 import numpy as np
 from forest.benchmarking.utils import n_qubit_pauli_basis
 
@@ -63,6 +64,36 @@ def unvec(vector):
     matrix = vector.reshape(dim, dim).T
     return matrix
 
+def kraus2process(kraus_ops: list):
+    r"""
+    Convert a set of Kraus operators (representing a channel) to
+    a process matrix which is also known as a chi matrix.
+
+    :param kraus_ops: A list or tuple of N Kraus operators
+    :return: Returns a D^2 x D^2 matrix.
+    """
+    if not isinstance(kraus_ops, (list, tuple)):
+        kraus_ops = [kraus_ops]
+    n_kraus_ops = len(kraus_ops)
+    dim_squared = kraus_ops[0].size
+    n_qubits = int(np.log2(np.sqrt(dim_squared)))
+    n_pauli_ops = len(list(n_qubit_pauli_basis(n_qubits)))
+
+    # decompose Kraus operators into Pauli basis and store coeffs c_{k,p}
+    c_k_p = np.zeros((n_kraus_ops, n_pauli_ops), dtype=complex)
+    for kdx, krausop in enumerate(kraus_ops):
+        for pdx, Pauli in enumerate(n_qubit_pauli_basis(n_qubits)):
+            c_k_p[kdx, pdx] = np.trace(np.matmul(Pauli[1], krausop))
+
+    # multiply coeffs to get process matrix elements
+    chi_mat = np.zeros((dim_squared, dim_squared), dtype=complex)
+    for idx, jdx in itertools.product(range(0, n_pauli_ops), range(0, n_pauli_ops)):
+        chi_ij = 0
+        # \chi_{i, j} = \sum_k c_{k, i} c_{k, j} ^ *
+        for kdx in range(0, n_kraus_ops):
+            chi_ij += c_k_p[kdx, idx] * np.conjugate(c_k_p[kdx, jdx])
+        chi_mat[idx, jdx] = chi_ij / dim_squared
+    return chi_mat
 
 def kraus2superop(kraus_ops: list):
     r"""
@@ -132,6 +163,15 @@ def kraus2choi(kraus_ops: list):
         choi += np.kron(temp, temp.conj().T)
     return choi
 
+# def process2pauli_liouville(chi_matrix: np.ndarray):
+#     r"""
+#     Converts a process matrix (is also known as a chi matrix) to
+#     the Pauli Liouville representation.
+#
+#     :param chi: a D^2 x D^2 matrix
+#     :return: dim**2 by dim**2 pauli-liouville matrix
+#     """
+
 
 def superop2kraus(superop: np.ndarray):
     """
@@ -198,16 +238,17 @@ def pauli_liouville2choi(pl_matrix: np.ndarray):
     return superop2choi(pauli_liouville2superop(pl_matrix))
 
 
-def choi2kraus(choi: np.ndarray):
+def choi2kraus(choi: np.ndarray, tol: float = 1e-9):
     """
     Converts a choi matrix into a list of Kraus operators. (operators with small norm may be excluded)
 
     :param choi: a dim**2 by dim**2 choi matrix
+    :param tol: optional threshold parameter for eigenvalues to be discarded
     :return: list of Kraus operators
     """
     eigvals, v = np.linalg.eigh(choi)
     return [np.lib.scimath.sqrt(eigval) * unvec(np.array([evec]).T) for eigval, evec in zip(eigvals, v.T) if
-            abs(eigval) > 1e-16]
+            abs(eigval) > tol]
 
 
 def choi2superop(choi: np.ndarray):
