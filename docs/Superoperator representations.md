@@ -171,7 +171,7 @@ $$\begin{align}
 & = \frac{1}{d} \sum_i |M_i\rangle \rangle \langle\langle M_i |. 
 \end{align}$$
 
-An often qouted equivalent expression is
+An often quoted equivalent expression is
 
 $\begin{align}
 \mathcal C &= I\otimes \mathcal E (|\eta \rangle \langle \eta|) \\\\
