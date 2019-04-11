@@ -114,8 +114,8 @@ def test_kraus2chi():
     assert  np.allclose(HADChi, kraus2chi(HADKraus))
     p = np.random.rand()
     AdKraus = amplitude_damping_kraus(p)
-    AdProce = amplitude_damping_chi(p)
-    assert np.allclose(AdProce, kraus2chi(AdKraus))
+    AdChi = amplitude_damping_chi(p)
+    assert np.allclose(AdChi, kraus2chi(AdKraus))
     assert np.allclose(superop2chi(IZSuper), kraus2chi(IZKraus))
 
 def test_kraus2pauli_liouville():
@@ -146,9 +146,9 @@ def test_kraus2choi():
 
 def test_chi2pauli_liouville():
     p = np.random.rand()
-    AdProce = amplitude_damping_chi(p)
+    AdChi = amplitude_damping_chi(p)
     AdPauli = amplitude_damping_pauli(p)
-    assert np.allclose(AdPauli, chi2pauli_liouville(AdProce))
+    assert np.allclose(AdPauli, chi2pauli_liouville(AdChi))
     assert np.allclose(HADPauli, chi2pauli_liouville(HADChi))
 
 def test_basis_transform_p_to_c():
