@@ -119,9 +119,9 @@ where
 
 $$\chi_{i,j} = \sum_k c_{k,i} c_{k,j}^*$$ 
 
-is an element of the process matrix $\chi$  of size $d^2 \times d^2$. The if the channel is CP the $\chi$ matrix is a Hermitian and positive semidefinite. 
+is an element of the process matrix $\chi$  of size $d^2 \times d^2$. If the channel is CP the $\chi$ matrix is a Hermitian and positive semidefinite. 
 
-The $\chi$ matrix is can be related to the (yet to be defined) Choi matrix via a change of basis. Typically the Choi matrix is defined in the computational basis, while the $\chi$ matrix uses the Pauli basis. Moreover, they may have different normalization conventions.
+The $\chi$ matrix can be related to the (yet to be defined) Choi matrix via a change of basis. Typically the Choi matrix is defined in the computational basis, while the $\chi$ matrix uses the Pauli basis. Moreover, they may have different normalization conventions.
 
 ## Kraus to Pauli-Liouville matrix (Pauli transfer matrix)
 
@@ -143,7 +143,7 @@ $$|\rho' \rangle \rangle = R_{\mathcal E} |\rho \rangle \rangle$$
 
 
 ## Kraus to Superoperator
-We already saw an example of this in the setion on `vec`-ing. There we had uintary evolutiuon which only requires one Kraus operator. Lets generalized that to many Kraus opeerators.  
+We already saw an example of this in the setion on `vec`-ing. There we re-packaged conjugation by unitary evolution into the action of a matrix on a vec'd density operator. Unitary evolution is simply the case of a single Kraus operator, so we generalize this by taking a sum over all Kraus operators.  
 
 Consider the set of Kraus operators $\{ M_k \}$. The corresponding quantum operation is $\mathcal E (\rho) = \sum_k M_k \rho M_k^\dagger $.
 
@@ -152,7 +152,7 @@ Using the vec operator (see Eq. 1) this implies a superoperator
 $$\mathcal E = \sum_k (M_k^\dagger)^T \otimes M_k = \sum_k M_k^* \otimes M_k,$$
 which acts as $\mathcal E |\rho\rangle \rangle$ using Equation 2.
 
-**Note**  In quantum information a superoperator is an abstract concept. The object above is a concrete representation of the abstract concept in a particular basis. In the NMR community this particular construction is called the Liouville representation. This makes a lot of sense as it a change of basis from the Pauli-Liouville representation.
+**Note**  In quantum information a superoperator is an abstract concept. The object above is a concrete representation of the abstract concept in a particular basis. In the NMR community this particular construction is called the Liouville representation. The Pauli-Liouville representation is attained from Liouville represnetation by a change of basis, so the similarity in naming makes sense. 
 
 ## Kraus to Choi
 
@@ -182,7 +182,7 @@ $\begin{align}
 $$(R_{\mathcal E})_{i,j} = \frac 1 d \sum_{k,l}\chi_{k,l} {\rm Tr}[ P_i P_k P_j P_l].$$
 
 ## Superoperator to Pauli-Liouville matrix
-The standard basis on $n$ qubits is called the computational basis. It is essentially all the strings $|c_1\rangle=|0..0\rangle$ through to $|c_{\rm max}\rangle = |1...1\rangle$. To convert between a superoperator and the Pauli-Liouville matrix representation we need to to a change of basis from the computational basis to the Pauli basis. This is acheived by the unitary
+The standard basis on $n$ qubits is called the computational basis. It is essentially all the strings $|c_1\rangle=|0..0\rangle$ through to $|c_{\rm max}\rangle = |1...1\rangle$. To convert between a superoperator and the Pauli-Liouville matrix representation we need to do a change of basis from the computational basis to the Pauli basis. This is acheived by the unitary
 
 $$ U_{c2p}= \sum_{k=1}|c_k\rangle\langle\langle P_k|.$$
 
@@ -254,7 +254,7 @@ Some observations:
 * The chi matrix (in the Pauli basis) is very convenient for computing the result of Pauli twirling or Clifford twirling the corresponding process.
 
 ### Unitary Channels or Gates
-As an example we look two single qubit channels $R_z(\theta) = \exp(-i \theta Z/2)$ and $H$. The Hadamard is is a nice channel to examine as it transforms $X$ and $Z$ to each other
+As an example we look at two single qubit channels $R_z(\theta) = \exp(-i \theta Z/2)$ and $H$. The Hadamard is is a nice channel to examine as it transforms $X$ and $Z$ to each other
 $$\begin{align}
 H Z H^\dagger &=X\\\\
 H X H^\dagger &= Z
@@ -263,7 +263,7 @@ which can be easily seen in some of the channel representations.
 
 **Kraus** 
 
-As the channel is unitary there is only one Kraus operators used in the operator sum representation. However we express them in the Pauli basis to make some of the below manipulations easier
+As the channel is unitary there is only one Kraus operator used in the operator sum representation. However we express them in the Pauli basis to make some of the below manipulations easier
 $$\begin{align}
 R_z(\theta) &= \cos(\theta/2) I - i \sin(\theta/2) Z\\\\
 &= \begin{pmatrix}  
@@ -382,7 +382,7 @@ The Kraus operators used in the operator sum representation are
 $$\begin{align}
 M_0 &= \sqrt{1-p'}I \\\\
 M_1 &= \sqrt{p_x}X \\\\
-M_2 &= \sqrt{p_y'}Y \\\\
+M_2 &= \sqrt{p_y}Y \\\\
 M_3 &= \sqrt{p_z}Z.
 \end{align}$$
 
