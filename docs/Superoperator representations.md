@@ -123,6 +123,16 @@ is an element of the process matrix $\chi$  of size $d^2 \times d^2$. If the cha
 
 The $\chi$ matrix can be related to the (yet to be defined) Choi matrix via a change of basis. Typically the Choi matrix is defined in the computational basis, while the $\chi$ matrix uses the Pauli basis. Moreover, they may have different normalization conventions.
 
+In this way of viewing things we first define 
+
+$$
+|c_{k}\rangle\rangle = (U_{c2p}^*\otimes U_{c2p}) {\rm vec}(M_k) 
+$$
+then
+$$
+\chi = \sum_k |c_{k}\rangle\rangle \langle\langle c_k|.
+$$
+
 ## Kraus to Pauli-Liouville matrix (Pauli transfer matrix)
 
 We begin by defining the Pauli vector representation of the state $\rho$ 
