@@ -57,7 +57,7 @@ ${\rm vec}(AB) = (I\otimes A) {\rm vec}(B) = (B^T\otimes I) {\rm vec}(A)$.
 
 ## Matrix operations on Bipartite matrices: Reshuffling, SWAP, and tranposition
 
-This section is bassed on the Wood et al. presentation in [GRAPTN].
+This section is based on the Wood et al. presentation in [GRAPTN].
 
 As motivation for this section consider the Kraus representation theorem. It shows that a quantum channel can be represented as a partial trace over a unitary operation on a larger Hilbert space. Actually the unitary is on a bipartite Hilbert space.
 
@@ -80,7 +80,7 @@ Col-reshuffling $R$: $\mathcal Q_{m,\mu;n,\nu} \mapsto \mathcal Q_{\nu,\mu;n,m}.
 
 The importance of understanding reshuffling can be understood as understanding the relationship between 
 $${\rm vec}(G)\otimes {\rm vec}(\Gamma) \quad {\rm and} \quad  {\rm vec}(G\otimes\Gamma)$$
-where $G$ and $\Gamma$ are matrices that act on $\mathbb H_A$ and $\mathbb H_B$ respectively, as explaind in [VECQO].
+where $G$ and $\Gamma$ are matrices that act on $\mathbb H_A$ and $\mathbb H_B$ respectively, as explained in [VECQO].
 
 ### A note on numerical implementations
 Most linear algebra (or tensor) libraries have the ablity to `reshape` a matrix and `swapaxes` (or sometimes it is called `permute_dims`). 
@@ -89,11 +89,11 @@ If you are trying to reshuffle indicies usually the first job is to write your m
 
 
 ## The $n$-qubit Pauli basis 
- The $n$-qubit Pauli basis is denoted $\mathcal P^{\otimes n} $ where $\mathcal  P = \{ I, X, Y, Z \}$ are the usual Pauli matricies. It is an operator baisis for the $d = 2^n$ dimensional Hilbert space and there are $d^2 = 4^n$ operators in $\mathcal P^{\otimes n} $. If one divides all the operators by $\sqrt{d}$ the basis is orthonormal with respect to the Hilbert-Schmidt inner product.
+ The $n$-qubit Pauli basis is denoted $\mathcal P^{\otimes n} $ where $\mathcal  P = \{ I, X, Y, Z \}$ are the usual Pauli matricies. It is an operator basis for the $d = 2^n$ dimensional Hilbert space and there are $d^2 = 4^n$ operators in $\mathcal P^{\otimes n} $. If one divides all the operators by $\sqrt{d}$ the basis is orthonormal with respect to the Hilbert-Schmidt inner product.
  
 It is often convenient to index the $d^2$ operators with a single label, e.g. $P_1=I^{\otimes n},\, \ldots,\, P_{d^2}= Z^{\otimes n}$  (or $P_0=I^{\otimes n}$ if you like zero indexing). In anycase, as these operators are Hermitian and unitary they obey $P_i^2=I^{\otimes n}$.
  
-To be explicit, for two qubits $d=4$ and we have 16 operators e.g. $\{II, IX, IY, IZ, XI, XX, XY, ..., ZZ\}$ were $II$ should be intepreted as $I\otimes I$ etc. The single index would be $\{P_1, P_2, P_3, P_4, P_5, P_6, P_7, ..., P_{16}\}$.
+To be explicit, for two qubits $d=4$ and we have 16 operators e.g. $\{II, IX, IY, IZ, XI, XX, XY, ..., ZZ\}$ were $II$ should be interpreted as $I\otimes I$ etc. The single index would be $\{P_1, P_2, P_3, P_4, P_5, P_6, P_7, ..., P_{16}\}$.
 
 ## Quantum channels in the Kraus decomposition (or operator-sum representation)
 A completely positive map on the state $\rho$ can be written using a set of Kraus operators $\{ M_k \}$ as
