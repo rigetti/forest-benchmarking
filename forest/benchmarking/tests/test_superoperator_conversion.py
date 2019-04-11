@@ -116,6 +116,7 @@ def test_kraus2process():
     AdKraus = amplitude_damping_kraus(p)
     AdProce = amplitude_damping_process(p)
     assert np.allclose(AdProce, kraus2process(AdKraus))
+    assert np.allclose(superop2process(IZSuper), kraus2process(IZKraus))
 
 def test_kraus2pauli_liouville():
     p = np.random.rand()
