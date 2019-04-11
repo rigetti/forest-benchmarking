@@ -14,7 +14,7 @@ def amplitude_damping_kraus(p):
     Ad1 = np.asarray([[0, np.sqrt(p)], [0, 0]])
     return [Ad0, Ad1]
 
-def amplitude_damping_process(p):
+def amplitude_damping_chi(p):
     poly1 = ( 1 + np.sqrt(1-p))**2
     poly2 = (-1 + np.sqrt(1-p))**2
     ad_pro = 0.25*np.asarray([[poly1,     0,     0,     p],
@@ -52,7 +52,7 @@ def amplitude_damping_choi(p):
 HADAMARD = (sigma_x + sigma_z) / np.sqrt(2)
 HADKraus = HADAMARD
 
-HADProce = 0.5*np.asarray([[ 0,  0,  0,  0],
+HADChi = 0.5 * np.asarray([[0, 0, 0, 0],
                            [ 0,  1,  0,  1],
                            [ 0,  0,  0,  0],
                            [ 0,  1,  0,  1]])
@@ -110,13 +110,13 @@ def test_kraus_ops_sum_to_identity():
     [Ay0,Ay1] = amplitude_damping_kraus(p)
     np.testing.assert_array_almost_equal_nulp(np.matmul(Ay0.transpose().conj(), Ay0)
                                               + np.matmul(Ay1.transpose().conj(), Ay1), np.eye(2))
-def test_kraus2process():
-    assert  np.allclose(HADProce, kraus2process(HADKraus))
+def test_kraus2chi():
+    assert  np.allclose(HADChi, kraus2chi(HADKraus))
     p = np.random.rand()
     AdKraus = amplitude_damping_kraus(p)
-    AdProce = amplitude_damping_process(p)
-    assert np.allclose(AdProce, kraus2process(AdKraus))
-    assert np.allclose(superop2process(IZSuper), kraus2process(IZKraus))
+    AdProce = amplitude_damping_chi(p)
+    assert np.allclose(AdProce, kraus2chi(AdKraus))
+    assert np.allclose(superop2chi(IZSuper), kraus2chi(IZKraus))
 
 def test_kraus2pauli_liouville():
     p = np.random.rand()
@@ -144,12 +144,12 @@ def test_kraus2choi():
     assert np.allclose(kraus2choi(AdKraus),AdChoi)
     assert np.allclose(kraus2choi(HADKraus), HADChoi)
 
-def test_process2pauli_liouville():
+def test_chi2pauli_liouville():
     p = np.random.rand()
-    AdProce = amplitude_damping_process(p)
+    AdProce = amplitude_damping_chi(p)
     AdPauli = amplitude_damping_pauli(p)
-    assert np.allclose(AdPauli, process2pauli_liouville(AdProce))
-    assert np.allclose(HADPauli, process2pauli_liouville(HADProce))
+    assert np.allclose(AdPauli, chi2pauli_liouville(AdProce))
+    assert np.allclose(HADPauli, chi2pauli_liouville(HADChi))
 
 def test_basis_transform_p_to_c():
     xz_pauli_basis = np.zeros((16, 1))
