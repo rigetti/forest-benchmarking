@@ -22,7 +22,7 @@ were $T$ denotes a transpose. Clearly an inverse operation, `unvec` can be defin
 
 $$ {\rm unvec}\big ( {\rm vec}(A) \big ) = A.$$
 
-Of course `unvec()` generally depends on the dimensions of $A$, which are not recoverable from `vec(A)`. We often focus on square A, but for generality, we require the dimensions for $A$, defaulting to the square root of the dimension of `vec(A)`. 
+Of course `unvec()` generally depends on the dimensions of $A$, which are not recoverable from `vec(A)`. We often focus on square A, but for generality, we require the dimensions for $A$, defaulting to the square root of the dimension of `vec(A)`. Column stacking corresponds to how matrices are stored in memory for column major storage conventions.
 
 Similarly we can define a row vectorization to be row stacking $ {\rm vec_r}(A) = (a_{11}, a_{12}, \ldots, a_{1m}, a_{21},\ldots, a_{mm})^T$. Note that ${\rm vec}(A) = {\rm vec_r}(A^T)$. In any case we will **not** use this row convention.
 
