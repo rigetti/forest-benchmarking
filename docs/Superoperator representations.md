@@ -162,7 +162,7 @@ Using the vec operator (see Eq. 1) this implies a superoperator
 $$\mathcal E = \sum_k (M_k^\dagger)^T \otimes M_k = \sum_k M_k^* \otimes M_k,$$
 which acts as $\mathcal E |\rho\rangle \rangle$ using Equation 2.
 
-**Note**  In quantum information a superoperator is an abstract concept. The object above is a concrete representation of the abstract concept in a particular basis. In the NMR community this particular construction is called the Liouville representation. The Pauli-Liouville representation is attained from Liouville represnetation by a change of basis, so the similarity in naming makes sense. 
+**Note**  In quantum information a superoperator is an abstract concept. The object above is a concrete representation of the abstract concept in a particular basis. In the NMR community this particular construction is called the Liouville representation. The Pauli-Liouville representation is attained from Liouville representation by a change of basis, so the similarity in naming makes sense. 
 
 ## Kraus to Choi
 
