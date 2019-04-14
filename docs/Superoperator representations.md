@@ -2,7 +2,8 @@
 
 This document summarizes our conventions for the different superoperator representations. We show how to apply the channels to states in these represenations and how to convert channels between a subset of representations. By combining these conversion methods you can convert between any of the channel representations.
 
-At the bottom of the document there is a list of references with more information. This document was influenced by [IGST] and we recomend reading [GRAPTN] to gain deeper understading. Additionally these references explain, for example how to determine if a channel is unital or completely postive in the different representations.
+This document is **not** intended to be a tutorial or a comprehensive review. At the bottom of the document there is a list of references with more information. This document was influenced by [IGST] and we recomend reading [GRAPTN] to gain deeper understading. Additionally these references explain, for example how to determine if a channel is unital or completely postive in the different representations.
+
 
 ## `vec` and `unvec`
 Consider an $m\times m$ matrix
@@ -261,7 +262,7 @@ Some observations:
 * The Choi matrix of a unitary process always has rank 1.
 * The superoperator / Liouville representation of a unitary process is always full rank.
 * The eigenvalues of a Choi matrix give you an upper bound to the probability a particular (canonical) Kraus operator will occur (generally that probability depends on the state). This is helpful when sampling Kraus operators (you can test for which occurred accoridng to the order of these eigenvalues).
-* The chi matrix (in the Pauli basis) is very convenient for computing the result of Pauli twirling or Clifford twirling the corresponding process.
+* The $\chi$ matrix (in the Pauli basis) is very convenient for computing the result of Pauli twirling or Clifford twirling the corresponding process.
 
 ### Unitary Channels or Gates
 As an example we look at two single qubit channels $R_z(\theta) = \exp(-i \theta Z/2)$ and $H$. The Hadamard is is a nice channel to examine as it transforms $X$ and $Z$ to each other
