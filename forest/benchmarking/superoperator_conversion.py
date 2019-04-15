@@ -41,8 +41,8 @@ def vec(matrix: np.ndarray) -> np.ndarray:
 
     where |A>> denotes the vec'ed version of A and T is a transpose.
 
-    :param matrix: A N x M numpy array.
-    :return: Returns a column vector with  N x M rows.
+    :param matrix: A N (rows) by M (columns) numpy array.
+    :return: Returns a column vector with  N by M rows.
     """
     return np.asarray(matrix).T.reshape((-1, 1))
 
@@ -51,17 +51,17 @@ def unvec(vector: np.ndarray, shape: Tuple[int, int] = None) -> np.ndarray:
     """
     Take a column vector and turn it into a matrix.
 
-    By default, the unvec'ed matrix is assumed to be square; specifying shape = [nrows, ncols] will
-    produce a nrows by ncols matrix.
+    By default, the unvec'ed matrix is assumed to be square. Specifying shape = [N, M] will
+    produce a N by M matrix where N is the number of rows and M is the number of columns.
 
     Consider |A>> := vec(A) = (a, c, b, d)^T. `unvec(|A>>)` should return
 
     A = [[a, b]
          [c, d]].
 
-    :param vector: A N^2 x 1 numpy array.
+    :param vector: A (N*M) by 1 numpy array.
     :param shape: The shape of the output matrix; by default, the matrix is assumed to be square.
-    :return: Returns a column vector with  N x N rows.
+    :return: Returns a N by M matrix.
     """
     vector = np.asarray(vector)
     if shape is None:
@@ -78,7 +78,7 @@ def kraus2chi(kraus_ops: Sequence[np.ndarray]) -> np.ndarray:
     a chi matrix which is also known as a process matrix.
 
     :param kraus_ops: A list or tuple of N Kraus operators
-    :return: Returns a D^2 x D^2 matrix.
+    :return: Returns a dim**2 by dim**2 matrix.
     """
     if isinstance(kraus_ops, np.ndarray):  # handle input of single kraus op
         if len(kraus_ops[0].shape) < 2:  # first elem is not a matrix
@@ -95,10 +95,10 @@ def kraus2superop(kraus_ops: Sequence[np.ndarray]) -> np.ndarray:
     Convert a set of Kraus operators (representing a channel) to
     a superoperator using the column stacking convention.
 
-    Suppose the N Kraus operators M_i are DxD matrices. Then the
-    the superoperator is a D*D \otimes D*D matrix. Using the relation
+    Suppose the N Kraus operators M_i are dim by dim matrices. Then the
+    the superoperator is a (dim**2) \otimes (dim**2) matrix. Using the relation
     column stacking relation,
-    ${\rm vec}(ABC) = (C^T\otimes A) {\rm vec}(B)$, we can show
+    vec(ABC) = (C^T\otimes A) vec(B), we can show
 
     super_operator = \sum_i^N ( M_i^\dagger )^T \otimes M_i
                    = \sum_i^N M_i^* \otimes M_i
@@ -107,7 +107,7 @@ def kraus2superop(kraus_ops: Sequence[np.ndarray]) -> np.ndarray:
     and A^\dagger is the complex conjugate and transpose.
 
     :param kraus_ops: A tuple of N Kraus operators
-    :return: Returns a D^2 x D^2 matrix.
+    :return: Returns a dim**2 by dim**2 matrix.
     """
     if isinstance(kraus_ops, np.ndarray):  # handle input of single kraus op
         if len(kraus_ops[0].shape) < 2:  # first elem is not a matrix
@@ -124,10 +124,10 @@ def kraus2superop(kraus_ops: Sequence[np.ndarray]) -> np.ndarray:
 def kraus2pauli_liouville(kraus_ops: Sequence[np.ndarray]) -> np.ndarray:
     """
     Convert a set of Kraus operators (representing a channel) to
-    a Pauli-Liouville matrix.
+    a Pauli-Liouville matrix (aka Pauli Transfer matrix).
 
     :param kraus_ops: A list of Kraus operators
-    :return: Returns D^2 x D^2 pauli-liouville matrix
+    :return: Returns dim**2 by dim**2 Pauli-Liouville matrix
     """
     return superop2pauli_liouville(kraus2superop(kraus_ops))
 
@@ -137,8 +137,8 @@ def kraus2choi(kraus_ops: Sequence[np.ndarray]) -> np.ndarray:
     Convert a set of Kraus operators (representing a channel) to
     a Choi matrix using the column stacking convention.
 
-    Suppose the N Kraus operators M_i are DxD matrices. Then the
-    the Choi matrix is a D^2 x D^2 matrix
+    Suppose the N Kraus operators M_i are dim by dim matrices. Then the
+    the Choi matrix is a dim**2 by dim**2 matrix
 
     choi_matrix = \sum_i^N |M_i>> (|M_i>>)^\dagger
                 = \sum_i^N |M_i>> <<M_i|
@@ -146,7 +146,7 @@ def kraus2choi(kraus_ops: Sequence[np.ndarray]) -> np.ndarray:
     where |M_i>> = vec(M_i)
 
     :param kraus_ops: A list of N Kraus operators
-    :return: Returns a D^2 x D^2 matrix.
+    :return: Returns a dim**2 by dim**2 matrix.
     """
     if isinstance(kraus_ops, np.ndarray):  # handle input of single kraus op
         if len(kraus_ops[0].shape) < 2:  # first elem is not a matrix
@@ -159,8 +159,8 @@ def chi2pauli_liouville(chi_matrix: np.ndarray) -> np.ndarray:
     r"""
     Converts a chi matrix (aka a process matrix) to the Pauli Liouville representation.
 
-    :param chi_matrix:  a D^2 x D^2 process matrix
-    :return: dim**2 by dim**2 pauli-liouville matrix
+    :param chi_matrix:  a dim**2 by dim**2 process matrix
+    :return: dim**2 by dim**2 Pauli-Liouville matrix
     """
     return choi2pauli_liouville(chi2choi(chi_matrix))
 
@@ -170,7 +170,7 @@ def chi2kraus(chi_matrix: np.ndarray) -> List[np.ndarray]:
     Converts a chi matrix into a list of Kraus operators. (operators with small norm may be
     excluded)
 
-    :param chi_matrix:  a D^2 x D^2 process matrix
+    :param chi_matrix:  a dim**2 by dim**2 process matrix
     :return: list of Kraus operators
     """
     return pauli_liouville2kraus(chi2pauli_liouville(chi_matrix))
@@ -180,7 +180,7 @@ def chi2superop(chi_matrix: np.ndarray) -> np.ndarray:
     """
     Converts a chi matrix into a superoperator.
 
-    :param chi_matrix:  a D^2 x D^2 process matrix
+    :param chi_matrix:  a dim**2 by dim**2 process matrix
     :return: a dim**2 by dim**2 superoperator matrix
     """
     return pauli_liouville2superop(chi2pauli_liouville(chi_matrix))
@@ -190,7 +190,7 @@ def chi2choi(chi_matrix: np.ndarray) -> np.ndarray:
     """
     Converts a chi matrix into a Choi matrix.
 
-    :param chi_matrix:  a D^2 x D^2 process matrix
+    :param chi_matrix:  a dim**2 by dim**2 process matrix
     :return: a dim**2 by dim**2 Choi matrix
     """
     dim = int(np.sqrt(np.asarray(chi_matrix).shape[0]))
@@ -213,7 +213,7 @@ def superop2chi(superop: np.ndarray) -> np.ndarray:
     Converts a superoperator into a list of Kraus operators. (operators with small norm may be excluded)
 
     :param superop: a dim**2 by dim**2 superoperator
-    :return: a D^2 x D^2 process matrix
+    :return: a dim**2 by dim**2 process matrix
     """
     return kraus2chi(superop2kraus(superop))
 
@@ -223,7 +223,7 @@ def superop2pauli_liouville(superop: np.ndarray) -> np.ndarray:
     Converts a superoperator into a pauli_liouville matrix. This is achieved by a linear change of basis.
 
     :param superop: a dim**2 by dim**2 superoperator
-    :return: dim**2 by dim**2 pauli-liouville matrix
+    :return: dim**2 by dim**2 Pauli-Liouville matrix
     """
     dim = int(np.sqrt(np.asarray(superop).shape[0]))
     c2p_basis_transform = computational2pauli_basis_matrix(dim)
@@ -256,7 +256,7 @@ def pauli_liouville2chi(pl_matrix: np.ndarray) -> np.ndarray:
     Converts a pauli_liouville matrix into a chi matrix. (operators with small norm may be excluded)
 
     :param pl_matrix: a dim**2 by dim**2 pauli_liouville matrix
-    :return: a D^2 x D^2 process matrix
+    :return: a dim**2 by dim**2 process matrix
     """
     return kraus2chi(pauli_liouville2kraus(pl_matrix))
 
@@ -265,7 +265,7 @@ def pauli_liouville2superop(pl_matrix: np.ndarray) -> np.ndarray:
     """
     Converts a pauli_liouville matrix into a superoperator. This is achieved by a linear change of basis.
 
-    :param pl_matrix: a dim**2 by dim**2 pauli-liouville matrix
+    :param pl_matrix: a dim**2 by dim**2 Pauli-Liouville matrix
     :return: dim**2 by dim**2 superoperator
     """
     dim = int(np.sqrt(np.asarray(pl_matrix).shape[0]))
@@ -275,9 +275,9 @@ def pauli_liouville2superop(pl_matrix: np.ndarray) -> np.ndarray:
 
 def pauli_liouville2choi(pl_matrix: np.ndarray) -> np.ndarray:
     """
-    Convert a pauli-liouville matrix into a choi matrix.
+    Convert a Pauli-Liouville matrix into a choi matrix.
 
-    :param pl_matrix: a dim**2 by dim**2 pauli-liouville matrix
+    :param pl_matrix: a dim**2 by dim**2 Pauli-Liouville matrix
     :return: dim**2 by dim**2 choi matrix
     """
     return superop2choi(pauli_liouville2superop(pl_matrix))
@@ -319,10 +319,10 @@ def choi2superop(choi: np.ndarray) -> np.ndarray:
 
 def choi2pauli_liouville(choi: np.ndarray) -> np.ndarray:
     """
-    Convert a choi matrix into a pauli-liouville matrix.
+    Convert a choi matrix into a Pauli-Liouville matrix.
 
     :param choi: a dim**2 by dim**2 choi matrix
-    :return: dim**2 by dim**2 pauli-liouville matrix
+    :return: dim**2 by dim**2 Pauli-Liouville matrix
     """
     return superop2pauli_liouville(choi2superop(choi))
 
@@ -330,13 +330,13 @@ def choi2pauli_liouville(choi: np.ndarray) -> np.ndarray:
 def pauli2computational_basis_matrix(dim) -> np.ndarray:
     """
     Produces a basis transform matrix that converts from a pauli basis to the computational basis.
-        p2c_transform = sum_{k=1}^{dim^2}  | sigma_k >> <k|
+        p2c_transform = sum_{k=1}^{dim**2}  | sigma_k >> <k|
     For example,
         sigma_x = [0, 1, 0, 0].T in the 'pauli basis'
         p2c * sigma_x = vec(sigma_x) = | sigma_x >>
 
     :param dim: dimension of the hilbert space on which the operators act.
-    :return: A dim^2 by dim^2 basis transform matrix
+    :return: A dim**2 by dim**2 basis transform matrix
     """
     n_qubits = int(np.log2(dim))
 
@@ -355,12 +355,12 @@ def computational2pauli_basis_matrix(dim) -> np.ndarray:
     """
     Produces a basis transform matrix that converts from a computational basis to a pauli basis. Conjugate transpose of
     pauli2computational_basis_matrix with an extra dimensional factor.
-        c2p_transform = sum_{k=1}^{dim^2}  | k > << sigma_k |
+        c2p_transform = sum_{k=1}^{dim**2}  | k > << sigma_k |
     For example,
         vec(sigma_z) = | sigma_z >> = [1, 0, 0, -1].T in the computational basis
         c2p * | sigma_z >> = [0, 0, 0, 1].T
 
     :param dim: dimension of the hilbert space on which the operators act.
-    :return: A dim^2 by dim^2 basis transform matrix
+    :return: A dim**2 by dim**2 basis transform matrix
     """
     return pauli2computational_basis_matrix(dim).conj().T / dim
