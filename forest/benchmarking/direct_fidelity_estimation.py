@@ -1,42 +1,68 @@
-import copy
 import functools
 import itertools
 from operator import mul
 from typing import List, Sequence
-from typing import Tuple
 
 import numpy as np
 from dataclasses import dataclass
 
-import forest.benchmarking.operator_estimation as est
-from forest.benchmarking.utils import prepare_prod_pauli_eigenstate
 from pyquil import Program
 from pyquil.api import BenchmarkConnection, QuantumComputer
-from pyquil.operator_estimation import ExperimentSetting, TomographyExperiment, \
-    TensorProductState, plusX, minusX, plusY, minusY, plusZ, minusZ
-from pyquil.paulis import PauliTerm, PauliSum, sI, sX, sY, sZ
+from pyquil.operator_estimation import ExperimentResult, ExperimentSetting, TomographyExperiment, \
+    TensorProductState, measure_observables, plusX, minusX, plusY, minusY, plusZ, minusZ
+from pyquil.paulis import PauliTerm, sI, sX, sY, sZ
 
 
-def calibrate_readout_imperfections(pauli: PauliTerm, quantum_machine: QuantumComputer,
-                                    var: float = 0.01):
-    """
-    Compute the expectation value and variance of measuring a pauli without any pre or post circuit.
-    This can be used to attribute lack of of visibility to readout imperfections.
+@dataclass
+class DFEData:
+    """Experimental data from a DFE experiment"""
 
-    TODO:
-      + look into whether we can calibrate multiple PauliTerm with one call
-      + test how well this calibration works with correlated readout errors
+    results: List[ExperimentResult]
+    """The experimental results"""
 
-    :param pauli: The Pauli expectation to calibrate.
-    :param quantum_machine: The QVM or QPU to use for calibration.
-    :param var: The desired variance of the result.
-    :return: The expectation, variance, and number of shots of the expectation value of a +1
-     eigenstate of pauli.
-    """
-    this_prog = prepare_prod_pauli_eigenstate(pauli)
-    expectation, variance, count = est.estimate_locally_commuting_operator(
-        this_prog, PauliSum([pauli]), var, quantum_machine)
-    return expectation[0], variance[0, 0].real, count
+    in_states: List[str]
+    """The input tensor product states being acted on by the `program`"""
+
+    program: Program
+    """The pyquil Program DFE data refers to"""
+
+    out_pauli: List[str]
+    """The expected output Pauli operators after the program acts on the corresponding `in_pauli`"""
+
+    pauli_point_est: np.ndarray
+    """Point estimate of Pauli operators"""
+
+    pauli_std_err: np.ndarray
+    """Estimate of std error in the point estimate"""
+
+    cal_point_est: np.ndarray
+    """Point estimate of readout calibration for Pauli operators"""
+
+    cal_std_err: np.ndarray
+    """Estimate of std error in the point estimate of readout calibration for Pauli operators"""
+
+    dimension: int
+    """Dimension of the Hilbert space"""
+
+    qubits: List[int]
+    """qubits involved in the experiment"""
+
+
+@dataclass
+class DFEEstimate:
+    """State/Process estimates from DFE experiments"""
+
+    dimension: int
+    """Dimension of the Hilbert space"""
+
+    qubits: List[int]
+    """qubits involved in the experiment"""
+
+    fid_point_est: float
+    """Point estimate of fidelity between ideal gate or state and measured, rescaled by the calibration."""
+
+    fid_std_err: float
+    """Standard error of the fidelity point estimate, including the calibration."""
 
 
 def _state_to_pauli(state: TensorProductState) -> PauliTerm:
@@ -60,13 +86,15 @@ def _exhaustive_dfe(program: Program, qubits: Sequence[int], in_states,
                     benchmarker: BenchmarkConnection) -> ExperimentSetting:
     """Yield experiments over itertools.product(in_paulis).
 
-    Used as a helper function for exhaustive_xxx_dfe routines.
+    Used as a helper function for generate_exhaustive_xxx_dfe_experiment routines.
 
     :param program: A program comprised of clifford gates
     :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
         used in ``program``.
-    :param in_paulis: Use these single-qubit Pauli operators in every itertools.product()
+    :param in_states: Use these single-qubit Pauli operators in every itertools.product()
         to generate an exhaustive list of DFE experiments.
+    :return: experiment setting iterator
+    :rtype: ``ExperimentSetting``
     """
     n_qubits = len(qubits)
     for i_states in itertools.product(in_states, repeat=n_qubits):
@@ -82,10 +110,10 @@ def _exhaustive_dfe(program: Program, qubits: Sequence[int], in_states,
         )
 
 
-def exhaustive_process_dfe(program: Program, qubits: list,
-                           benchmarker: BenchmarkConnection) -> TomographyExperiment:
+def generate_exhaustive_process_dfe_experiment(program: Program, qubits: list,
+                                               benchmarker: BenchmarkConnection) -> TomographyExperiment:
     """
-    Estimate process fidelity by exhaustive direct fidelity estimation.
+    Estimate process fidelity by exhaustive direct fidelity estimation (DFE).
 
     This leads to a quadratic reduction in overhead w.r.t. process tomography for
     fidelity estimation.
@@ -104,21 +132,25 @@ def exhaustive_process_dfe(program: Program, qubits: list,
             https://doi.org/10.1103/PhysRevLett.106.230501
             https://arxiv.org/abs/1104.4695
 
-    :param program: A program comprised of clifford gates that defines the process for
+    :param program: A program comprised of Clifford group gates that defines the process for
         which we estimate the fidelity.
     :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
         used in ``program``.
+    :param benchmarker: A ``BecnhmarkConnection`` object to be used in experiment design
+    :return: a set of experiments
+    :rtype: ``TomographyExperiment`
     """
-    return TomographyExperiment(list(
+    expr = TomographyExperiment(list(
         _exhaustive_dfe(program=program,
                         qubits=qubits,
                         in_states=[None, plusX, minusX, plusY, minusY, plusZ, minusZ],
                         benchmarker=benchmarker)),
         program=program, qubits=qubits)
+    return expr
 
 
-def exhaustive_state_dfe(program: Program, qubits: list,
-                         benchmarker: BenchmarkConnection) -> TomographyExperiment:
+def generate_exhaustive_state_dfe_experiment(program: Program, qubits: list,
+                                             benchmarker: BenchmarkConnection) -> TomographyExperiment:
     """
     Estimate state fidelity by exhaustive direct fidelity estimation.
 
@@ -139,26 +171,45 @@ def exhaustive_state_dfe(program: Program, qubits: list,
             https://doi.org/10.1103/PhysRevLett.106.230501
             https://arxiv.org/abs/1104.4695
 
-    :param program: A program comprised of clifford gates that constructs a state
+    :param program: A program comprised of Clifford group gates that constructs a state
         for which we estimate the fidelity.
     :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
         used in ``program``.
+    :param benchmarker: A ``BecnhmarkConnection`` object to be used in experiment design
+    :return: a set of experiments
+    :rtype: ``TomographyExperiment`
     """
-    return TomographyExperiment(list(
+    expr = TomographyExperiment(list(
         _exhaustive_dfe(program=program,
                         qubits=qubits,
-                        in_states=[None, plusZ, minusZ],
+                        in_states=[None, plusZ],
                         benchmarker=benchmarker)),
         program=program, qubits=qubits)
+    return expr
 
 
 def _monte_carlo_dfe(program: Program, qubits: Sequence[int], in_states: list, n_terms: int,
                      benchmarker: BenchmarkConnection) -> ExperimentSetting:
+    """Yield experiments over itertools.product(in_paulis).
+
+    Used as a helper function for generate_monte_carlo_xxx_dfe_experiment routines.
+
+    :param program: A program comprised of clifford gates
+    :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
+        used in ``program``.
+    :param in_states: Use these single-qubit Pauli operators in every itertools.product()
+        to generate an exhaustive list of DFE experiments.
+    :param n_terms: Number of preparation and measurement settings to be chosen at random
+    :return: experiment setting iterator
+    :rtype: ``ExperimentSetting``
+    """
     all_st_inds = np.random.randint(len(in_states), size=(n_terms, len(qubits)))
     for st_inds in all_st_inds:
         i_st = functools.reduce(mul, (in_states[si](qubits[i])
                                       for i, si in enumerate(st_inds)
                                       if in_states[si] is not None), TensorProductState())
+
+        # TODO: we should not pick a new one, we should just return a trivial experiment
         while len(i_st) == 0:
             # pick a new one
             second_try_st_inds = np.random.randint(len(in_states), size=len(qubits))
@@ -172,222 +223,189 @@ def _monte_carlo_dfe(program: Program, qubits: Sequence[int], in_states: list, n
         )
 
 
-def monte_carlo_process_dfe(program: Program, qubits: List[int],benchmarker: BenchmarkConnection,
-                            n_terms: int = 200) -> TomographyExperiment:
-    return TomographyExperiment(list(
+def generate_monte_carlo_state_dfe_experiment(program: Program, qubits: List[int], benchmarker: BenchmarkConnection,
+                                              n_terms=200) -> TomographyExperiment:
+    """
+    Estimate state fidelity by sampled direct fidelity estimation.
+
+    This leads to constant overhead (w.r.t. number of qubits) fidelity estimation.
+
+    The algorithm is due to:
+
+    [DFE1]  Practical Characterization of Quantum Devices without Tomography
+            Silva et al., PRL 107, 210404 (2011)
+            https://doi.org/10.1103/PhysRevLett.107.210404
+
+    [DFE2]  Direct Fidelity Estimation from Few Pauli Measurements
+            Flammia and Liu, PRL 106, 230501 (2011)
+            https://doi.org/10.1103/PhysRevLett.106.230501
+
+    :param program: A program comprised of clifford gates that constructs a state
+        for which we estimate the fidelity.
+    :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
+        used in ``program``.
+    :param benchmarker: The `BenchmarkConnection` object used to design experiments
+    :param n_terms: Number of randomly chosen observables to measure. This number should be 
+        a constant less than ``2**len(qubits)``, otherwise ``exhaustive_state_dfe`` is more efficient.
+    :return: a set of experiments
+    :rtype: ``TomographyExperiment`
+    """
+    expr = TomographyExperiment(list(
+        _monte_carlo_dfe(program=program, qubits=qubits,
+                         in_states=[None, plusZ],
+                         n_terms=n_terms, benchmarker=benchmarker)),
+        program=program, qubits=qubits)
+    return expr
+
+
+def generate_monte_carlo_process_dfe_experiment(program: Program, qubits: List[int], benchmarker: BenchmarkConnection,
+                                                n_terms: int = 200) -> TomographyExperiment:
+    """
+    Estimate process fidelity by randomly sampled direct fidelity estimation.
+
+    This leads to constant overhead (w.r.t. number of qubits) fidelity estimation.
+
+    The algorithm is due to:
+
+    [DFE1]  Practical Characterization of Quantum Devices without Tomography
+            Silva et al., PRL 107, 210404 (2011)
+            https://doi.org/10.1103/PhysRevLett.107.210404
+
+    [DFE2]  Direct Fidelity Estimation from Few Pauli Measurements
+            Flammia and Liu, PRL 106, 230501 (2011)
+            https://doi.org/10.1103/PhysRevLett.106.230501
+
+    :param program: A program comprised of Clifford group gates that constructs a state
+        for which we estimate the fidelity.
+    :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
+        used in ``program``.
+    :param benchmarker: The `BenchmarkConnection` object used to design experiments
+    :param n_terms: Number of randomly chosen observables to measure. This number should be 
+        a constant less than ``2**len(qubits)``, otherwise ``exhaustive_process_dfe`` is more efficient.
+    :return: a DFE experiment object
+    :rtype: ``DFEExperiment`
+    """
+    expr = TomographyExperiment(list(
         _monte_carlo_dfe(program=program, qubits=qubits,
                          in_states=[None, plusX, minusX, plusY, minusY, plusZ, minusZ],
                          n_terms=n_terms, benchmarker=benchmarker)),
         program=program, qubits=qubits)
+    return expr
 
 
-@dataclass
-class DFEdata:
-    """Experimental data from a DFE experiment"""
-    in_pauli: List[str]
-    """The input Pauli operators being acted on by the `program`"""
-
-    program: Program
-    """The pyquil Program to perform DFE on"""
-
-    out_pauli: List[str]
-    """The expected output Pauli operators after the program acts on the corresponding `in_pauli`"""
-
-    dimension: int
-    """Dimension of the Hilbert space"""
-
-    number_qubits: int
-    """number of qubits"""
-
-    expectation: List[float]
-    """expectation values as reported from the QPU"""
-
-    variance: List[float]
-    """variances associated with the `expectation`"""
-
-    count: List[int]
-    """number of shots used to calculate the `expectation`"""
-
-
-def acquire_dfe_data(experiment, quantum_machine: QuantumComputer, var: float = 0.01) -> Tuple[DFEdata, DFEdata]:
+def acquire_dfe_data(qc: QuantumComputer, expr: TomographyExperiment, n_shots=10_000, active_reset=False,
+                     mitigate_readout_errors=True) -> DFEData:
     """
-    Estimate state/process fidelity by exhaustive direct fidelity estimation.
+    Acquire data necessary for direct fidelity estimate (DFE).
 
-    This leads to a quadratic reduction in overhead wrt state tomography for fidelity estimation.
-
-    The algorithm is due to [DFE1] and [DFE2].
-
-    :param experiment: namedtuple with fields 'in_pauli', 'program', and 'out_pauli'.
-    :param quantum_machine: QPUConnection or QVMConnection object to be used
-    :param var: maximum tolerable variance per observable
-    :return: the experiment and calibration data
+    :param qc: A quantum computer object where the experiment will run.
+    :param expr: A partial tomography(``TomographyExperiment``) object describing the experiments to be run.
+    :param n_shots: The minimum number of shots to be taken in each experiment (including calibration).
+    :param active_reset: Boolean flag indicating whether experiments should terminate with an active reset instruction
+        (this can make experiments a lot faster).
+    :param mitigate_readout_errors: Boolean flag indicating whether bias due to imperfect readout should be corrected
+        for
+    :return: a DFE data object
+    :rtype: ``DFEData`
     """
-    # get qubit information
-    qubits = experiment.program.get_qubits()
-    n_qubits = len(qubits)
-    dimension = 2 ** len(qubits)
-
-    expectations = []
-    variances = []
-    counts = []
-    cal_exps = []
-    cal_vars = []
-    cal_counts = []
-
-    for (ip, op) in zip(experiment.in_pauli, experiment.out_pauli):
-        # at the moment estimate_locally_commuting_operator mutates prog so deepcopy is needed
-        this_prog = copy.deepcopy(experiment.program)
-
-        # Create preparation program for the corresponding input Pauli and then append the
-        # circuit we want to characterize
-        tot_prog = prepare_prod_pauli_eigenstate(ip) + this_prog
-
-        # measure the output Pauli operator in question i.e. data aqcuisition
-        expectation, variance, count = \
-            est.estimate_locally_commuting_operator(tot_prog, PauliSum([op]), var, quantum_machine)
-        expectations += [expectation[0]]
-        variances += [variance[0, 0].real]
-        counts += [count]
-
-        # calibration
-        cal_exp, cal_var, cal_count = calibrate_readout_imperfections(op, quantum_machine, var)
-        cal_exps += [cal_exp]
-        cal_vars += [cal_var]
-        cal_counts += [cal_count]
-
-    exp_data = DFEdata(
-        in_pauli=[ip.pauli_string(qubits) for ip in experiment.in_pauli],
-        program=experiment.program,
-        out_pauli=[op.pauli_string(qubits) for op in experiment.out_pauli],
-        dimension=dimension,
-        number_qubits=n_qubits,
-        expectation=expectations,
-        variance=variances,
-        count=counts
-    )
-    cal_data = DFEdata(
-        in_pauli=[ip.pauli_string(qubits) for ip in experiment.in_pauli],
-        program=experiment.program,
-        out_pauli=[op.pauli_string(qubits) for op in experiment.out_pauli],
-        dimension=dimension,
-        number_qubits=n_qubits,
-        expectation=cal_exps,
-        variance=cal_vars,
-        count=cal_counts
-    )
-    return exp_data, cal_data
-
-
-@dataclass
-class DFEestimate:
-    """State/Process estimates from DFE experiments"""
-    in_pauli: List[str]
-    """The input Pauli operators being acted on by the `program`"""
-
-    program: Program
-    """The pyquil Program to perform DFE on"""
-
-    out_pauli: List[str]
-    """The expected output Pauli operators after the program acts on the corresponding `in_pauli`"""
-
-    dimension: int
-    """Dimension of the Hilbert space"""
-
-    number_qubits: int
-    """number of qubits"""
-
-    pauli_point_est: List[float]
-    """Point estimate of Pauli operators"""
-
-    pauli_var_est: List[float]
-    """Estimate of varaince in the point estimate"""
-
-    fid_point_est: float
-    """Point estimate of fidelity between ideal gate or state and measured, rescaled by the calibration."""
-
-    fid_var_est: float
-    """Variance of the fidelity point estimate, after considering the calibration."""
-
-    fid_std_err_est: float
-    """Standard deviation of the fidelity point estimate, after considering the calibration."""
-
-
-def direct_fidelity_estimate(data: DFEdata, cal: DFEdata, type: str) -> DFEestimate:
-    """
-    Estimate state or process fidelity by exhaustive direct fidelity estimation.
-
-    :param data: data from DFE experiment
-    :param cal: calibration data from DFE experiment
-    :param type: 'state' or 'process', 'process' is default.
-    """
-    pauli_est = data.expectation / np.abs(cal.expectation)
-    var_est = ratio_variance(data.expectation, data.variance, cal.expectation, cal.variance)
-
-    temp_data = { 'dimension': data.dimension, 'expectation': pauli_est, 'variance': var_est }
-
-    if type == 'state':
-        fid = aggregate_state_dfe(temp_data)
-    elif type == 'process':
-        fid = aggregate_process_dfe(temp_data)
+    if mitigate_readout_errors:
+        res = list(measure_observables(qc, expr, n_shots=n_shots, active_reset=active_reset))
     else:
-        raise ValueError('Error: must specify state or process DFE.')
+        res = list(measure_observables(qc, expr, n_shots=n_shots, active_reset=active_reset, readout_symmetrize=None,
+                                       calibrate_readout=None))
 
-    return DFEestimate(
-        in_pauli=data.in_pauli,
-        program=data.program,
-        out_pauli=data.out_pauli,
-        dimension=data.dimension,
-        number_qubits=data.number_qubits,
-        pauli_point_est=pauli_est ,
-        pauli_var_est=var_est,
-        fid_point_est=fid['expectation'],
-        fid_var_est=fid['variance'],
-        fid_std_err_est=np.sqrt(fid['variance'])
-    )
-
-
-def aggregate_process_dfe(data: dict):
-    if isinstance(data['dimension'], int):
-        dim = data['dimension']
-    else:
-        dim = list(set(data['dimension']))
-        assert len(dim) == 0
-        dim = dim[0]
-    return {
-        'expectation': (1.0 + np.sum(data['expectation']) + dim) / (dim * (dim + 1)),
-        'variance': np.sum(data['variance']) / (dim * (dim + 1)) ** 2,
-    }
+    return DFEData(results=res,
+                   in_states=[str(e[0].in_state) for e in expr],
+                   program=expr.program,
+                   out_pauli=[str(e[0].out_operator) for e in expr],
+                   pauli_point_est=np.array([r.expectation for r in res]),
+                   pauli_std_err=np.array([r.stddev for r in res]),
+                   cal_point_est=np.array([r.calibration_expectation for r in res]),
+                   cal_std_err=np.array([r.calibration_stddev for r in res]),
+                   dimension=2**len(expr.qubits),
+                   qubits=expr.qubits)
 
 
-def aggregate_state_dfe(data: dict):
-    return {
-        'expectation': (1.0 + np.sum(data['expectation'])) / data['dimension'],
-        'variance': np.sum(data['variance'])
-    }
+def estimate_dfe(data: DFEData, kind: str) -> DFEEstimate:
+    """
+    Analyse data from experiments to obtain a direct fidelity estimate (DFE).
 
+    State fidelity between the experimental state σ and the ideal (pure) state ρ (both states represented by density
+    matrices) is defined as F(σ,ρ) = tr σ⋅ρ [Joz].
 
-def ratio_variance(a: np.ndarray, var_a: np.ndarray, b: np.ndarray, var_b: np.ndarray) -> np.ndarray:
-    r"""
-    Given random variables 'A' and 'B', compute the variance on the ratio Y = A/B. Denote the
-    mean of the random variables as a = E[A] and b = E[B] while the variances are var_a = Var[A]
-    and var_b = Var[B] and the covariance as Cov[A,B]. The following expression approximates the
-    variance of Y
+    The direct fidelity estimate for a state is given by the average expected value of the Pauli operators in the
+    stabilizer group of the ideal pure state (i.e., Eqn. 1 of [DFE1]).
 
-    Var[Y] \approx (a/b) ^2 * ( var_a /a^2 + var_b / b^2 - 2 * Cov[A,B]/(a*b) )
+    The average gate fidelity between the experimental process ℰ and the ideal (unitary) process 𝒰 is defined as
+    F(ℰ,𝒰) = (tr ℰ 𝒰⁺ + d)/(d^2+d) where the processes are represented by linear superoperators acting of vectorized
+    density matrices, and d is the dimension of the Hilbert space ℰ and 𝒰 act on (where ⁺ represents the Hermitian
+    conjugate). See [Nie] for details.
 
-    Below we assume the covariance of a and b is negligible.
+    The average gate fidelity can be re-written a F(ℰ,𝒰)=(d^2 tr J(ℰ)⋅J(𝒰) + d)/(d^2+d) where J() is the
+    Choi-Jamiolkoski representation of the superoperator in the argument. Since the Choi-Jamiolkowski representation
+    is given by a density operator, the connection to the calculation of state fidelity becomes apparent:
+    F(J(ℰ),J(𝒰)) = tr J(ℰ)⋅J(𝒰) is the state fidelity between Choi-Jamiolkoski states.
 
-    See the following for more details:
-      - https://doi.org/10.1002/(SICI)1097-0320(20000401)39:4<300::AID-CYTO8>3.0.CO;2-O
-      - http://www.stat.cmu.edu/~hseltman/files/ratio.pdf
-      - https://en.wikipedia.org/wiki/Taylor_expansions_for_the_moments_of_functions_of_random_variables
+    Noting that the Choi-Jamiolkoski state is prepared by acting on half of a maximally entangled state with the
+    process in question, the direct fidelity estimate of the Choi-Jamiolkoski state is given by the average expected
+    value of a Pauli operator resulting from applying the ideal unitary 𝒰 to a Pauli operator Pᵢ, for the state
+    resulting from applying the ideal unitary to a stabilizer state that has Pᵢ in its stabilizer group (one must be
+    careful to prepare states that have both +1 and -1 eigenstates of the operator in question, to emulate the random
+    state preparation corresponding to measuring half of a maximally entangled state).
 
-    :param a: Iterable of means, to be used as the numerator in a ratio.
-    :param var_a: Iterable of variances for each mean in a.
-    :param b: Iterable of means, to be used as the denominator in a ratio.
-    :param var_b: Iterable of variances for each mean in b.
+    [Joz]  Fidelity for Mixed Quantum States
+           Jozsa, Journal of Modern Optics, 41:12, 2315-2323 (1994)
+           DOI: 10.1080/09500349414552171
+           https://doi.org/10.1080/09500349414552171
 
-    TODO: add in covariance correction?
+    [DFE1]  Practical Characterization of Quantum Devices without Tomography
+            Silva et al., PRL 107, 210404 (2011)
+            https://doi.org/10.1103/PhysRevLett.107.210404
+            https://arxiv.org/abs/1104.3835
+
+    [Nie]  A simple formula for the average gate fidelity of a quantum dynamical operation
+           Nielsen, Phys. Lett. A 303 (4): 249-252 (2002)
+           DOI: 10.1016/S0375-9601(02)01272-0
+           https://doi.org/10.1016/S0375-9601(02)01272-0
+           https://arxiv.org/abs/quant-ph/0205035
+
+    :param data: A ``DFEData`` object containing raw experimental results.
+    :param kind: A string describing the kind of DFE data being analysed ('state' or 'process')
+    :return: a DFE estimate object
+    :rtype: ``DFEEstimate`
 
     """
-    return (np.asarray(a)/np.asarray(b))**2 * (var_a/np.asarray(a)**2 + var_b/np.asarray(b)**2)
+    d = data.dimension
+
+    # The subtlety in estimating the fidelity from a set of expectations of Pauli operators is that it is essential
+    # to include the expectation of the identity in the calculation -- without it the fidelity estimate will be biased
+    # downwards.
+
+    # However, there is no need to estimate the expectation of the identity: it is an experiment that always
+    # yields 1 as a result, so its expectation is 1. This quantity must be included in the calculation with the proper
+    # weight, however. For state fidelity estimation, we should choose the identity to be measured one out of every
+    # d times. For process fidelity estimation, we should choose to prepare and measure the identity one out of every
+    # d**2 times.
+
+    # The mean expected value for the (non-trivial) Pauli operators that are measured must be scaled
+    # as well -- each non-trivial Pauli should be selected 1 in every d or d**2 times (depending on whether we do
+    # states or processes), but if we choose Pauli ops uniformly from the d-1 or d**2-1 non-trivial Paulis, we
+    # again introduce a bias. So the mean expected value of non-trivial Paulis that are sampled must be weighted
+    # by d-1/d (for states) or d**2-1/d**2 (for processes). Similarly, variance estimates must be scaled appropriately.
+
+    if kind == 'state':
+        # introduce bias due to measuring the identity
+        mean_est = (d-1)/d * np.mean(data.pauli_point_est) + 1.0/d
+        var_est = (d-1)**2/d**2 * np.sum(data.pauli_std_err**2) / len(data.pauli_point_est) ** 2
+    elif kind == 'process':
+        # introduce bias due to measuring the identity
+        p_mean = (d**2-1)/d**2 * np.mean(data.pauli_point_est) + 1.0/d**2
+        mean_est = (d**2 * p_mean + d)/(d**2+d)
+        var_est = d**2/(d+1)**2 * (d**2-1)**2/d**4 * np.sum(data.pauli_std_err**2) / len(data.pauli_point_est) ** 2
+    else:
+        raise ValueError('DFEdata can only be of kind \'state\' or \'process\'.')
+
+    return DFEEstimate(dimension=data.dimension,
+                       qubits=data.qubits,
+                       fid_point_est=mean_est,
+                       fid_std_err=np.sqrt(var_est))
