@@ -318,9 +318,9 @@ def acquire_dfe_data(qc: QuantumComputer, expr: TomographyExperiment, n_shots=10
                    program=expr.program,
                    out_pauli=[str(e[0].out_operator) for e in expr],
                    pauli_point_est=np.array([r.expectation for r in res]),
-                   pauli_std_err=np.array([r.stddev for r in res]),
+                   pauli_std_err=np.array([r.std_err for r in res]),
                    cal_point_est=np.array([r.calibration_expectation for r in res]),
-                   cal_std_err=np.array([r.calibration_stddev for r in res]),
+                   cal_std_err=np.array([r.calibration_std_err for r in res]),
                    dimension=2**len(expr.qubits),
                    qubits=expr.qubits)
 
