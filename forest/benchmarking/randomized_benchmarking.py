@@ -6,7 +6,7 @@ from lmfit import Model
 from numpy import pi
 from scipy.stats import beta
 
-from pyquil.api import BenchmarkConnection, QuantumComputer, get_benchmarker
+from pyquil.api import BenchmarkConnection, QuantumComputer
 from pyquil.gates import CZ, RX, RZ
 from pyquil.quilbase import Gate
 from pyquil import Program
@@ -17,9 +17,6 @@ from forest.benchmarking.utils import all_pauli_z_terms
 from forest.benchmarking.compilation import basic_compile
 from forest.benchmarking.stratified_experiment import StratifiedExperiment, Layer, \
     acquire_stratified_data
-
-
-bm = get_benchmarker()
 
 
 def oneq_rb_gateset(qubit: int) -> Gate:
@@ -63,8 +60,9 @@ def get_rb_gateset(qubits: Sequence[int]) -> List[Gate]:
     raise ValueError(f"No RB gateset for more than two qubits.")
 
 
-def generate_rb_sequence(qubits: Sequence[int], depth: int,  interleaved_gate: Program = None,
-                         random_seed: int = None) -> List[Program]:
+def generate_rb_sequence(bm: BenchmarkConnection, qubits: Sequence[int], depth: int,
+                         interleaved_gate: Program = None, random_seed: int = None) \
+        -> List[Program]:
     """
     Generate a complete randomized benchmarking sequence.
 
@@ -83,9 +81,9 @@ def generate_rb_sequence(qubits: Sequence[int], depth: int,  interleaved_gate: P
     return programs
 
 
-def generate_rb_experiment(qubits: Sequence[int], depths: Sequence[int], num_sequences: int,
-                           interleaved_gate: Program = None, random_seed: int = None) \
-        -> StratifiedExperiment:
+def generate_rb_experiment(bm: BenchmarkConnection, qubits: Sequence[int], depths: Sequence[int],
+                           num_sequences: int, interleaved_gate: Program = None,
+                           random_seed: int = None) -> StratifiedExperiment:
     """
 
     :param qubits: the qubits for a single isolated rb experiment
@@ -102,7 +100,7 @@ def generate_rb_experiment(qubits: Sequence[int], depths: Sequence[int], num_seq
                 random_seed += 1
 
             # a sequence is just a list of Cliffords, with last Clifford inverting the sequence
-            sequence = generate_rb_sequence(qubits, depth, interleaved_gate, random_seed)
+            sequence = generate_rb_sequence(bm, qubits, depth, interleaved_gate, random_seed)
             settings = [ExperimentSetting(zeros_state(qubits), op)
                         for op in all_pauli_z_terms(qubits)]
             layers.append(Layer(depth, tuple(sequence), tuple(settings), tuple(qubits),
@@ -115,7 +113,8 @@ def generate_rb_experiment(qubits: Sequence[int], depths: Sequence[int], num_seq
     return StratifiedExperiment(tuple(layers), tuple(qubits), expt_type)
 
 
-def generate_unitarity_experiment(qubits: Sequence[int], depths: Sequence[int], num_sequences: int,
+def generate_unitarity_experiment(bm: BenchmarkConnection, qubits: Sequence[int],
+                                  depths: Sequence[int], num_sequences: int,
                                   use_self_inv_seqs = False, random_seed: int = None) \
         -> StratifiedExperiment:
     """
@@ -136,9 +135,9 @@ def generate_unitarity_experiment(qubits: Sequence[int], depths: Sequence[int], 
                 random_seed += 1
 
             if use_self_inv_seqs:
-                sequence = generate_rb_sequence(qubits, depth, random_seed)
+                sequence = generate_rb_sequence(bm, qubits, depth, random_seed)
             else:  # provide larger depth and strip inverse from end of each sequence
-                sequence = generate_rb_sequence(qubits, depth + 1, random_seed)[:-1]
+                sequence = generate_rb_sequence(bm, qubits, depth + 1, random_seed)[:-1]
             settings = _state_tomo_settings(qubits)
             layers.append(Layer(depth, tuple(sequence), tuple(settings), tuple(qubits),
                                 f'Seq{idx}'))
@@ -179,8 +178,11 @@ def populate_rb_survival_statistics(expt: StratifiedExperiment):
         survival_mean = beta.mean(num_survived + 1, num_died + 1)
         survival_var = beta.var(num_survived + 1, num_died + 1)
 
-        survival_stats = {"Survival": (survival_mean, np.sqrt(survival_var))}
-        layer.estimates = survival_stats
+        if layer.estimates is not None:
+            layer.estimates["Survival"] = (survival_mean, np.sqrt(survival_var))
+        else:
+            survival_stats = {"Survival": (survival_mean, np.sqrt(survival_var))}
+            layer.estimates = survival_stats
 
 
 def populate_unitarity_purity_statistics(expt: StratifiedExperiment):
@@ -207,30 +209,40 @@ def populate_unitarity_purity_statistics(expt: StratifiedExperiment):
 
         shifted_purity = estimate_purity(dim, expectations)
         shifted_purity_error = estimate_purity_err(dim, expectations, variances)
-        shifted_purity_stats = {"Shifted Purity": (shifted_purity, shifted_purity_error)}
-        layer.estimates = shifted_purity_stats
+
+        if layer.estimates is not None:
+            layer.estimates["Shifted Purity"] = (shifted_purity, shifted_purity_error)
+        else:
+            shifted_purity_stats = {"Shifted Purity": (shifted_purity, shifted_purity_error)}
+            layer.estimates = shifted_purity_stats
 
 
-def acquire_rb_data(qc, experiments: Sequence[StratifiedExperiment], num_shots: int = 500):
-    if not isinstance(experiments, Sequence):
+def acquire_rb_data(qc, experiments: Sequence[StratifiedExperiment], num_shots: int = 500,
+                    run_simultaneous = True) -> Sequence[StratifiedExperiment]:
+    if isinstance(experiments, StratifiedExperiment):
         experiments = [experiments]
     compile_method = qc.compiler.quil_to_native_quil
     qc.compiler.quil_to_native_quil = basic_compile
-    acquire_stratified_data(qc, experiments, num_shots)
+    results = acquire_stratified_data(qc, experiments, num_shots, run_simultaneous)
     qc.compiler.quil_to_native_quil = compile_method  # restore the original compilation
-    for expt in experiments:
+    for expt in results:
         populate_rb_survival_statistics(expt) # populate with relevant estimates
 
+    return results
 
-def acquire_unitarity_data(qc, experiments: Sequence[StratifiedExperiment], num_shots: int = 500):
-    if not isinstance(experiments, Sequence):
+
+def acquire_unitarity_data(qc, experiments: Sequence[StratifiedExperiment], num_shots: int = 500,
+                           run_simultaneous = True) -> Sequence[StratifiedExperiment]:
+    if isinstance(experiments, StratifiedExperiment):
         experiments = [experiments]
     compile_method = qc.compiler.quil_to_native_quil
     qc.compiler.quil_to_native_quil = basic_compile
-    acquire_stratified_data(qc, experiments, num_shots)
+    results = acquire_stratified_data(qc, experiments, num_shots, run_simultaneous)
     qc.compiler.quil_to_native_quil = compile_method  # restore the original compilation
-    for expt in experiments:
+    for expt in results:
         populate_unitarity_purity_statistics(expt) # populate with relevant estimates
+
+    return results
 
 
 def standard_rb(x, baseline, amplitude, decay):
@@ -414,7 +426,7 @@ def unitarity_to_rb_decay(unitarity, dimension):
     :return: The upperbound on RB decay, saturated if no unitary errors are present Proposition 8 [ECN]
     """
     r = (np.sqrt(unitarity) - 1)*(1-dimension)/dimension
-    return average_gate_infidelity_to_RB_decay(r, dimension)
+    return average_gate_infidelity_to_rb_decay(r, dimension)
 
 
 ########

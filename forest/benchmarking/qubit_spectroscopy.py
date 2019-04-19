@@ -27,6 +27,25 @@ MHZ = 1e6  # MHz
 GHZ = 1e9  # GHz
 
 
+def acquire_qubit_spectroscopy_data(qc: QuantumComputer,
+                                    experiments: Sequence[StratifiedExperiment], num_shots: int) \
+    -> Sequence[StratifiedExperiment]:
+    #TODO: add parallel type support
+    if isinstance(experiments, StratifiedExperiment):
+        experiments = [experiments]
+    results = acquire_stratified_data(qc, experiments, num_shots)
+    for expt in results:
+        for layer in expt.layers:
+            z_expectation = layer.results[0].expectation
+            var = layer.results[0].stddev**2
+            prob0, bit_var = transform_pauli_moments_to_bit(z_expectation, var)
+            if layer.estimates is None:
+                layer.estimates = {"Fraction One": (1- prob0, np.sqrt(bit_var))}
+            else:
+                layer.estimates["Fraction One"] = (1- prob0, np.sqrt(bit_var))
+    return results
+
+
 # ==================================================================================================
 #   T1
 # ==================================================================================================
@@ -55,7 +74,8 @@ def generate_t1_experiment(qubit: int, times: Sequence[float]) -> StratifiedExpe
     return StratifiedExperiment(tuple(layers), (qubit,), "T1")
 
 
-def acquire_t1_data(qc: QuantumComputer, experiments: Sequence[StratifiedExperiment], num_shots):
+def acquire_t1_data(qc: QuantumComputer, experiments: Sequence[StratifiedExperiment], num_shots) \
+        -> Sequence[StratifiedExperiment]:
     """
     Execute experiments to measure the T1 decay time of 1 or more qubits.
 
@@ -64,16 +84,7 @@ def acquire_t1_data(qc: QuantumComputer, experiments: Sequence[StratifiedExperim
     :param num_shots
     :return:
     """
-    if not isinstance(experiments, Sequence):
-        experiments = [experiments]
-    acquire_stratified_data(qc, experiments, num_shots)
-    for expt in experiments:
-        for layer in expt.layers:
-            z_expectation = layer.results[0].expectation
-            var = layer.results[0].stddev**2
-            prob0, bit_var = transform_pauli_moments_to_bit(z_expectation, var)
-            # TODO: allow addition to estimates or always over-write?
-            layer.estimates = {"Fraction One": (1- prob0, np.sqrt(bit_var))}
+    return acquire_qubit_spectroscopy_data(qc, experiments, num_shots)
 
 
 def estimate_t1(experiment: StratifiedExperiment):
@@ -160,7 +171,7 @@ def generate_t2_star_experiment(qubit: int, times: Sequence[float], detuning: fl
         layers.append(Layer(int(round(t_in_us / USEC_PER_DEPTH)), sequence, settings, (qubit,),
                             "T" + str(t_in_us) + "us", continuous_param=t))
 
-    return StratifiedExperiment(tuple(layers), (qubit,), "T2star", meta_data={'Detuning': detuning})
+    return StratifiedExperiment(tuple(layers), (qubit,), "T2star", metadata={'Detuning': detuning})
 
 
 def generate_t2_echo_experiment(qubit: int, times: Sequence[float], detuning: float = 5e6) \
@@ -192,10 +203,11 @@ def generate_t2_echo_experiment(qubit: int, times: Sequence[float], detuning: fl
         layers.append(Layer(int(round(t_in_us / USEC_PER_DEPTH)), sequence, settings, (qubit,),
                             "T" + str(t_in_us) + "us", continuous_param=t_in_us))
 
-    return StratifiedExperiment(tuple(layers), (qubit,), "T2echo", meta_data={'Detuning': detuning})
+    return StratifiedExperiment(tuple(layers), (qubit,), "T2echo", metadata={'Detuning': detuning})
 
 
-def acquire_t2_data(qc: QuantumComputer, experiments: Sequence[StratifiedExperiment], num_shots):
+def acquire_t2_data(qc: QuantumComputer, experiments: Sequence[StratifiedExperiment], num_shots) \
+        -> Sequence[StratifiedExperiment]:
     """
     Execute experiments to measure the T2 time of one or more qubits.
 
@@ -204,16 +216,7 @@ def acquire_t2_data(qc: QuantumComputer, experiments: Sequence[StratifiedExperim
     :param num_shots
     :return:
     """
-    if not isinstance(experiments, Sequence):
-        experiments = [experiments]
-    acquire_stratified_data(qc, experiments, num_shots)
-    for expt in experiments:
-        for layer in expt.layers:
-            z_expectation = layer.results[0].expectation
-            var = layer.results[0].stddev**2
-            prob0, bit_var = transform_pauli_moments_to_bit(z_expectation, var)
-            # TODO: allow addition to estimates or always over-write?
-            layer.estimates = {"Fraction One": (1- prob0, np.sqrt(bit_var))}
+    return acquire_qubit_spectroscopy_data(qc, experiments, num_shots)
 
 
 def estimate_t2(experiment: StratifiedExperiment):
@@ -225,7 +228,7 @@ def estimate_t2(experiment: StratifiedExperiment):
     """
     x_data = [layer.depth * USEC_PER_DEPTH for layer in experiment.layers]  # times in u-seconds
     y_data = [layer.estimates["Fraction One"][0] for layer in experiment.layers]
-    detuning = experiment.meta_data['Detuning']
+    detuning = experiment.metadata['Detuning']
 
     fit_params, fit_params_errs = fit_to_exponentially_decaying_sinusoidal_curve(np.array(x_data),
                                                                                  np.array(y_data),
@@ -270,7 +273,7 @@ def plot_t2_estimate_over_data(experiments: Union[StratifiedExperiment,
     expt_types = [expt.expt_type for expt in experiments]
     if 'T2star' in expt_types and 'T2echo' in expt_types:
         plt.title("$T_2$ (mixed type) decay")
-    elif 'T2echo' in expt_types:
+    elif 'T2star' in expt_types:
         plt.title("$T_2^*$ (Ramsey) decay")
     elif 'T2echo' in expt_types:
         plt.title("$T_2$ (Echo) decay")
@@ -311,11 +314,12 @@ def generate_rabi_experiment(qubit: int, angles: Sequence[float]) -> StratifiedE
 
         layers.append(Layer(1, sequence, settings, (qubit,), f"{round(angle,2)}rad",
                             continuous_param=angle))
-
+    # TODO: avoid warnings from basic_compile about RX(not +/-pi)
     return StratifiedExperiment(tuple(layers), (qubit,), "Rabi")
 
 
-def acquire_rabi_data(qc: QuantumComputer, experiments: Sequence[StratifiedExperiment], num_shots):
+def acquire_rabi_data(qc: QuantumComputer, experiments: Sequence[StratifiedExperiment], num_shots) \
+        -> Sequence[StratifiedExperiment]:
     """
     Execute Rabi experiments.
 
@@ -324,16 +328,7 @@ def acquire_rabi_data(qc: QuantumComputer, experiments: Sequence[StratifiedExper
     :param num_shots
     :return:
     """
-    if not isinstance(experiments, Sequence):
-        experiments = [experiments]
-    acquire_stratified_data(qc, experiments, num_shots)
-    for expt in experiments:
-        for layer in expt.layers:
-            z_expectation = layer.results[0].expectation
-            var = layer.results[0].stddev**2
-            prob0, bit_var = transform_pauli_moments_to_bit(z_expectation, var)
-            # TODO: allow addition to estimates or always over-write?
-            layer.estimates = {"Fraction One": (1- prob0, np.sqrt(bit_var))}
+    return acquire_qubit_spectroscopy_data(qc, experiments, num_shots)
 
 
 def estimate_rabi(experiment: StratifiedExperiment):
@@ -435,16 +430,7 @@ def acquire_cz_phase_ramsey_data(qc: QuantumComputer, experiments: Sequence[Stra
     :param num_shots
     :return:
     """
-    if isinstance(experiments, StratifiedExperiment):
-        experiments = [experiments]
-    acquire_stratified_data(qc, experiments, num_shots)
-    for expt in experiments:
-        for layer in expt.layers:
-            z_expectation = layer.results[0].expectation
-            var = layer.results[0].stddev**2
-            prob0, bit_var = transform_pauli_moments_to_bit(z_expectation, var)
-            # TODO: allow addition to estimates or always over-write?
-            layer.estimates = {"Fraction One": (1- prob0, np.sqrt(bit_var))}
+    return acquire_qubit_spectroscopy_data(qc, experiments, num_shots)
 
 
 def estimate_cz_phase_ramsey(experiment: StratifiedExperiment):

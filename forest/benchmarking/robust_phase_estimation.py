@@ -283,7 +283,8 @@ def num_trials(depth, max_depth, alpha, beta, multiplicative_factor: float = 1.0
 
 def acquire_rpe_data(qc: QuantumComputer,
                      experiments: Union[StratifiedExperiment, Sequence[StratifiedExperiment]],
-                     multiplicative_factor: float = 1.0, additive_error: float = None):
+                     multiplicative_factor: float = 1.0, additive_error: float = None,
+                     parallelize_experiments: bool = True) -> Sequence[StratifiedExperiment]:
     """
     Run each experiment in the sequence of experiments.
 
@@ -306,9 +307,11 @@ def acquire_rpe_data(qc: QuantumComputer,
         alpha = 5 / 2  # should be > 2 for Heisenberg scaling. See eq. V.11 in [RPE]
         beta = 1 / 2  # should be > 0
         for layer in expt.layers:
-            layer.num_shots = num_trials(layer.depth, max_depth, alpha, beta,
-                                         multiplicative_factor, additive_error)
-    acquire_stratified_data(qc, experiments)
+            if layer.num_shots is None:
+                layer.num_shots = num_trials(layer.depth, max_depth, alpha, beta,
+                                             multiplicative_factor, additive_error)
+    # TODO: automatically populate estimates
+    return acquire_stratified_data(qc, experiments, parallelize_layers=parallelize_experiments)
 
 
 #########
@@ -581,8 +584,8 @@ def plot_rpe_iterations(xs, ys, x_stds, y_stds, expected_positions: List = None)
     else:
         ax.set_title("Observed Position per RPE Iteration")
 
-    ax.set_rmax(1.0)
-    ax.set_rticks([0.5, 1])  # radial ticks
+    ax.set_rmax(1.5)
+    ax.set_rticks([0.5, 1, 1.5])  # radial ticks
     ax.set_rlabel_position(-22.5)  # offset radial labels to lower right quadrant
     ax.grid(True)
 

@@ -1,12 +1,14 @@
 from typing import Tuple, Sequence, Dict, Any
+import itertools
+from copy import deepcopy
 import numpy as np
-from numpy.random import permutation
+from numpy.random import shuffle
 import networkx as nx
 from networkx.algorithms.approximation.clique import clique_removal
 from dataclasses import dataclass
 
 from pyquil.operator_estimation import ExperimentSetting, ExperimentResult, measure_observables, \
-    TomographyExperiment as PyQuilTomographyExperiment
+    TomographyExperiment as PyQuilTomographyExperiment, _max_weight_state, _max_weight_operator
 from pyquil import Program
 from pyquil.quil import merge_programs
 
@@ -15,18 +17,8 @@ from forest.benchmarking.compilation import basic_compile
 @dataclass(order=True)
 class Layer:
     """
-    A component is the low-level structure of a StratifiedExperiment that stores a sequence of
+    A Layer is the low-level structure of a StratifiedExperiment that stores a sequence of
     gates that will be run on a qc.
-
-    In the case of standard rb, a component is simply the rb Clifford sequence whose end
-    result will be measured in the computational basis. For unitarity, a component sequence will
-    be run with 4^n different measurements.
-
-    Note that in standard rb the result of interest for a given sequence is the "survival
-    probability" which is essentially just the shifted z expectation of the sequence end-state.
-    In unitarity the result of interest for a sequence is a purity--this is calculated from the
-    expectations of the 4^n expectations that are stored in the 4^n ExperimentResults individual
-    expectations.
     """
     depth: int
     sequence: Tuple[Program]
@@ -52,7 +44,7 @@ class Layer:
 
             first_gate_output = '['
             if abbreviate_first_gate:
-                first_gate_output += str(first_gate[0]) + ',...,  ' + str(first_gate[-1])
+                first_gate_output += str(first_gate[0]) + ', ...,  ' + str(first_gate[-1])
             else:
                 first_gate_output += ', '.join([str(instr) for instr in first_gate])
             first_gate_output += ']'
@@ -68,7 +60,7 @@ class Layer:
 
                 last_gate_output = ', ['
                 if abbreviate_last_gate:
-                    last_gate_output += str(last_gate[0]) + ',...,  ' + str(last_gate[-1])
+                    last_gate_output += str(last_gate[0]) + ', ...,  ' + str(last_gate[-1])
                 else:
                     last_gate_output += ', '.join([str(instr) for instr in last_gate])
                 last_gate_output += ']'
@@ -94,13 +86,13 @@ class StratifiedExperiment:
     qubits: Tuple[int]
     expt_type: str
     estimates: Dict[str, Tuple[float, float]] = None
-    meta_data: Dict[str, Any] = None
+    metadata: Dict[str, Any] = None
 
     def __str__(self):
         return self.expt_type + '[' + '\n'.join([str(lyr) for lyr in self.layers]) + ']\n'
 
 
-def _group_allowed_types(expts, allowed_parallel_types = None):
+def _group_allowed_types(expts: Sequence[StratifiedExperiment], allowed_parallel_types = None):
     parallelizable_groups = []
     expt_type_group_idx = {}
     for expt in expts:
@@ -145,7 +137,7 @@ def _group_by_depth(experiment_groups: Sequence[Sequence[StratifiedExperiment]])
 
 
 def _get_simultaneous_groups(layers: Sequence[Layer]):
-    #TODO: consider e.g. running two short components serially in parallel with one longer component
+    #TODO: consider e.g. running two short sequences serially in parallel with one longer sequence
     #TODO: any reason this should or shouldn't be randomized?
     g = nx.Graph()
     nodes = np.arange(len(layers))
@@ -171,18 +163,41 @@ def _get_simultaneous_groups(layers: Sequence[Layer]):
 
 
 def _partition_settings(layers: Sequence[Layer]):
-    # assume layers act on separate qubits
-    settings_pool = [permutation(layer.settings) for layer in layers]
-    max_num_settings = max([len(layer.settings) for layer in layers])
-    groups = []
-    idx_maps = []
-    for idx in range(max_num_settings):
-        group = [settings[idx] for settings in settings_pool if len(settings) > idx ]
-        groups.append(group)
-        idx_map = [j for j, settings in enumerate(settings_pool) if len(settings) > idx]
-        idx_maps.append(idx_map)
+    # assume layer sequences act on separate qubits or else are equivalent.
+    layer_map = {}
+    settings_pool = []
+    g = nx.Graph()
+    for layer in layers:
+        for setting in layer.settings:
+            if setting not in g:
+                g.add_node(setting, count=1)
+                layer_map[setting] = [layer]
+                settings_pool.append(setting)
+            else:
+                g.nodes[setting]['count'] += 1
+                layer_map[setting].append(layer)
 
-    return groups, idx_maps
+    for setting1, setting2 in itertools.combinations(settings_pool, r=2):
+        max_weight_in = _max_weight_state([setting1.in_state, setting2.in_state])
+        max_weight_out = _max_weight_operator([setting1.out_operator, setting2.out_operator])
+        if max_weight_in is not None and max_weight_out is not None:
+            g.add_edge(setting1, setting2)
+
+    _, cliqs = clique_removal(g)
+    new_cliqs = []
+    associated_layers = []
+    for cliq in cliqs:
+        cliq_layers = []
+        new_cliq = []
+        for setting in cliq:
+            # duplicate `count` times
+            new_cliq += [setting] * g.nodes[setting]['count']
+            cliq_layers += layer_map[setting]
+
+        new_cliqs += [new_cliq]
+        associated_layers.append(cliq_layers)
+
+    return new_cliqs, associated_layers
 
 
 def merge_sequences(sequences: list) -> list:
@@ -198,40 +213,13 @@ def merge_sequences(sequences: list) -> list:
     return [merge_programs([seq[idx] for seq in sequences]) for idx in range(depth)]
 
 
-def _run_simultaneous_group(qc, layers, num_shots):
-    sequence = merge_sequences([layer.sequence for layer in layers])
-    qubits = [q for layer in layers for q in layer.qubits]
-
-    program = basic_compile(merge_programs(sequence))
-
-    if num_shots is None:
-        # TODO: is this the right thing to do?
-        num_shots = max([layer.num_shots for layer in layers])
-
-    all_results = [[] for _ in layers]
-    for settings, idx_map  in zip(*_partition_settings(layers)):
-        single_expt = PyQuilTomographyExperiment([settings], program, qubits)
-        group_results = list(measure_observables(qc, single_expt, num_shots))
-
-        for idx, result in enumerate(group_results):
-            all_results[idx_map[idx]].append(result)
-
-    for layer, results in zip(layers, all_results):
-        layer.results = results
-        layer.num_shots = num_shots
-
-        # defer to layer.estimates for now
-        # layer.mean = np.mean([result.expectation for result in results])
-        # # TODO: check this... stderr? covariance for IX, XI, XX?
-        # var = np.sum([result.stddev**2 for result in results]) / len(results)**2
-        # layer.stderr = np.sqrt(var)
-
-
 def acquire_stratified_data(qc, experiments: Sequence[StratifiedExperiment], num_shots: int = None,
                             parallelize_layers: bool = True,
                             allowed_parallel_types: Sequence[Sequence[str]] = None,
-                            randomize_layers_within_depth = False,
-                            randomize_all_layers = True):
+                            randomize_layers_within_depth: bool = True,
+                            randomize_all_layers: bool = True,
+                            randomize_all_settings: bool = True,
+                            use_active_reset: bool = False):
     """
     Takes in StratifiedExperiments and simultaneously runs individual layers of equal depth
     across separate experiments with allowed_parallel_types.
@@ -265,11 +253,11 @@ def acquire_stratified_data(qc, experiments: Sequence[StratifiedExperiment], num
     :param randomize_all_layers: shuffle all of the layers before they are run, regardless of depth
     :return: Currently mutates the input StratifiedExperiments.
     """
-    # make a copy of each experiment, or return a separate results dataclass?
-    # copies = [copy.deepcopy(expt) for expt in experiments]
-
-    if not isinstance(experiments, Sequence):
+    if isinstance(experiments, StratifiedExperiment):
         experiments = [experiments]
+
+    # make a copy of each experiment
+    experiments = [deepcopy(expt) for expt in experiments]
 
     if parallelize_layers:
         # by default only layers of the same expt type will possibly be parallelized.
@@ -278,15 +266,16 @@ def acquire_stratified_data(qc, experiments: Sequence[StratifiedExperiment], num
         # each layer of each experiment will be run iteratively
         expts_by_type_group = [[expt] for expt in experiments]
 
-    # TODO: any reason to supply option for not randomizing order of depths?
     # for each depth get a list of groups of layers from experiment types that can be parallelized
-    parallelizable_groups_by_depth = permutation(_group_by_depth(expts_by_type_group))
+    parallelizable_groups_by_depth = _group_by_depth(expts_by_type_group)
+    # TODO: any reason to supply option for not randomizing order of depths?
+    shuffle(parallelizable_groups_by_depth)
 
     all_simultaneous_groups = []
     for parallelizable_groups in parallelizable_groups_by_depth:  # iterate over each depth
 
         if randomize_layers_within_depth:  # randomize (parallel groups of) layers within this depth
-            parallelizable_groups = permutation(parallelizable_groups)
+            shuffle(parallelizable_groups)
 
         simultaneous_groups_at_depth = []
         if parallelize_layers:
@@ -306,7 +295,38 @@ def acquire_stratified_data(qc, experiments: Sequence[StratifiedExperiment], num
     if randomize_all_layers:
         # shuffle all of the layers; any randomization before this is moot since each (group of)
         # layer(s) will be run in random order irrespective of depth or expt_type.
-        all_simultaneous_groups = permutation(all_simultaneous_groups)
+        shuffle(all_simultaneous_groups)
 
+    simultaneous_experiment_settings = []
     for group in all_simultaneous_groups:
-        _run_simultaneous_group(qc, group, num_shots)
+
+        sequence = merge_sequences([layer.sequence for layer in group])
+        qubits = [q for layer in group for q in layer.qubits]
+
+        program = basic_compile(merge_programs(sequence))
+        for simultaneous_settings, associated_layers in zip(*_partition_settings(group)):
+            single_expt = PyQuilTomographyExperiment([simultaneous_settings], program, qubits)
+            simultaneous_experiment_settings.append((single_expt, associated_layers))
+
+    if randomize_all_settings:
+        shuffle(simultaneous_experiment_settings)
+
+    for (single_expt, layers) in simultaneous_experiment_settings:
+
+        if num_shots is None:
+            max_num_shots = max([layer.num_shots for layer in layers])
+        else:
+            max_num_shots = num_shots
+            for layer in layers:
+                layer.num_shots = num_shots
+
+        group_results = list(measure_observables(qc, single_expt, max_num_shots,
+                                                 active_reset=use_active_reset))
+
+        for layer, result in zip(layers, group_results):
+            if layer.results is None:
+                layer.results = [result]
+            else:
+                layer.results.append(result)
+
+    return experiments

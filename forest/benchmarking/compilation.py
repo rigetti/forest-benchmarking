@@ -1,4 +1,5 @@
 from math import pi
+import warnings
 
 import numpy as np
 from typing import Tuple
@@ -187,7 +188,8 @@ def basic_compile(program):
             elif inst.name in [gate.name for gate in new_prog.defined_gates]:
                 new_prog += inst
             else:
-                raise ValueError(f"Unknown gate instruction {inst}")
+                warnings.warn(f"Unknown gate instruction {inst} could not be compiled.")
+                new_prog += inst
 
         else:
             new_prog += inst
