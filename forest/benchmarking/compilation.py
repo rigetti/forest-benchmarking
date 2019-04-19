@@ -184,6 +184,8 @@ def basic_compile(program):
                 new_prog += _H(inst.qubits[0])
             elif inst.name == "X":
                 new_prog += _X(inst.qubits[0])
+            elif inst.name == "Z":
+                new_prog += RZ(pi, inst.qubits[0])
             elif inst.name in [gate.name for gate in new_prog.defined_gates]:
                 new_prog += inst
             else:

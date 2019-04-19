@@ -1,4 +1,5 @@
 from typing import Tuple, Sequence, Callable, Any, List
+from copy import copy
 import networkx as nx
 import numpy as np
 import random
@@ -9,74 +10,110 @@ from scipy.special import comb
 from dataclasses import dataclass
 
 from pyquil.quilbase import Pragma, Gate, DefGate
-from pyquil.quil import Program
-from pyquil.api import QuantumComputer
-from pyquil.api import BenchmarkConnection
+from pyquil.quil import Program, address_qubits, merge_programs
+from pyquil.api import QuantumComputer, BenchmarkConnection
 from pyquil.gates import CNOT, CCNOT, Z, X, I, H, CZ, MEASURE, RESET
-from pyquil.quil import address_qubits
-from forest.benchmarking.rb import get_rb_gateset
+from pyquil.unitary_tools import permutation_arbitrary
+from rpcq.messages import TargetDevice
+from rpcq._utils import RPCErrorError
+
+from forest.benchmarking.randomized_benchmarking import get_rb_gateset
 from forest.benchmarking.distance_measures import total_variation_distance as tvd
 from forest.benchmarking.random_operators import haar_rand_unitary
+from forest.benchmarking.compilation import basic_compile
 
-
-@dataclass(order=True)
-class Slice:
-    index: int
-    gates: Tuple[Program]
-    needs_compilation: bool = True
+#
+# @dataclass(order=True)
+# class Slice:
+#     index: int
+#     gates: Tuple[Program]
+#     needs_compilation: bool = True
 
     # def __str__(self):
     #     return f'Index {self.index}:\n' + '\n'.join([str(comp) for comp in self.components]) + '\n'
 
+#TODO: make concatenation of slices possible.
 
-@dataclass(order=True)
-class Layer:
-    depth: int
-    slices: Tuple[Slice]
-    needs_compilation: bool = True
+# @dataclass(order=True)
+# class Layer:
+#     depth: int
+#     slices: Tuple[Slice]
+#     needs_compilation: bool = True
 
     # def __str__(self):
     #     return f'Depth {self.depth}:\n' + '\n'.join([str(comp) for comp in self.components]) + '\n'
 
 
-@dataclass
-class Circuit:
-    layers: Tuple[Layer]
-    graph: nx.Graph
-    needs_compilation: bool = True
-    name: str = None
+# @dataclass
+# class Circuit:
+#     layers: Tuple[Layer]
+#     graph: nx.Graph
+#     needs_compilation: bool = True
+#     name: str = None
 
     # def __str__(self):
     #     return '\n'.join([str(lyr) for lyr in self.layers]) + '\n'
 
 
-@dataclass(order=True)
-class SliceTemplate:
-    index: int
-    generator: Callable
-    args = Sequence[Any]
-    sandwich: bool = False
-
-    # def __str__(self):
-    #     return f'Depth {self.depth}:\n' + '\n'.join([str(comp) for comp in self.components]) + '\n'
-
-
-@dataclass(order=True)
-class LayerTemplate:
-    depth: int
-    slices: Tuple[SliceTemplate]
-    sandwich: bool = False
-
-    # def __str__(self):
-    #     return f'Depth {self.depth}:\n' + '\n'.join([str(comp) for comp in self.components]) + '\n'
-
-
 @dataclass
 class CircuitTemplate:
-    layers: Tuple[LayerTemplate]
-    graph: nx.Graph
-    sandwich: bool = False
-    name: str = None
+    generators: List[Callable]
+    #TODO: could allow CircuitTemplates, allow definition of depth, subunits...
+    #TODO: add compilation?
+
+    def append(self, other):
+        self.generators += other.generators
+
+    def __add__(self, other):
+        """
+        Concatenate two circuits together, returning a new one.
+
+        :param Circuit other: Another circuit to add to this one.
+        :return: A newly concatenated circuit.
+        :rtype: Program
+        """
+        ckt = CircuitTemplate(self.generators)
+        ckt.append(other)
+        return ckt
+
+    def __iadd__(self, other):
+        """
+        Concatenate two circuits together using +=, returning a new one.
+        """
+        self.append(other)
+        return self
+
+    def sample(self, qc, graph, width, depth, sequence = None, index=0):
+        if sequence is None:
+            sequence = []
+        while index < depth:
+            for generator in self.generators:
+                if index == depth:
+                    break
+                prog, index = generator(qc, graph, width, depth, sequence, index)
+                sequence.append(prog)
+        return sequence
+
+    # def __str__(self):
+    #     return f'Depth {self.depth}:\n' + '\n'.join([str(comp) for comp in self.components]) + '\n'
+
+
+# @dataclass(order=True)
+# class LayerTemplate:
+#     depth: int
+#     slices: Tuple[SliceTemplate]
+#     sandwich: bool = False
+
+    # def __str__(self):
+    #     return f'Depth {self.depth}:\n' + '\n'.join([str(comp) for comp in self.components]) + '\n'
+
+
+# @dataclass
+# class CircuitTemplate:
+#     slices: Tuple[SliceTemplate]
+#     graph: nx.Graph
+#     sandwich: bool = False
+#     name: str = None
 
     # def __str__(self):
     #     return '\n'.join([str(lyr) for lyr in self.layers]) + '\n'
@@ -166,30 +203,27 @@ def random_two_qubit_cliffords(graph: nx.Graph, bm: BenchmarkConnection):
     return prog
 
 
-def random_permutation(graph: nx.Graph):
-    qubits = graph.nodes
-    permutation = np.random_permutation(range(len(qubits)))
+def random_permutation(graph: nx.Graph, width):
+    #TODO: find another way; this is too slow
+    qubits = list(graph.nodes)
+    measure_qubits = qubits[:width]  # arbitrarily pick the first width-many nodes
+    permutation = np.random.permutation(range(len(measure_qubits)))
+    matrix = permutation_arbitrary(permutation, len(measure_qubits))[0]
 
-    matrix = []
-    for target in permutation:
-        row = [0 for _ in permutation]
-        row[target] = 1
-        matrix.append(row)
-
-    gate_definition = DefGate("".join([str(qubits[idx]) for idx in permutation]), matrix)
+    gate_definition = DefGate("Perm" + "".join([str(measure_qubits[idx]) for idx in permutation]), matrix)
     PERMUTE = gate_definition.get_constructor()
     p = Program()
     p += gate_definition
-    p += PERMUTE(*qubits)
+    p += PERMUTE(*measure_qubits)
     return p
 
 
-def random_su2_pairs(graph: nx.Graph):
-    qubits = graph.nodes
+def random_su2_pairs(graph: nx.Graph, width):
+    qubits = list(graph.nodes)[:width]  # arbitrarily pick the first width-many nodes
     gates = []
     for q1, q2 in zip(qubits[::2], qubits[1::2]):
         matrix = haar_rand_unitary(4)
-        gate_definition = DefGate("RSU2(" + str(q1) + str(q2) + ")", matrix)
+        gate_definition = DefGate(f"RSU2({q1},{q2})", matrix)
         RSU2 = gate_definition.get_constructor()
         p = Program()
         p += gate_definition
@@ -198,191 +232,172 @@ def random_su2_pairs(graph: nx.Graph):
     return gates
 
 
-# ==================================================================================================
-# Prefix // Suffix programs; pre and post
-# ==================================================================================================
+def quantum_volume_compilation(qc, graph, width, depth, sequence):
+    prog = merge_programs(sequence)
+    qubits = list(graph.nodes)
+    measure_qubits = qubits[:width]  # arbitrarily pick the first width-many nodes
 
-def pre_trival(graph: nx.Graph):
-    # Install identity on all qubits so that we can find all the qubits from prog.get_qubits().
-    # Otherwise if the circuit happens to be identity on a particular qubit you will get
-    # not get that qubit from get_qubits. Worse, if the entire program is identity you will
-    # get the empty set. Do not delete this!
-    prep_gate = I
-    prog = Program()
-    prog += [prep_gate(qubit) for qubit in list(graph.nodes)]
-    return prog
+    ro = prog.declare("ro", "BIT", len(measure_qubits))
+    for idx, qubit in enumerate(measure_qubits):
+        prog.measure(qubit, ro[idx])
 
+    # restrict compilation to chosen qubits
+    isa_dict = qc.device.get_isa().to_dict()
+    single_qs = isa_dict['1Q']
+    two_qs = isa_dict['2Q']
 
-def post_trival():
-    prog = Program()
-    return prog
+    new_1q = {}
+    for key, val in single_qs.items():
+        if int(key) in qubits:
+            new_1q[key] = val
+    new_2q = {}
+    for key, val in two_qs.items():
+        q1, q2 = key.split('-')
+        if int(q1) in qubits and int(q2) in qubits:
+            new_2q[key] = val
 
+    new_isa = {'1Q': new_1q, '2Q': new_2q}
 
-# ==================================================================================================
+    new_compiler = copy(qc.compiler)
+    new_compiler.target_device = TargetDevice(isa=new_isa, specs=qc.device.get_specs().to_dict())
+    # try to compile with the restricted qubit topology
+    try:
+        native_quil = new_compiler.quil_to_native_quil(prog)
+    except RPCErrorError as e:
+        if "Multiqubit instruction requested between disconnected components of the QPU graph:" \
+                in str(e):
+            raise ValueError("naive_program_generator could not generate a program using only the "
+                             "qubits supplied; expand the set of allowed qubits or supply "
+                             "a custom program_generator.")
+        raise
+
+    return native_quil
+
+# ===========================================
 # Layer tools
 # ==================================================================================================
-
-def slice_templates_1q_and_2q_rand_cliff(bm: BenchmarkConnection):
-    slice_1q = SliceTemplate(0, random_single_qubit_cliffords, (bm, ))
-    slice_2q = SliceTemplate(1, random_two_qubit_cliffords, (bm, ))
-    return slice_1q, slice_2q
-
-
-def slice_templates_1q_and_2q_rand_rand_gates(one_q_gates, two_q_gates):
-    slice_1q = SliceTemplate(0, random_single_qubit_gates, (one_q_gates, ))
-    slice_2q = SliceTemplate(1, random_two_qubit_gates, (two_q_gates, ))
-    return slice_1q, slice_2q
-
-
-def layer_1q_and_2q_rand_cliff(bm: BenchmarkConnection,
-                               graph: nx.Graph,
-                               layer_dagger: bool = False):
-    """
-    Creates a layer of random one qubit Cliffords followed by random two qubit Cliffords.
-
-    :param bm: A benchmark connection that will do the grunt work of generating the Cliffords
-    :param graph:  The graph. Nodes are used as arguments to gates, so they should be qubit-like.
-    :param layer_dagger: Bool if true will add the dagger to the layer, making the layer
-    efectivley the identity
-    :return: program
-    """
-    prog = Program()
-    prog += random_single_qubit_cliffords(bm, graph)
-    prog += random_two_qubit_cliffords(bm, graph)
-    if layer_dagger:
-        prog += prog.dagger()
-    return prog
-
-
-def layer_1q_and_2q_rand_gates(graph: nx.Graph,
-                               one_q_gates,
-                               two_q_gates,
-                               layer_dagger: bool = False):
-    """
-    You pass in two lists of one and two qubit gates. This function creates a layer of random one
-    qubit gates followed by random two qubit gates
-
-    :param graph: The graph. Nodes are used as arguments to gates, so they should be qubit-like.
-    :param one_q_gates: list of one qubit gates
-    :param two_q_gates: list of two qubit gates e.g. [CZ, ID]
-    :param layer_dagger: Bool if true will add the dagger to the layer, making the layer
-    efectivley the identity
-    :return: program
-    """
-    prog = Program()
-    prog += random_single_qubit_gates(graph, one_q_gates)
-    prog += random_two_qubit_gates(graph, two_q_gates)
-    if layer_dagger:
-        prog += prog.dagger()
-    return prog
+#
+#
+# def layer_1q_and_2q_rand_cliff(bm: BenchmarkConnection,
+#                                graph: nx.Graph,
+#                                layer_dagger: bool = False):
+#     """
+#     Creates a layer of random one qubit Cliffords followed by random two qubit Cliffords.
+#
+#     :param bm: A benchmark connection that will do the grunt work of generating the Cliffords
+#     :param graph:  The graph. Nodes are used as arguments to gates, so they should be qubit-like.
+#     :param layer_dagger: Bool if true will add the dagger to the layer, making the layer
+#         effectively the identity
+#     :return: program
+#     """
+#     prog = Program()
+#     prog += random_single_qubit_cliffords(bm, graph)
+#     prog += random_two_qubit_cliffords(bm, graph)
+#     if layer_dagger:
+#         prog += prog.dagger()
+#     return prog
+#
+#
+# def layer_1q_and_2q_rand_gates(graph: nx.Graph,
+#                                one_q_gates,
+#                                two_q_gates,
+#                                layer_dagger: bool = False):
+#     """
+#     You pass in two lists of one and two qubit gates. This function creates a layer of random one
+#     qubit gates followed by random two qubit gates
+#
+#     :param graph: The graph. Nodes are used as arguments to gates, so they should be qubit-like.
+#     :param one_q_gates: list of one qubit gates
+#     :param two_q_gates: list of two qubit gates e.g. [CZ, ID]
+#     :param layer_dagger: Bool if true will add the dagger to the layer, making the layer
+#         effectively the identity
+#     :return: program
+#     """
+#     prog = Program()
+#     prog += random_single_qubit_gates(graph, one_q_gates)
+#     prog += random_two_qubit_gates(graph, two_q_gates)
+#     if layer_dagger:
+#         prog += prog.dagger()
+#     return prog
 
 
 # ==================================================================================================
 # Sandwich tools
 # ==================================================================================================
-def circuit_sandwich_rand_gates(graph: nx.Graph,
-                                circuit_depth: int,
-                                one_q_gates: list,
-                                two_q_gates: list,
-                                layer_dagger: bool = False,
-                                sandwich_dagger: bool = False):
-    """
-    Create a sandwich circuit by adding layers.
-
-    :param graph: The graph. Nodes are used as arguments to gates, so they should be qubit-like.
-    :param circuit_depth: maximum depth of quantum circuit
-    :param one_q_gates: list of one qubit gates
-    :param two_q_gates: list of two qubit gates e.g. [CZ, ID]
-    :param layer_dagger: Bool if true will add the dagger to the layer, making the layer
-    :param sandwich_dagger: Bool if true the second half of the circuit will be the inverse of
-    the first.
-    :return: program
-    """
-    total_prog = Program()
-    total_prog += pre_trival(graph)
-
-    if sandwich_dagger:
-        circuit_depth = int(np.floor(circuit_depth / 2))
-
-    layer_progs = Program()
-    for _ in range(circuit_depth):
-        layer_progs += layer_1q_and_2q_rand_gates(graph,
-                                                  one_q_gates,
-                                                  two_q_gates,
-                                                  layer_dagger)
-    if sandwich_dagger:
-        layer_progs += layer_progs.dagger()
-
-    total_prog += layer_progs
-    total_prog += post_trival()
-    return total_prog
-
-
-def circuit_sandwich_clifford(bm: BenchmarkConnection,
-                              graph: nx.Graph,
-                              circuit_depth: int,
-                              layer_dagger: bool = False,
-                              sandwich_dagger: bool = False):
-    """
-
-    :param bm: A benchmark connection that will do the grunt work of generating the Cliffords
-    :param graph: The graph. Nodes are used as arguments to gates, so they should be qubit-like.
-    :param circuit_depth: maximum depth of quantum circuit
-    :param layer_dagger: Bool if true will add the dagger to the layer, making the layer
-    :param sandwich_dagger: Bool if true the second half of the circuit will be the inverse of
-    the first.
-    :return: program
-    """
-    total_prog = Program()
-
-    total_prog += pre_trival(graph)
-
-    if sandwich_dagger:
-        circuit_depth = int(np.floor(circuit_depth / 2))
-
-    layer_progs = Program()
-    for _ in range(circuit_depth):
-        layer_progs += layer_1q_and_2q_rand_cliff(bm, graph, layer_dagger)
-    if sandwich_dagger:
-        layer_progs += layer_progs.dagger()
-
-    total_prog += layer_progs
-    total_prog += post_trival()
-    return total_prog
-
+# def circuit_sandwich_rand_gates(graph: nx.Graph,
+#                                 circuit_depth: int,
+#                                 one_q_gates: list,
+#                                 two_q_gates: list,
+#                                 layer_dagger: bool = False,
+#                                 sandwich_dagger: bool = False):
+#     """
+#     Create a sandwich circuit by adding layers.
+#
+#     :param graph: The graph. Nodes are used as arguments to gates, so they should be qubit-like.
+#     :param circuit_depth: maximum depth of quantum circuit
+#     :param one_q_gates: list of one qubit gates
+#     :param two_q_gates: list of two qubit gates e.g. [CZ, ID]
+#     :param layer_dagger: Bool if true will add the dagger to the layer, making the layer
+#     :param sandwich_dagger: Bool if true the second half of the circuit will be the inverse of
+#     the first.
+#     :return: program
+#     """
+#     total_prog = Program()
+#     total_prog += pre_trival(graph)
+#
+#     if sandwich_dagger:
+#         circuit_depth = int(np.floor(circuit_depth / 2))
+#
+#     layer_progs = Program()
+#     for _ in range(circuit_depth):
+#         layer_progs += layer_1q_and_2q_rand_gates(graph,
+#                                                   one_q_gates,
+#                                                   two_q_gates,
+#                                                   layer_dagger)
+#     if sandwich_dagger:
+#         layer_progs += layer_progs.dagger()
+#
+#     total_prog += layer_progs
+#     total_prog += post_trival()
+#     return total_prog
+#
+#
+# def circuit_sandwich_clifford(bm: BenchmarkConnection,
+#                               graph: nx.Graph,
+#                               circuit_depth: int,
+#                               layer_dagger: bool = False,
+#                               sandwich_dagger: bool = False):
+#     """
+#
+#     :param bm: A benchmark connection that will do the grunt work of generating the Cliffords
+#     :param graph: The graph. Nodes are used as arguments to gates, so they should be qubit-like.
+#     :param circuit_depth: maximum depth of quantum circuit
+#     :param layer_dagger: Bool if true will add the dagger to the layer, making the layer
+#     :param sandwich_dagger: Bool if true the second half of the circuit will be the inverse of
+#     the first.
+#     :return: program
+#     """
+#     total_prog = Program()
+#
+#     total_prog += pre_trival(graph)
+#
+#     if sandwich_dagger:
+#         circuit_depth = int(np.floor(circuit_depth / 2))
+#
+#     layer_progs = Program()
+#     for _ in range(circuit_depth):
+#         layer_progs += layer_1q_and_2q_rand_cliff(bm, graph, layer_dagger)
+#     if sandwich_dagger:
+#         layer_progs += layer_progs.dagger()
+#
+#     total_prog += layer_progs
+#     total_prog += post_trival()
+#     return total_prog
+#
 
 # ==================================================================================================
 # Generate and Acquire functions
 # ==================================================================================================
-def generate_repeated_layer_circuit_template(lattice: nx.Graph, circuit_depth: int,
-                                             circuit_width: int,
-                                             slice_templates: Sequence[SliceTemplate],
-                                             layer_sandwich: bool = False,
-                                             circuit_sandwich: bool = False) -> CircuitTemplate:
-    """
-    Return the template needed to generate random circuits of a certain width and depth using a
-    particular lattice connectivity.
-
-    :param lattice:
-    :param circuit_depth: depth of quantum circuit
-    :param circuit_width: width of quantum circuit
-    :param slice_templates:
-    :param layer_sandwich:
-    :param circuit_sandwich:
-    :return:
-    """
-    if circuit_width > len(lattice.nodes):
-        raise ValueError("You must have circuit widths less than or equal to the number of qubits "
-                         "on a lattice.")
-    layers = (LayerTemplate(depth, slice_templates, layer_sandwich) \
-              for depth in range(1, circuit_depth + 1))
-
-    return CircuitTemplate(layers, lattice, circuit_sandwich, "UniformLayers")
-
-
-# def generate_circuit_experiments():
-#     
-#     yield Circuit(layers, graph, needs_compilation, name)
 
 
 def generate_sandwich_circuits_experiments(qc_noisy: QuantumComputer,
