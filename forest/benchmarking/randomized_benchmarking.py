@@ -2,7 +2,7 @@ from math import pi
 from typing import Iterable, List, Sequence
 
 import numpy as np
-from lmfit import Model
+from lmfit.model import ModelResult
 from numpy import pi
 from scipy.stats import beta
 
@@ -14,6 +14,7 @@ from pyquil.operator_estimation import ExperimentSetting, zeros_state
 
 from forest.benchmarking.tomography import _state_tomo_settings
 from forest.benchmarking.utils import all_pauli_z_terms
+from forest.benchmarking.analysis.fitting import fit_base_param_decay
 from forest.benchmarking.compilation import basic_compile
 from forest.benchmarking.stratified_experiment import StratifiedExperiment, Layer, \
     acquire_stratified_data
@@ -220,6 +221,48 @@ def populate_rb_survival_statistics(expt: StratifiedExperiment):
             layer.estimates = survival_stats
 
 
+def estimate_purity(dim: int, op_expect: np.ndarray, renorm: bool=True):
+    """
+    The renormalized, or 'shifted', purity is given in equation (10) of [ECN]
+    where d is the dimension of the Hilbert space, 2**num_qubits
+
+    :param dim: dimension of the hilbert space
+    :param op_expect: array of estimated expectations of each operator being measured
+    :param renorm: flag that renormalizes result to be between 0 and 1
+    :return: purity given the operator expectations
+    """
+    # assumes op_expect includes expectation of I with value 1.
+    purity = (1 / dim) * np.sum(op_expect * op_expect)
+    if renorm:
+        purity = (dim / (dim - 1.0)) * (purity - 1.0 / dim)
+    return purity
+
+
+def estimate_purity_err(dim: int, op_expect: np.ndarray, op_expect_var: np.ndarray, renorm=True):
+    """
+    Propagate the observed variance in operator expectation to an error estimate on the purity.
+    This assumes that each operator expectation is independent.
+
+    :param dim: dimension of the Hilbert space
+    :param op_expect: array of estimated expectations of each operator being measured
+    :param op_expect_var: array of estimated variance for each operator expectation
+    :param renorm: flag that provides error for the renormalized purity
+    :return: purity given the operator expectations
+    """
+    #TODO: check validitiy of approximation |op_expect| >> 0, and functional form below (squared?)
+    var_of_square_op_expect = (2 * np.abs(op_expect)) ** 2 * op_expect_var
+    #TODO: check if this adequately handles |op_expect| >\> 0
+    need_second_order = np.isclose([0.]*len(var_of_square_op_expect), var_of_square_op_expect, atol=1e-6)
+    var_of_square_op_expect[need_second_order] = op_expect_var[need_second_order]**2
+
+    purity_var = (1 / dim) ** 2 * (np.sum(var_of_square_op_expect))
+
+    if renorm:
+        purity_var = (dim / (dim - 1.0)) ** 2 * purity_var
+
+    return np.sqrt(purity_var)
+
+
 def populate_purity_statistics(expt: StratifiedExperiment):
     """
     Calculate the mean and variance of the estimated probability of the zeros state given the
@@ -264,8 +307,8 @@ def acquire_rb_data(qc, experiments: Sequence[StratifiedExperiment], num_shots: 
     sequences are not compiled down to the identity within the call to measure_observables. By
     default all of the compatible ExperimentSettings in the list of experiments are run in
     parallel (whenever possible) num_shots many times.
-    
-    Estimates for the survival probability are stored in each layer's estimates, 
+
+    Estimates for the survival probability are stored in each layer's estimates,
     see populate_rb_survival_statistics
 
     :param qc: a quantum computer, e.g. QVM or QPU, that runs the experiments
@@ -321,57 +364,8 @@ def acquire_unitarity_data(qc: QuantumComputer, experiments: Sequence[Stratified
     return results
 
 
-def standard_rb(x, baseline, amplitude, decay):
-    """
-    Fitting function for randomized benchmarking.
-
-    :param numpy.ndarray x: Independent variable
-    :param float baseline: Offset value
-    :param float amplitude: Amplitude of exponential decay
-    :param float decay: Decay parameter
-    :return: Fit function
-    """
-    return baseline + amplitude * decay ** x
-
-
-def standard_rb_guess(model: Model, y):
-    """
-    Guess the parameters for a fit.
-
-    :param model: a lmfit model to make guess parameters for. This should probably be an
-        instance of ``Model(standard_rb)``.
-    :param y: Dependent variable
-    :return: Lmfit parameters object appropriate for passing to ``Model.fit()``.
-    """
-    b_guess = y[-1]
-    a_guess = y[0] - y[-1]
-    d_guess = 0.95
-    return model.make_params(baseline=b_guess, amplitude=a_guess, decay=d_guess)
-
-
-def _check_data(x, y, weights):
-    if not len(x) == len(y):
-        raise ValueError("Lengths of x and y arrays must be equal.")
-    if weights is not None and not len(x) == len(weights):
-        raise ValueError("Lengths of x and weights arrays must be equal is weights is not None.")
-
-
-def fit_standard_rb(depths, survivals, weights=None) -> Model.ModelResult:
-    """
-    Construct and fit a RB curve with appropriate guesses
-
-    :param depths: The clifford circuit depths (independent variable)
-    :param survivals: The survival probabilities (dependent variable)
-    :param weights: Optional weightings of each point to use when fitting.
-    :return: a lmfit Model
-    """
-    _check_data(depths, survivals, weights)
-    rb_model = Model(standard_rb)
-    params = standard_rb_guess(model=rb_model, y=survivals)
-    return rb_model.fit(survivals, x=depths, params=params, weights=weights)
-
-
-def fit_rb_results(experiment: StratifiedExperiment) -> Model.ModelResult:
+def fit_rb_results(experiment: StratifiedExperiment, param_guesses: tuple = None) \
+        -> ModelResult:
     """
     Wrapper for fitting the results of a StratifiedExperiment; simply extracts key parameters
     and passes on to the standard fit.
@@ -379,6 +373,7 @@ def fit_rb_results(experiment: StratifiedExperiment) -> Model.ModelResult:
     The estimate for the rb decay can be found in the returned fit.params['decay']
 
     :param experiment: the RB StratifiedExperiment with results on which to fit a RB decay.
+    :param param_guesses: guesses for the (amplitude, decay, baseline) parameters
     :return: a ModelResult fit with estimates of the Model parameters, including the rb 'decay'
     """
     depths = []
@@ -388,108 +383,28 @@ def fit_rb_results(experiment: StratifiedExperiment) -> Model.ModelResult:
         depths.append(layer.depth)
         survivals.append(layer.estimates["Survival"][0])
         weights.append(1/layer.estimates["Survival"][1])
-    return fit_standard_rb(depths, survivals, np.asarray(weights))
+
+    if param_guesses is None:  # make some standard reasonable guess (amplitude, decay, baseline)
+        param_guesses = (survivals[0] - survivals[-1], 0.95, survivals[-1])
+
+    return fit_base_param_decay(np.asarray(depths), np.asarray(survivals), param_guesses,
+                                np.asarray(weights))
 
 
-########
-# Unitarity
-########
-
-
-def estimate_purity(dim: int, op_expect: np.ndarray, renorm: bool=True):
-    """
-    The renormalized, or 'shifted', purity is given in equation (10) of [ECN]
-    where d is the dimension of the Hilbert space, 2**num_qubits
-
-    :param dim: dimension of the hilbert space
-    :param op_expect: array of estimated expectations of each operator being measured
-    :param renorm: flag that renormalizes result to be between 0 and 1
-    :return: purity given the operator expectations
-    """
-    # assumes op_expect includes expectation of I with value 1.
-    purity = (1 / dim) * np.sum(op_expect * op_expect)
-    if renorm:
-        purity = (dim / (dim - 1.0)) * (purity - 1.0 / dim)
-    return purity
-
-
-def estimate_purity_err(dim: int, op_expect: np.ndarray, op_expect_var: np.ndarray, renorm=True):
-    """
-    Propagate the observed variance in operator expectation to an error estimate on the purity.
-    This assumes that each operator expectation is independent.
-
-    :param dim: dimension of the Hilbert space
-    :param op_expect: array of estimated expectations of each operator being measured
-    :param op_expect_var: array of estimated variance for each operator expectation
-    :param renorm: flag that provides error for the renormalized purity
-    :return: purity given the operator expectations
-    """
-    #TODO: check validitiy of approximation |op_expect| >> 0, and functional form below (squared?)
-    var_of_square_op_expect = (2 * np.abs(op_expect)) ** 2 * op_expect_var
-    #TODO: check if this adequately handles |op_expect| >\> 0
-    need_second_order = np.isclose([0.]*len(var_of_square_op_expect), var_of_square_op_expect, atol=1e-6)
-    var_of_square_op_expect[need_second_order] = op_expect_var[need_second_order]**2
-
-    purity_var = (1 / dim) ** 2 * (np.sum(var_of_square_op_expect))
-
-    if renorm:
-        purity_var = (dim / (dim - 1.0)) ** 2 * purity_var
-
-    return np.sqrt(purity_var)
-
-
-def unitarity_fn(x, baseline, amplitude, unitarity):
-    """
-    Fitting function for unitarity randomized benchmarking, equation (8) of [ECN]
-
-    :param numpy.ndarray x: Independent variable
-    :param float baseline: Offset value
-    :param float amplitude: Amplitude of exponential decay
-    :param float unitarity: Decay parameter
-    :return: Fit function
-    """
-    return baseline + amplitude * unitarity ** (x-1)
-
-
-def unitarity_guess(model: Model, y):
-    """
-    Guess the parameters for a fit.
-
-    :param model: a lmfit model to make guess parameters for. This should probably be an
-        instance of ``Model(unitarity)``.
-    :param y: Dependent variable
-    :return: Lmfit parameters object appropriate for passing to ``Model.fit()``.
-    """
-    b_guess = 0.
-    a_guess = y[0]
-    d_guess = 0.95
-    return model.make_params(baseline=b_guess, amplitude=a_guess, unitarity=d_guess)
-
-
-def fit_unitarity(depths, shifted_purities, weights=None) -> Model.ModelResult:
-    """
-    Construct and fit a URB curve with appropriate guesses
-
-    :param depths: The clifford circuit depths (independent variable)
-    :param shifted_purities: The shifted purities (dependent variable)
-    :param weights: Optional weightings of each point to use when fitting.
-    :return: a lmfit Model
-    """
-    _check_data(depths, shifted_purities, weights)
-    unitarity_model = Model(unitarity_fn)
-    params = unitarity_guess(model=unitarity_model, y=shifted_purities)
-    return unitarity_model.fit(shifted_purities, x=depths, params=params, weights=weights)
-
-
-def fit_unitarity_results(experiment) -> Model.ModelResult:
+def fit_unitarity_results(experiment: StratifiedExperiment, param_guesses: tuple = None) \
+        -> ModelResult:
     """
     Wrapper for fitting the results of a StratifiedExperiment; simply extracts key parameters
-    and passes on to fit_unitarity.
+    and passes on to the standard fit.
 
-    The estimate for the unitarity decay can be found in the returned fit.params['unitarity']
+    The estimate for the unitarity (the decay) can be found in the returned fit.params['decay']
 
     :param experiment: the URB StratifiedExperiment with results on which to fit a URB decay.
-    :return: a ModelResult fit with estimates of the Model parameters, including the unitarity
+    :param param_guesses: guesses for the (amplitude, decay, baseline) parameters
+    :return: a ModelResult fit with estimates of the Model parameters, including the 'decay',
+        which is the unitarity parameter. Note that [ECN] parameterizes the decay differently;
+        effectively, the 'amplitude' reported here absorbs a factor 1/unitarity.
+        Comparing to 'B' in equation 8), fit.params['amplitude'] = B / fit.params['decay']
     """
     depths = []
     shifted_purities = []
@@ -498,7 +413,12 @@ def fit_unitarity_results(experiment) -> Model.ModelResult:
         depths.append(layer.depth)
         shifted_purities.append(layer.estimates["Shifted Purity"][0])
         weights.append(1/layer.estimates["Shifted Purity"][1])
-    return fit_unitarity(depths, shifted_purities, np.asarray(weights))
+
+    if param_guesses is None:  # make some standard reasonable guess (amplitude, decay, baseline)
+        param_guesses = (shifted_purities[0], 0.95, 0)
+
+    return fit_base_param_decay(np.asarray(depths), np.asarray(shifted_purities), param_guesses,
+                                np.asarray(weights))
 
 
 def unitarity_to_rb_decay(unitarity, dimension) -> float:
