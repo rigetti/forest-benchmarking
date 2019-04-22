@@ -150,10 +150,10 @@ Trace preservation implies $(R_{\mathcal E})_{0,j} = \delta_{0,j}$, i.e. the fir
 
 In this representation the channel is applied to the state by multiplication
 
-$$|\rho' \rangle \rangle = R_{\mathcal E} |\rho \rangle \rangle$$
+$$|\rho' \rangle \rangle = R_{\mathcal E} |\rho \rangle \rangle.$$
 
 
-## Kraus to Superoperator
+## Kraus to Superoperator (Liouville)
 We already saw an example of this in the setion on `vec`-ing. There we re-packaged conjugation by unitary evolution into the action of a matrix on a vec'd density operator. Unitary evolution is simply the case of a single Kraus operator, so we generalize this by taking a sum over all Kraus operators.  
 
 Consider the set of Kraus operators $\{ M_k \}$. The corresponding quantum operation is $\mathcal E (\rho) = \sum_k M_k \rho M_k^\dagger $.
