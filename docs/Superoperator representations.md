@@ -2,7 +2,7 @@
 
 This document summarizes our conventions for the different superoperator representations. We show how to apply the channels to states in these represenations and how to convert channels between a subset of representations. By combining these conversion methods you can convert between any of the channel representations.
 
-This document is **not** intended to be a tutorial or a comprehensive review. At the bottom of the document there is a list of references with more information. This document was influenced by [IGST] and we recomend reading [GRAPTN] to gain deeper understading. Additionally these references explain, for example how to determine if a channel is unital or completely postive in the different representations.
+This document is **not** intended to be a tutorial or a comprehensive review. At the bottom of the document there is a list of references with more information. This document was influenced by [IGST] and we recomend reading [GRAPTN] to gain deeper understading. (The references are listed at the bottom of this document.) Additionally these references explain, for example how to determine if a channel is unital or completely postive in the different representations.
 
 
 ## `vec` and `unvec`

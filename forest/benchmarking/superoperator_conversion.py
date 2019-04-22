@@ -34,12 +34,12 @@ def vec(matrix: np.ndarray) -> np.ndarray:
     """
     Vectorize, i.e. "vec", a matrix by column stacking.
 
-    For example the 2x2 matrix A
+    For example the 2 by 2 matrix A
 
     A = [[a, b]
          [c, d]]      becomes  |A>> := vec(A) = (a, c, b, d)^T ,
 
-    where |A>> denotes the vec'ed version of A and T is a transpose.
+    where |A>> denotes the vec'ed version of A and T denotes transpose.
 
     :param matrix: A N (rows) by M (columns) numpy array.
     :return: Returns a column vector with  N by M rows.
@@ -353,8 +353,8 @@ def pauli2computational_basis_matrix(dim) -> np.ndarray:
 
 def computational2pauli_basis_matrix(dim) -> np.ndarray:
     """
-    Produces a basis transform matrix that converts from a computational basis to a pauli basis. Conjugate transpose of
-    pauli2computational_basis_matrix with an extra dimensional factor.
+    Produces a basis transform matrix that converts from a computational basis to a pauli basis.
+    Conjugate transpose of pauli2computational_basis_matrix with an extra dimensional factor.
         c2p_transform = sum_{k=1}^{dim**2}  | k > << sigma_k |
     For example,
         vec(sigma_z) = | sigma_z >> = [1, 0, 0, -1].T in the computational basis
