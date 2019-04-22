@@ -1,5 +1,5 @@
 from math import pi
-from typing import Iterable, List, Tuple, Sequence
+from typing import Iterable, List, Sequence
 
 import numpy as np
 from lmfit import Model
@@ -48,7 +48,7 @@ def get_rb_gateset(qubits: Sequence[int]) -> List[Gate]:
     """
     A wrapper around the gateset generation functions.
 
-    :param rb_type: "1q" or "2q".
+    :param qubits: the qubits on which to the gates should act
     :returns: list of gates, tuple of qubits
     """
     if len(qubits) == 1:
@@ -66,11 +66,12 @@ def generate_rb_sequence(bm: BenchmarkConnection, qubits: Sequence[int], depth: 
     """
     Generate a complete randomized benchmarking sequence.
 
-    :param qubits:
+    :param bm: object returned from get_benchmarker() used to generate clifford sequences
+    :param qubits: qubits on which the sequence will act
     :param depth: The total number of Cliffords in the sequence (including inverse)
-    :param random_seed: Random seed passed to compiler to seed sequence generation.
-    :param interleaved_gate:
-    :return:
+    :param random_seed: Random seed passed to bm to seed sequence generation.
+    :param interleaved_gate: See [IRB]; this gate will be interleaved into the sequence
+    :return: A list of programs constituting Clifford gates in a self-inverting sequence.
     """
     if depth < 2:
         raise ValueError("Sequence depth must be at least 2 for rb sequences, or at least 1 for "
@@ -85,13 +86,29 @@ def generate_rb_experiment(bm: BenchmarkConnection, qubits: Sequence[int], depth
                            num_sequences: int, interleaved_gate: Program = None,
                            random_seed: int = None) -> StratifiedExperiment:
     """
+    Creates all of the programs and organizes all information necessary for a RB or IRB
+    experiment on the given qubits.
 
-    :param qubits: the qubits for a single isolated rb experiment
-    :param depths:
-    :param num_sequences:
-    :param interleaved_gate:
-    :param random_seed:
-    :return:
+    The StratifiedExperiment returned can be passed to acquire_rb_data or acquire_stratified_data
+    for data collection on a Qauntum Computer. To run simultaneous experiments, create multiple
+    RB experiments and pass all of them to one of these methods with the appropriate flags set.
+
+    For standard RB see
+    [RB] Scalable and Robust Randomized Benchmarking of Quantum Processes
+         Magesan et al.,
+         Phys. Rev. Lett. 106, 180504 (2011)
+         https://dx.doi.org/10.1103/PhysRevLett.106.180504
+         https://arxiv.org/abs/1009.3639
+
+    :param bm: object returned from get_benchmarker() used to generate clifford sequences
+    :param qubits: the qubits for a single isolated rb experiment (for simultaneous rb,
+        create multiple experiments and run them simultaneously)
+    :param depths: the depths of the sequences in the experiment
+    :param num_sequences: the number of sequences at each depth
+    :param interleaved_gate: optional gate to interleave throughout the sequence, see [IRB]
+    :param random_seed: Random seed passed to bm to seed sequence generation.
+    :return: a StratifiedExperiment with all programs and information necessary for data
+        collection in a RB or IRB experiment
     """
     layers = []  # we will have len(depths)*num_sequences many layers, one layer per sequence.
     for depth in depths:
@@ -118,15 +135,29 @@ def generate_unitarity_experiment(bm: BenchmarkConnection, qubits: Sequence[int]
                                   use_self_inv_seqs = False, random_seed: int = None) \
         -> StratifiedExperiment:
     """
-    Essentially the same as generate_rb_experiment, just stripping off last gate, no option for
-    interleaving.
+    Creates all of the programs and organizes all information necessary for a unitarity
+    experiment on the given qubits.
 
-    :param qubits: qubits for a single isolated unitary rb experiment
-    :param depths:
-    :param num_sequences:
-    :param use_self_inv_seqs:
-    :param random_seed:
-    :return:
+    Similarly to generate_rb_experiment, the StratifiedExperiment returned can be passed to
+    acquire_unitarity_data or acquire_stratified_data for data collection on a Qauntum Computer.
+
+    Unitarity algorithm is due to
+    [ECN]  Estimating the Coherence of Noise
+           Wallman et al.,
+           New Journal of Physics 17, 113020 (2015)
+           https://dx.doi.org/10.1088/1367-2630/17/11/113020
+           https://arxiv.org/abs/1503.07865
+
+    :param bm: object returned from get_benchmarker() used to generate clifford sequences
+    :param qubits: the qubits for a single isolated rb experiment (for simultaneous rb,
+        create multiple experiments and run them simultaneously)
+    :param depths: the depths of the sequences in the experiment
+    :param num_sequences: the number of sequences at each depth
+    :param use_self_inv_seqs: if True, the last inverting gate of the sequence will be left off.
+        This may allow the sequence to also be interpreted as a regular RB sequence.
+    :param random_seed: Random seed passed to bm to seed sequence generation.
+    :return: a StratifiedExperiment with all programs and information necessary for data
+        collection in a unitarity experiment.
     """
     layers = []  # we will have len(depths)*num_sequences many layers, one layer per sequence.
     for depth in depths:
@@ -152,14 +183,18 @@ def populate_rb_survival_statistics(expt: StratifiedExperiment):
     Calculate the mean and variance of the estimated probability of the zeros state given the
     expectation of all operators with Z terms.
 
-    We first convert the operator expectation values into a density matrix, then take the (0, 0)
-    component of this matrix as the probability of the all zeros state. For binary classified data
-    with N counts of 1 and M counts of 0, these can be estimated using the mean and variance of
-    the beta distribution beta(N+1, M+1) where the +1 is used to incorporate an unbiased Bayes
-    prior.
+    We implicitly convert the operator expectation values into a density matrix, then take the
+    (0, 0) component of this matrix as the probability of the all zeros state; note that the sum
+    of all Z/I operators divided by the dimension is the projector onto the all zeros state.
+
+    For binary classified data with N counts of 1 and M counts of 0, these can be estimated using
+    the mean and variance of the beta distribution beta(N+1, M+1) where the +1 is used to
+    incorporate an unbiased Bayes prior.
 
     :param expt: A StratifiedExperiment whose Components have been populated with results.
-    :return:
+    :return: None; mutates the input StratifiedExperiment by adding a 'Survival' estimate to each
+        layer, which records the estimated probability (mean and std_err) of a sequence yielding
+        all zeros upon measurement averaged over all Clifford sequences at the layer's depth.
     """
     for layer in expt.layers:
         # exclude operators that include x or y; no change for a standard rb experiment
@@ -185,7 +220,7 @@ def populate_rb_survival_statistics(expt: StratifiedExperiment):
             layer.estimates = survival_stats
 
 
-def populate_unitarity_purity_statistics(expt: StratifiedExperiment):
+def populate_purity_statistics(expt: StratifiedExperiment):
     """
     Calculate the mean and variance of the estimated probability of the zeros state given the
     expectation of all operators with Z terms.
@@ -197,7 +232,9 @@ def populate_unitarity_purity_statistics(expt: StratifiedExperiment):
     prior.
 
     :param expt: A StratifiedExperiment whose Components have been populated with results.
-    :return:
+    :return: None; mutates the input StratifiedExperiment by adding a 'Shifted Purity' estimate to
+        each layer, which records the estimated purity re-scaled to lay between 0 and 1 (see
+        [ECN] eq. 10) averaged over all possible Clifford sequences at the given layer's depth.
     """
     for layer in expt.layers:
         # This assumes inclusion of I term with expectation 1 to make dim**2 many total terms
@@ -219,6 +256,25 @@ def populate_unitarity_purity_statistics(expt: StratifiedExperiment):
 
 def acquire_rb_data(qc, experiments: Sequence[StratifiedExperiment], num_shots: int = 500,
                     run_simultaneous = True) -> Sequence[StratifiedExperiment]:
+    """
+    Runs the StratifiedExperiment on the given qc and stores the results in a copy of each
+    experiment with results populated for each layer.
+
+    The qc objects compilation method is temporarily replaced with basic_compile so that the rb
+    sequences are not compiled down to the identity within the call to measure_observables. By
+    default all of the compatible ExperimentSettings in the list of experiments are run in
+    parallel (whenever possible) num_shots many times.
+    
+    Estimates for the survival probability are stored in each layer's estimates, 
+    see populate_rb_survival_statistics
+
+    :param qc: a quantum computer, e.g. QVM or QPU, that runs the experiments
+    :param experiments: a list of StratifiedExperiments; intended for RB or IRB expt_type
+    :param num_shots: the number of shots to run each group of simultaneously ran ExperimentSettings
+    :param run_simultaneous: if True then sequences will be run in parallel for data collection
+        whenever possible; see acquire_stratified_data
+    :return: a list of copies of the input experiments with results for each layer.
+    """
     if isinstance(experiments, StratifiedExperiment):
         experiments = [experiments]
     compile_method = qc.compiler.quil_to_native_quil
@@ -231,8 +287,28 @@ def acquire_rb_data(qc, experiments: Sequence[StratifiedExperiment], num_shots: 
     return results
 
 
-def acquire_unitarity_data(qc, experiments: Sequence[StratifiedExperiment], num_shots: int = 500,
-                           run_simultaneous = True) -> Sequence[StratifiedExperiment]:
+def acquire_unitarity_data(qc: QuantumComputer, experiments: Sequence[StratifiedExperiment],
+                           num_shots: int = 500, run_simultaneous = True) \
+        -> Sequence[StratifiedExperiment]:
+    """
+    Runs the StratifiedExperiment on the given qc and stores the results in a copy of each
+    experiment with results populated for each layer.
+
+    The qc objects compilation method is temporarily replaced with basic_compile so that the rb
+    sequences are not compiled down to the identity within the call to measure_observables. By
+    default all of the compatible ExperimentSettings in the list of experiments are run in
+    parallel (whenever possible) num_shots many times.
+    
+    Estimates for the shifted purity are stored in each layer's estimates, 
+    see populate_purity_statistics
+
+    :param qc: a quantum computer, e.g. QVM or QPU, that runs the experiments
+    :param experiments: a list of StratifiedExperiments; intended for RB or IRB expt_type
+    :param num_shots: the number of shots to run each group of simultaneously ran ExperimentSettings
+    :param run_simultaneous: if True then sequences will be run in parallel for data collection
+        whenever possible; see acquire_stratified_data
+    :return: a list of copies of the input experiments with results for each layer.
+    """
     if isinstance(experiments, StratifiedExperiment):
         experiments = [experiments]
     compile_method = qc.compiler.quil_to_native_quil
@@ -240,7 +316,7 @@ def acquire_unitarity_data(qc, experiments: Sequence[StratifiedExperiment], num_
     results = acquire_stratified_data(qc, experiments, num_shots, run_simultaneous)
     qc.compiler.quil_to_native_quil = compile_method  # restore the original compilation
     for expt in results:
-        populate_unitarity_purity_statistics(expt) # populate with relevant estimates
+        populate_purity_statistics(expt) # populate with relevant estimates
 
     return results
 
@@ -262,7 +338,7 @@ def standard_rb_guess(model: Model, y):
     """
     Guess the parameters for a fit.
 
-    :param model: an lmfit model to make guess parameters for. This should probably be an
+    :param model: a lmfit model to make guess parameters for. This should probably be an
         instance of ``Model(standard_rb)``.
     :param y: Dependent variable
     :return: Lmfit parameters object appropriate for passing to ``Model.fit()``.
@@ -280,14 +356,14 @@ def _check_data(x, y, weights):
         raise ValueError("Lengths of x and weights arrays must be equal is weights is not None.")
 
 
-def fit_standard_rb(depths, survivals, weights=None):
+def fit_standard_rb(depths, survivals, weights=None) -> Model.ModelResult:
     """
-    Construct and fit an RB curve with appropriate guesses
+    Construct and fit a RB curve with appropriate guesses
 
     :param depths: The clifford circuit depths (independent variable)
     :param survivals: The survival probabilities (dependent variable)
     :param weights: Optional weightings of each point to use when fitting.
-    :return: an lmfit Model
+    :return: a lmfit Model
     """
     _check_data(depths, survivals, weights)
     rb_model = Model(standard_rb)
@@ -295,13 +371,15 @@ def fit_standard_rb(depths, survivals, weights=None):
     return rb_model.fit(survivals, x=depths, params=params, weights=weights)
 
 
-def fit_rb_results(experiment):
+def fit_rb_results(experiment: StratifiedExperiment) -> Model.ModelResult:
     """
-    Wrapper for plotting the results of a StratifiedExperiment; simply extracts key parameters
+    Wrapper for fitting the results of a StratifiedExperiment; simply extracts key parameters
     and passes on to the standard fit.
 
-    :param experiment:
-    :return:
+    The estimate for the rb decay can be found in the returned fit.params['decay']
+
+    :param experiment: the RB StratifiedExperiment with results on which to fit a RB decay.
+    :return: a ModelResult fit with estimates of the Model parameters, including the rb 'decay'
     """
     depths = []
     survivals = []
@@ -367,17 +445,17 @@ def unitarity_fn(x, baseline, amplitude, unitarity):
     :param numpy.ndarray x: Independent variable
     :param float baseline: Offset value
     :param float amplitude: Amplitude of exponential decay
-    :param float decay: Decay parameter
+    :param float unitarity: Decay parameter
     :return: Fit function
     """
     return baseline + amplitude * unitarity ** (x-1)
 
-#TODO: confirm validity or update guesses
+
 def unitarity_guess(model: Model, y):
     """
     Guess the parameters for a fit.
 
-    :param model: an lmfit model to make guess parameters for. This should probably be an
+    :param model: a lmfit model to make guess parameters for. This should probably be an
         instance of ``Model(unitarity)``.
     :param y: Dependent variable
     :return: Lmfit parameters object appropriate for passing to ``Model.fit()``.
@@ -388,13 +466,14 @@ def unitarity_guess(model: Model, y):
     return model.make_params(baseline=b_guess, amplitude=a_guess, unitarity=d_guess)
 
 
-def fit_unitarity(depths, shifted_purities, weights=None):
-    """Construct and fit an RB curve with appropriate guesses
+def fit_unitarity(depths, shifted_purities, weights=None) -> Model.ModelResult:
+    """
+    Construct and fit a URB curve with appropriate guesses
 
     :param depths: The clifford circuit depths (independent variable)
     :param shifted_purities: The shifted purities (dependent variable)
     :param weights: Optional weightings of each point to use when fitting.
-    :return: an lmfit Model
+    :return: a lmfit Model
     """
     _check_data(depths, shifted_purities, weights)
     unitarity_model = Model(unitarity_fn)
@@ -402,7 +481,16 @@ def fit_unitarity(depths, shifted_purities, weights=None):
     return unitarity_model.fit(shifted_purities, x=depths, params=params, weights=weights)
 
 
-def fit_unitarity_results(experiment):
+def fit_unitarity_results(experiment) -> Model.ModelResult:
+    """
+    Wrapper for fitting the results of a StratifiedExperiment; simply extracts key parameters
+    and passes on to fit_unitarity.
+
+    The estimate for the unitarity decay can be found in the returned fit.params['unitarity']
+
+    :param experiment: the URB StratifiedExperiment with results on which to fit a URB decay.
+    :return: a ModelResult fit with estimates of the Model parameters, including the unitarity
+    """
     depths = []
     shifted_purities = []
     weights = []
@@ -413,7 +501,7 @@ def fit_unitarity_results(experiment):
     return fit_unitarity(depths, shifted_purities, np.asarray(weights))
 
 
-def unitarity_to_rb_decay(unitarity, dimension):
+def unitarity_to_rb_decay(unitarity, dimension) -> float:
     """
     This allows comparison of measured unitarity and RB decays. This function provides an upper bound on the
     RB decay given the input unitarity, where the upperbound is saturated when no unitary errors are present,
