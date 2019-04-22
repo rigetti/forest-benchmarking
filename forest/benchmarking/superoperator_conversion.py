@@ -65,8 +65,7 @@ def unvec(vector: np.ndarray, shape: Tuple[int, int] = None) -> np.ndarray:
     """
     vector = np.asarray(vector)
     if shape is None:
-        assert vector.shape[0] >= vector.shape[1]  # check for col vector
-        dim = int(np.sqrt(vector.shape[0]))  # for col vector, .shape[0] = .size
+        dim = int(np.sqrt(vector.size))
         shape = dim, dim
     matrix = vector.reshape(*shape).T
     return matrix
