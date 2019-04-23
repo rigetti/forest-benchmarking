@@ -84,7 +84,7 @@ class StratifiedExperiment:
     """
     layers: Tuple[Layer]
     qubits: Tuple[int]
-    expt_type: str
+    expt_type: str = None
     estimates: Dict[str, Tuple[float, float]] = None
     metadata: Dict[str, Any] = None
 
