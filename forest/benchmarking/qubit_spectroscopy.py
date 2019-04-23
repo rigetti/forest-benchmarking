@@ -125,7 +125,13 @@ def fit_t1_results(experiment: StratifiedExperiment, param_guesses: tuple = None
     for layer in experiment.layers:
         x_data.append(layer.depth * USEC_PER_DEPTH) # times in u-seconds
         y_data.append(layer.estimates["Fraction One"][0])
-        weights.append(1/layer.estimates["Fraction One"][1])
+        err = layer.estimates["Fraction One"][1]
+        # TODO: improve handling of inf weights
+        if err == 0:
+            weight = 100
+        else:
+           weight = 1/layer.estimates["Fraction One"][1]
+        weights.append(weight)
 
     if param_guesses is None:  # make some standard reasonable guess
         param_guesses = (1.0, 15, 0.0)
@@ -271,7 +277,13 @@ def fit_t2_results(experiment: StratifiedExperiment, param_guesses: tuple = None
     for layer in experiment.layers:
         x_data.append(layer.depth * USEC_PER_DEPTH) # times in u-seconds
         y_data.append(layer.estimates["Fraction One"][0])
-        weights.append(1/layer.estimates["Fraction One"][1])
+        err = layer.estimates["Fraction One"][1]
+        # TODO: improve handling of inf weights
+        if err == 0:
+            weight = 100
+        else:
+           weight = 1/layer.estimates["Fraction One"][1]
+        weights.append(weight)
 
     detuning = experiment.metadata['Detuning']
 
@@ -409,7 +421,13 @@ def fit_rabi_results(experiment: StratifiedExperiment, param_guesses: tuple = No
     for layer in experiment.layers:
         x_data.append(layer.continuous_param) # control angles in radians
         y_data.append(layer.estimates["Fraction One"][0])
-        weights.append(1/layer.estimates["Fraction One"][1])
+        err = layer.estimates["Fraction One"][1]
+        # TODO: improve handling of inf weights
+        if err == 0:
+            weight = 100
+        else:
+           weight = 1/layer.estimates["Fraction One"][1]
+        weights.append(weight)
 
     if param_guesses is None:  # make some standard reasonable guess
         param_guesses = (.5, 0, .5, 1.)
@@ -538,7 +556,13 @@ def fit_cz_phase_ramsey_results(experiment: StratifiedExperiment, param_guesses:
     for layer in experiment.layers:
         x_data.append(layer.continuous_param) # control angles in radians
         y_data.append(layer.estimates["Fraction One"][0])
-        weights.append(1/layer.estimates["Fraction One"][1])
+        err = layer.estimates["Fraction One"][1]
+        # TODO: improve handling of inf weights
+        if err == 0:
+            weight = 100
+        else:
+           weight = 1/layer.estimates["Fraction One"][1]
+        weights.append(weight)
 
     if param_guesses is None:  # make some standard reasonable guess
         param_guesses = (.5, 0, .5, 1.)
