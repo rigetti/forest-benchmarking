@@ -30,9 +30,9 @@ from typing import Sequence, Tuple, List
 import numpy as np
 from forest.benchmarking.utils import n_qubit_pauli_basis
 
-#===================================================================================================
+# ==================================================================================================
 # Superoperator conversion tools
-#===================================================================================================
+# ==================================================================================================
 
 def vec(matrix: np.ndarray) -> np.ndarray:
     """
@@ -369,9 +369,9 @@ def computational2pauli_basis_matrix(dim) -> np.ndarray:
     return pauli2computational_basis_matrix(dim).conj().T / dim
 
 
-#===================================================================================================
+# ==================================================================================================
 # Channel and Superoperator approximation tools
-#===================================================================================================
+# ==================================================================================================
 def pauli_twirl_chi_matrix(chi_matrix: np.ndarray) -> np.ndarray:
     r"""
     Implements a Pauli twirl of a chi matrix (aka a process matrix).
@@ -394,3 +394,38 @@ def pauli_twirl_chi_matrix(chi_matrix: np.ndarray) -> np.ndarray:
 
 
 #TODO Honest approximations for Channels that act on one or MORE qubits.
+
+# ==================================================================================================
+# Apply channel
+# ==================================================================================================
+def apply_kraus_ops_2_state(kraus_ops: Sequence[np.ndarray], state: np.ndarray) -> np.ndarray:
+    r"""
+    Apply a quantum channel, specified by Kraus operators, to state. The Kraus operators need not be
+    square.
+
+    :param kraus_ops: A list or tuple of N Kraus operators, each operator is M by dim ndarray
+    :param state_matrix: A dim by dim ndarray
+    :return: M by M ndarray
+    """
+    if isinstance(kraus_ops, np.ndarray):  # handle input of single kraus op
+        if len(kraus_ops[0].shape) < 2:  # first elem is not a matrix
+            kraus_ops = [kraus_ops]
+
+    dim,_ = state.shape
+    rows,cols = kraus_ops[0].shape
+
+    if rows==cols:
+        # square Kraus operators
+        if dim != rows:
+            raise ValueError("Dimensions of state and Kraus operator are incompatible")
+
+    if rows!=cols:
+        # Non-square Kraus operators
+        if dim != cols:
+            raise ValueError("Dimensions of state and Kraus operator are incompatible")
+
+    new_state = np.zeros((rows,rows))
+    for M in kraus_ops:
+        new_state += M @ state @ np.transpose(M.conj())
+
+    return new_state

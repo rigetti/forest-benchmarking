@@ -285,4 +285,21 @@ def test_pauli_twirl_of_amp_damp():
     num_chi = pauli_twirl_chi_matrix(amplitude_damping_chi(p))
     assert np.allclose(ana_chi, num_chi)
 
+# ==================================================================================================
+# Test apply channel
+# ==================================================================================================
+def test_apply_kraus_ops_2_state():
+    AD_kraus = amplitude_damping_kraus(0.1)
+    assert np.allclose(rho_out,apply_kraus_ops_2_state(AD_kraus,ONE_STATE))
 
+def test_apply_non_square_kraus_ops_2_state():
+    Id = np.asarray([[1, 0], [0, 1]])
+    bra_zero = np.asarray([[1], [0]])
+    bra_one = np.asarray([[0], [1]])
+    state_one = np.kron(Id/2,ONE_STATE)
+    state_zero = np.kron(Id / 2, ZERO_STATE)
+    Kraus1 = np.kron(Id, bra_one.transpose())
+    Kraus0 = np.kron(Id, bra_zero.transpose())
+    assert np.allclose(apply_kraus_ops_2_state(Kraus0,state_zero),Id/2)
+    assert np.allclose(apply_kraus_ops_2_state(Kraus1, state_one), Id / 2)
+    assert np.allclose(apply_kraus_ops_2_state(Kraus0, state_one), 0)
