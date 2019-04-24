@@ -55,7 +55,7 @@ def test_1q_general_pauli_noise(qvm, benchmarker):
     observed_decay = fit.params['decay'].value
     decay_error = fit.params['decay'].stderr
 
-    assert (np.abs(expected_decay - observed_decay) < 2 * decay_error)
+    assert (np.abs(expected_decay - observed_decay) < 2.5 * decay_error)
 
 
 def test_2q_general_pauli_noise(qvm, benchmarker):
@@ -63,8 +63,8 @@ def test_2q_general_pauli_noise(qvm, benchmarker):
     expected_decay = .8
     probs = [expected_decay + .2 / 4, .06] + [0] * 12 + [.04, .05]
 
-    num_sequences_per_depth = 5
-    num_shots = 25
+    num_sequences_per_depth = 10
+    num_shots = 30
     depths = [2, 10, 12, 25]
     qubits = (0, 1)
 
@@ -77,7 +77,7 @@ def test_2q_general_pauli_noise(qvm, benchmarker):
     observed_decay = fit.params['decay'].value
     decay_error = fit.params['decay'].stderr
 
-    assert (np.abs(expected_decay - observed_decay) < 2 * decay_error)
+    assert (np.abs(expected_decay - observed_decay) < 2.5 * decay_error)
 
 
 def test_survival_statistics():
@@ -224,7 +224,7 @@ def test_unitarity(qvm, benchmarker):
     # in the case of depolarizing noise with parameter p, observed unitarity should correspond
     # via the upper bound
     observed_p = unitarity_to_rb_decay(observed_unitarity, 2**len(qubits))
-    tol = abs(observed_p - unitarity_to_rb_decay(observed_unitarity - 2 * unitarity_error,
+    tol = abs(observed_p - unitarity_to_rb_decay(observed_unitarity - 2.5 * unitarity_error,
                                                  2 ** len(qubits)))
     # TODO: properly incorporate unitarity error into tol
     np.testing.assert_allclose(expected_p, observed_p, atol=tol)

@@ -1,4 +1,4 @@
-from typing import Tuple, Sequence, Dict, Any
+from typing import Tuple, Sequence, Dict, Any, List
 import itertools
 from copy import deepcopy
 import numpy as np
@@ -114,7 +114,8 @@ def _group_allowed_types(expts: Sequence[StratifiedExperiment], allowed_parallel
     return parallelizable_groups
 
 
-def _group_by_depth(experiment_groups: Sequence[Sequence[StratifiedExperiment]]):
+def _group_by_depth(experiment_groups: Sequence[Sequence[StratifiedExperiment]]) \
+        -> List[List[List[Layer]]]:
     depth_groups = {}
     for expt_group in experiment_groups:
         # first go through all of the experiments in allowed type groups and make subgroups by depth
@@ -136,7 +137,7 @@ def _group_by_depth(experiment_groups: Sequence[Sequence[StratifiedExperiment]])
     return [group for group in depth_groups.values()]
 
 
-def _get_simultaneous_groups(layers: Sequence[Layer]):
+def _get_simultaneous_groups(layers: Sequence[Layer]) -> List[List[Layer]]:
     #TODO: consider e.g. running two short sequences serially in parallel with one longer sequence
     #TODO: any reason this should or shouldn't be randomized?
     g = nx.Graph()
@@ -162,7 +163,8 @@ def _get_simultaneous_groups(layers: Sequence[Layer]):
     return [[layers[idx] for idx in clique] for clique in cliques]
 
 
-def _partition_settings(layers: Sequence[Layer]):
+def _partition_settings(layers: Sequence[Layer]) \
+        -> Tuple[List[List[ExperimentSetting]], List[List[Layer]]]:
     # assume layer sequences act on separate qubits or else are equivalent.
     layer_map = {}
     settings_pool = []
