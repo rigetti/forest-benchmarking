@@ -1,4 +1,5 @@
-"""A module for converting between different representations of superoperators.
+"""A module containing tools for working with superoperators. Eg. converting between different
+representations of superoperators.
 
 We have arbitrarily decided to use a column stacking convention.
 
@@ -29,6 +30,9 @@ from typing import Sequence, Tuple, List
 import numpy as np
 from forest.benchmarking.utils import n_qubit_pauli_basis
 
+#===================================================================================================
+# Superoperator conversion tools
+#===================================================================================================
 
 def vec(matrix: np.ndarray) -> np.ndarray:
     """
@@ -363,3 +367,30 @@ def computational2pauli_basis_matrix(dim) -> np.ndarray:
     :return: A dim**2 by dim**2 basis transform matrix
     """
     return pauli2computational_basis_matrix(dim).conj().T / dim
+
+
+#===================================================================================================
+# Channel and Superoperator approximation tools
+#===================================================================================================
+def pauli_twirl_chi_matrix(chi_matrix: np.ndarray) -> np.ndarray:
+    r"""
+    Implements a Pauli twirl of a chi matrix (aka a process matrix).
+
+    See the folloiwng reference for more details
+
+    [SPICC] Scalable protocol for identification of correctable codes
+            Silva et al.,
+            PRA 78, 012347 2008
+            http://dx.doi.org/10.1103/PhysRevA.78.012347
+            https://arxiv.org/abs/0710.1900
+
+    Note: Pauli twirling a quantum channel can give rise to a channel that is less noisy; use with
+    care.
+
+    :param chi_matrix:  a dim**2 by dim**2 chi or process matrix
+    :return: dim**2 by dim**2 chi or process matrix
+    """
+    return np.diag(chi_matrix.diagonal())
+
+
+#TODO Honest approximations for Channels that act on one or MORE qubits.
