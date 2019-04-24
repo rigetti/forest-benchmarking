@@ -303,3 +303,7 @@ def test_apply_non_square_kraus_ops_2_state():
     assert np.allclose(apply_kraus_ops_2_state(Kraus0,state_zero),Id/2)
     assert np.allclose(apply_kraus_ops_2_state(Kraus1, state_one), Id / 2)
     assert np.allclose(apply_kraus_ops_2_state(Kraus0, state_one), 0)
+
+def test_apply_choi_matrix_2_state():
+    choi = amplitude_damping_choi(0.1)
+    assert np.allclose(rho_out, apply_choi_matrix_2_state(choi, ONE_STATE))
