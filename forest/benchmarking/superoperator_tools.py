@@ -28,7 +28,7 @@ Further references include:
 """
 from typing import Sequence, Tuple, List
 import numpy as np
-from forest.benchmarking.utils import n_qubit_pauli_basis
+from forest.benchmarking.utils import n_qubit_pauli_basis, partial_trace
 
 # ==================================================================================================
 # Superoperator conversion tools
@@ -429,3 +429,26 @@ def apply_kraus_ops_2_state(kraus_ops: Sequence[np.ndarray], state: np.ndarray) 
         new_state += M @ state @ np.transpose(M.conj())
 
     return new_state
+
+def apply_choi_matrix_2_state(choi: np.ndarray, state: np.ndarray) -> np.ndarray:
+    r"""
+    Apply a quantum channel, specified by a Choi matrix (using the column stacking convention),
+    to a state.
+
+    The Choi matrix is a dim**2 by dim**2 matrix and the state rho is a dim by dim matrix. The
+    output state is
+
+    rho_{out} = Tr_{A}[(rho^T \otimes Id) Choi_matrix ],
+
+    where Tr_{A} is the partial trace over hilbert space H_A with respect to the tensor product
+    H_A \otimes H_B, and T denotes transposition.
+
+
+    :param choi: a dim**2 by dim**2 matrix
+    :return: a dim by dim matrix.
+    """
+    dim = int(np.sqrt(np.asarray(choi).shape[0]))
+    dims = [dim, dim]
+    Id = np.identity(dim)
+    tot_matrix = np.kron(state.transpose(),Id) @ choi
+    return partial_trace(tot_matrix, [1], dims)
