@@ -452,3 +452,20 @@ def apply_choi_matrix_2_state(choi: np.ndarray, state: np.ndarray) -> np.ndarray
     Id = np.identity(dim)
     tot_matrix = np.kron(state.transpose(),Id) @ choi
     return partial_trace(tot_matrix, [1], dims)
+
+def apply_lioville_matrix_2_state(superoperator: np.ndarray, state: np.ndarray) -> np.ndarray:
+    r"""
+    Apply a quantum channel, specified by a superoperator aka the Lioville or Pauli-Lioville
+    representation, to a state by matrix multiplication.
+
+    Note: you must ensure the state and superoperator are represented in the same basis.
+
+    :param choi: a dim**2 by dim**2 matrix.
+    :return: a dim by dim matrix.
+    """
+    dim = int(np.sqrt(np.asarray(superoperator).shape[0]))
+    rows, cols = state.shape
+
+    if dim != cols:
+        raise ValueError("Dimensions of the vectorized state and superoperator are incompatible")
+    return superoperator*state
