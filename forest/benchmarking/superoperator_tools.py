@@ -105,6 +105,11 @@ def kraus2superop(kraus_ops: Sequence[np.ndarray]) -> np.ndarray:
     where A^* is the complex conjugate of a matrix A, A^T is the transpose,
     and A^\dagger is the complex conjugate and transpose.
 
+    Note: This function can also convert non-square Kraus operators to a superoperator,
+    these frequently arise in quantum measurement theory and quantum error correction. In that
+    situation consider a single Kraus operator that is M by N then the superoperator will be a
+    M**2 by N**2 matrix.
+
     :param kraus_ops: A tuple of N Kraus operators
     :return: Returns a dim**2 by dim**2 matrix.
     """
@@ -112,8 +117,17 @@ def kraus2superop(kraus_ops: Sequence[np.ndarray]) -> np.ndarray:
         if len(kraus_ops[0].shape) < 2:  # first elem is not a matrix
             kraus_ops = [kraus_ops]
 
-    dim_squared = np.asarray(kraus_ops[0]).size
-    superop = np.zeros((dim_squared, dim_squared), dtype=complex)
+    rows, cols = np.asarray(kraus_ops[0]).shape
+
+    # Standard case of square Kraus operators
+    if rows==cols:
+        dim_squared = np.asarray(kraus_ops[0]).size
+        superop = np.zeros((dim_squared, dim_squared), dtype=complex)
+
+    # This deals with the case when you want to represent a partial projection e.g. a single
+    # measurement operator M_i = Id \otimes <i| for i \in {0,1}
+    if rows!=cols:
+        superop = np.zeros((rows**2, cols**2), dtype=complex)
 
     for op in kraus_ops:
         superop += np.kron(np.asarray(op).conj(), op)
