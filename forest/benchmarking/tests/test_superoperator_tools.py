@@ -1,7 +1,7 @@
 import numpy as np
 from forest.benchmarking.utils import *
 from forest.benchmarking.superoperator_tools import *
-
+import pytest
 # Test philosophy:
 # Using the by hand calculations found in the docs we check conversion
 # between one qubit channels with one Kraus operator (Hadamard) and two
@@ -307,3 +307,14 @@ def test_apply_non_square_kraus_ops_2_state():
 def test_apply_choi_matrix_2_state():
     choi = amplitude_damping_choi(0.1)
     assert np.allclose(rho_out, apply_choi_matrix_2_state(choi, ONE_STATE))
+
+
+def test_apply_lioville_matrix_2_state():
+    super = amplitude_damping_super(0.1)
+    try:
+            apply_lioville_matrix_2_state(super, ONE_STATE)
+    except ValueError as e:
+        print(e)
+        assert str(e) == "Dimensions of the vectorized state and superoperator are incompatible"
+    rho_out_s = apply_lioville_matrix_2_state(super, vec(ONE_STATE))
+    assert np.allclose(vec(rho_out), rho_out_s)

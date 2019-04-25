@@ -466,6 +466,6 @@ def apply_lioville_matrix_2_state(superoperator: np.ndarray, state: np.ndarray) 
     dim = int(np.sqrt(np.asarray(superoperator).shape[0]))
     rows, cols = state.shape
 
-    if dim != cols:
+    if dim**2 != rows:
         raise ValueError("Dimensions of the vectorized state and superoperator are incompatible")
-    return superoperator*state
+    return superoperator@state
