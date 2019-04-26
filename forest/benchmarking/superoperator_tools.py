@@ -28,6 +28,8 @@ Further references include:
 from typing import Sequence, Tuple, List
 import numpy as np
 from forest.benchmarking.utils import n_qubit_pauli_basis
+from forest.benchmarking.utils import partial_trace
+from numpy import linalg
 
 
 def vec(matrix: np.ndarray) -> np.ndarray:
@@ -363,3 +365,78 @@ def computational2pauli_basis_matrix(dim) -> np.ndarray:
     :return: A dim**2 by dim**2 basis transform matrix
     """
     return pauli2computational_basis_matrix(dim).conj().T / dim
+
+
+# ==================================================================================================
+# Check physicality of Channels
+# ==================================================================================================
+def is_hermitian_preserving(choi: np.ndarray, rtolu: float=1e-05, atolu: float=1e-08,) -> bool:
+    '''
+    Checks if  a quantum process, specified by a Choi matrix, is hermitian-preserving.
+
+    :param choi: a dim**2 by dim**2 Choi matrix
+    :param rtolu: The relative tolerance parameter in np.allclose
+    :param atolu: The absolute tolerance parameter in np.allclose
+    :return: Returns True if the quantum channel is trace preserving with the given tolerance;
+    False otherwise.
+    '''
+    # Equation 3.31 of [GRAPTN]
+    if np.allclose(choi, np.transpose(choi.conj()), rtol=rtolu, atol=atolu):
+        herm_pres = True
+    else:
+        herm_pres = False
+    return herm_pres
+
+
+def is_trace_preserving(choi: np.ndarray, rtolu: float=1e-05, atolu: float=1e-08,) -> bool:
+    '''
+    Checks if  a quantum process, specified by a Choi matrix, is trace-preserving.
+
+    :param choi: A dim**2 by dim**2 Choi matrix
+    :param rtolu: The relative tolerance parameter in np.allclose
+    :param atolu: The absolute tolerance parameter in np.allclose
+    :return: Returns True if the quantum channel is trace-preserving with the given tolerance;
+    False otherwise.
+    '''
+    rows, cols = choi.shape
+    dim = int(np.sqrt(rows))
+    # tensor product of hilbert space H_0 \otimes H_1. We want to "keep" H_0 and trace over H_1
+    keep = [0]
+    possibly_Id = partial_trace(choi, keep, [dim,dim])
+    # Equation 3.33 of [GRAPTN]
+    if np.allclose(possibly_Id, np.identity(dim), rtol=rtolu, atol=atolu):
+        trace_pres = True
+    else:
+        trace_pres = False
+    return trace_pres
+
+
+def is_completely_positive(choi: np.ndarray, limit: float=1e-09) -> bool:
+    '''
+    Checks if  a quantum process, specified by a Choi matrix, is completely positive.
+
+    :param choi: A dim**2 by dim**2 Choi matrix
+    :param limit: A tolerance parameter, all eigenvalues must be greater than -|limit|.
+    :return: Returns True if the quantum channel is completely positive with the given tolerance;
+    False otherwise.
+    '''
+    limit = abs(limit)
+    evals, evecs = linalg.eig(choi)
+    # Equation 3.35 of [GRAPTN]
+    is_cp = all(x >= -limit for x in evals)
+    return is_cp
+
+def is_unital(choi: np.ndarray, limit: float=1e-09) -> bool:
+    '''
+    Checks if  a quantum process, specified by a Choi matrix, is unital.
+
+    :param choi: A dim**2 by dim**2 choi matrix
+    :param limit: A tolerance parameter, all eigenvalues must be greater than -|limit|.
+    :return: Returns True if the quantum channel is unital with the given tolerance; False
+    otherwise.
+    '''
+    limit = abs(limit)
+    evals, evecs = linalg.eig(choi)
+    # Equation 3.35 of [GRAPTN]
+    is_unital = all(x >= -limit for x in evals)
+    return is_unital
