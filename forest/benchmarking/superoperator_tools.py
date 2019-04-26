@@ -426,17 +426,39 @@ def is_completely_positive(choi: np.ndarray, limit: float=1e-09) -> bool:
     is_cp = all(x >= -limit for x in evals)
     return is_cp
 
-def is_unital(choi: np.ndarray, limit: float=1e-09) -> bool:
+
+def is_unital(choi: np.ndarray, rtolu: float=1e-05, atolu: float=1e-08,) -> bool:
     '''
     Checks if  a quantum process, specified by a Choi matrix, is unital.
 
-    :param choi: A dim**2 by dim**2 choi matrix
-    :param limit: A tolerance parameter, all eigenvalues must be greater than -|limit|.
+    :param choi: A dim**2 by dim**2 Choi matrix
+    :param rtolu: The relative tolerance parameter in np.allclose
+    :param atolu: The absolute tolerance parameter in np.allclose
     :return: Returns True if the quantum channel is unital with the given tolerance; False
     otherwise.
     '''
-    limit = abs(limit)
-    evals, evecs = linalg.eig(choi)
-    # Equation 3.35 of [GRAPTN]
-    is_unital = all(x >= -limit for x in evals)
-    return is_unital
+    rows, cols = choi.shape
+    dim = int(np.sqrt(rows))
+    possibly_Id = apply_choi_matrix_2_state(choi, np.identity(dim))
+    if np.allclose(possibly_Id, np.identity(dim), rtol=rtolu, atol=atolu):
+        unital = True
+    else:
+        unital = False
+    return unital
+
+
+def is_unitary(choi: np.ndarray, limit: float=1e-09) -> bool:
+    '''
+    Checks if  a quantum process, specified by a Choi matrix, is unitary.
+
+    :param choi: A dim**2 by dim**2 Choi matrix
+    :param limit: A tolerance parameter to discard Kraus operators with small norm.
+    :return: Returns True if the quantum channel is unitary with the given tolerance; False
+    otherwise.
+    '''
+    kraus_ops = choi2kraus(choi, tol = limit)
+    if len(kraus_ops) == 1:
+        unitary = True
+    else:
+        unitary = False
+    return unitary
