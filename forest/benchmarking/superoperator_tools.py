@@ -400,35 +400,30 @@ def pauli_twirl_chi_matrix(chi_matrix: np.ndarray) -> np.ndarray:
 # ==================================================================================================
 def apply_kraus_ops_2_state(kraus_ops: Sequence[np.ndarray], state: np.ndarray) -> np.ndarray:
     r"""
-    Apply a quantum channel, specified by Kraus operators, to state. The Kraus operators need not be
-    square.
+    Apply a quantum channel, specified by Kraus operators, to state.
+
+    The Kraus operators need not be square.
 
     :param kraus_ops: A list or tuple of N Kraus operators, each operator is M by dim ndarray
-    :param state_matrix: A dim by dim ndarray
-    :return: M by M ndarray
+    :param state: A dim by dim ndarray which is the density matrix for the state
+    :return: M by M ndarray which is the density matrix for the state after the action of kraus_ops
     """
     if isinstance(kraus_ops, np.ndarray):  # handle input of single kraus op
         if len(kraus_ops[0].shape) < 2:  # first elem is not a matrix
             kraus_ops = [kraus_ops]
 
-    dim,_ = state.shape
-    rows,cols = kraus_ops[0].shape
+    dim, _ = state.shape
+    rows, cols = kraus_ops[0].shape
 
-    if rows==cols:
-        # square Kraus operators
-        if dim != rows:
-            raise ValueError("Dimensions of state and Kraus operator are incompatible")
+    if dim != cols:
+        raise ValueError("Dimensions of state and Kraus operator are incompatible")
 
-    if rows!=cols:
-        # Non-square Kraus operators
-        if dim != cols:
-            raise ValueError("Dimensions of state and Kraus operator are incompatible")
-
-    new_state = np.zeros((rows,rows))
+    new_state = np.zeros((rows, rows))
     for M in kraus_ops:
         new_state += M @ state @ np.transpose(M.conj())
 
     return new_state
+
 
 def apply_choi_matrix_2_state(choi: np.ndarray, state: np.ndarray) -> np.ndarray:
     r"""
@@ -445,13 +440,14 @@ def apply_choi_matrix_2_state(choi: np.ndarray, state: np.ndarray) -> np.ndarray
 
 
     :param choi: a dim**2 by dim**2 matrix
+    :param state: A dim by dim ndarray which is the density matrix for the state
     :return: a dim by dim matrix.
     """
     dim = int(np.sqrt(np.asarray(choi).shape[0]))
     dims = [dim, dim]
-    Id = np.identity(dim)
-    tot_matrix = np.kron(state.transpose(),Id) @ choi
+    tot_matrix = np.kron(state.transpose(), np.identity(dim)) @ choi
     return partial_trace(tot_matrix, [1], dims)
+
 
 def apply_lioville_matrix_2_state(superoperator: np.ndarray, state: np.ndarray) -> np.ndarray:
     r"""
@@ -460,12 +456,14 @@ def apply_lioville_matrix_2_state(superoperator: np.ndarray, state: np.ndarray) 
 
     Note: you must ensure the state and superoperator are represented in the same basis.
 
-    :param choi: a dim**2 by dim**2 matrix.
-    :return: a dim by dim matrix.
+    :param superoperator: a dim**2 by dim**2 matrix.
+    :param state: A dim**2 ndarray which is the vectorized density matrix for the state
+    :return: A dim**2 ndarray which is the vectorized density matrix of state after action of
+        superoperator
     """
     dim = int(np.sqrt(np.asarray(superoperator).shape[0]))
     rows, cols = state.shape
 
     if dim**2 != rows:
         raise ValueError("Dimensions of the vectorized state and superoperator are incompatible")
-    return superoperator@state
+    return superoperator @ state
