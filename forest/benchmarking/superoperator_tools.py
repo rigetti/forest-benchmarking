@@ -119,15 +119,12 @@ def kraus2superop(kraus_ops: Sequence[np.ndarray]) -> np.ndarray:
 
     rows, cols = np.asarray(kraus_ops[0]).shape
 
-    # Standard case of square Kraus operators
-    if rows==cols:
-        dim_squared = np.asarray(kraus_ops[0]).size
-        superop = np.zeros((dim_squared, dim_squared), dtype=complex)
+    # Standard case of square Kraus operators is if rows==cols.
+    # When representing a partial projection, e.g. a single measurement operator
+    # M_i = Id \otimes <i| for i \in {0,1}, rows!=cols.
+    # However the following will work in both cases:
 
-    # This deals with the case when you want to represent a partial projection e.g. a single
-    # measurement operator M_i = Id \otimes <i| for i \in {0,1}
-    if rows!=cols:
-        superop = np.zeros((rows**2, cols**2), dtype=complex)
+    superop = np.zeros((rows**2, cols**2), dtype=complex)
 
     for op in kraus_ops:
         superop += np.kron(np.asarray(op).conj(), op)
