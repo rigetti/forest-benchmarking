@@ -1,6 +1,7 @@
 import numpy as np
-from forest.benchmarking.utils import *
+from pyquil.gate_matrices import X, Z, H, relaxation_operators
 from forest.benchmarking.superoperator_tools import *
+
 
 # Test philosophy:
 # Using the by hand calculations found in the docs we check conversion
@@ -8,89 +9,81 @@ from forest.benchmarking.superoperator_tools import *
 # Kraus operators (the amplitude damping channel). Additionally we check
 # a few two qubit channel conversions to get additional confidence.
 
-# The Amplitude Damping channel (one qubit)
-def amplitude_damping_kraus(p):
-    Ad0 = np.asarray([[1, 0], [0, np.sqrt(1-p)]])
-    Ad1 = np.asarray([[0, np.sqrt(p)], [0, 0]])
-    return [Ad0, Ad1]
 
 def amplitude_damping_chi(p):
-    poly1 = ( 1 + np.sqrt(1-p))**2
-    poly2 = (-1 + np.sqrt(1-p))**2
-    ad_pro = 0.25*np.asarray([[poly1,     0,     0,     p],
-                              [    0,     p, -1j*p,     0],
-                              [    0,  1j*p,     p,     0],
-                              [    p,     0,     0, poly2]])
+    poly1 = (1 + np.sqrt(1 - p)) ** 2
+    poly2 = (-1 + np.sqrt(1 - p)) ** 2
+    ad_pro = 0.25 * np.asarray([[poly1, 0, 0, p],
+                                [0, p, -1j * p, 0],
+                                [0, 1j * p, p, 0],
+                                [p, 0, 0, poly2]])
     return ad_pro
 
+
 def amplitude_damping_pauli(p):
-    poly1 = np.sqrt(1-p)
-    ad_pau = np.asarray([[  1,     0,     0,   0],
-                         [  0, poly1,     0,   0],
-                         [  0,     0, poly1,   0],
-                         [  p,     0,     0, 1-p]])
+    poly1 = np.sqrt(1 - p)
+    ad_pau = np.asarray([[1, 0, 0, 0],
+                         [0, poly1, 0, 0],
+                         [0, 0, poly1, 0],
+                         [p, 0, 0, 1 - p]])
     return ad_pau
 
+
 def amplitude_damping_super(p):
-    poly1 = np.sqrt(1-p)
-    ad_sup = np.asarray([[  1,     0,     0,   p],
-                         [  0, poly1,     0,   0],
-                         [  0,     0, poly1,   0],
-                         [  0,     0,     0, 1-p]])
+    poly1 = np.sqrt(1 - p)
+    ad_sup = np.asarray([[1, 0, 0, p],
+                         [0, poly1, 0, 0],
+                         [0, 0, poly1, 0],
+                         [0, 0, 0, 1 - p]])
     return ad_sup
 
+
 def amplitude_damping_choi(p):
-    poly1 = np.sqrt(1-p)
-    ad_choi = np.asarray([[     1,     0,     0, poly1],
-                          [     0,     0,     0,     0],
-                          [     0,     0,     p,     0],
-                          [ poly1,     0,     0,   1-p]])
+    poly1 = np.sqrt(1 - p)
+    ad_choi = np.asarray([[1, 0, 0, poly1],
+                          [0, 0, 0, 0],
+                          [0, 0, p, 0],
+                          [poly1, 0, 0, 1 - p]])
     return ad_choi
 
-# The Hadamard channel or gate (one qubit)
-
-HADAMARD = (sigma_x + sigma_z) / np.sqrt(2)
-HADKraus = HADAMARD
 
 HADChi = 0.5 * np.asarray([[0, 0, 0, 0],
-                           [ 0,  1,  0,  1],
-                           [ 0,  0,  0,  0],
-                           [ 0,  1,  0,  1]])
+                           [0, 1, 0, 1],
+                           [0, 0, 0, 0],
+                           [0, 1, 0, 1]])
 
-HADPauli = 1.0*np.asarray([[ 1,  0,  0,  0],
-                           [ 0,  0,  0,  1],
-                           [ 0,  0, -1,  0],
-                           [ 0,  1,  0,  0]])
+HADPauli = 1.0 * np.asarray([[1, 0, 0, 0],
+                             [0, 0, 0, 1],
+                             [0, 0, -1, 0],
+                             [0, 1, 0, 0]])
 
-HADSuper = 0.5*np.asarray([[ 1,  1,  1,  1],
-                           [ 1, -1,  1, -1],
-                           [ 1,  1, -1, -1],
-                           [ 1, -1, -1,  1]])
+HADSuper = 0.5 * np.asarray([[1, 1, 1, 1],
+                             [1, -1, 1, -1],
+                             [1, 1, -1, -1],
+                             [1, -1, -1, 1]])
 
-HADChoi = 0.5*np.asarray([[ 1,  1,  1, -1],
-                          [ 1,  1,  1, -1],
-                          [ 1,  1,  1, -1],
-                          [-1, -1, -1,  1]])
-
+HADChoi = 0.5 * np.asarray([[1, 1, 1, -1],
+                            [1, 1, 1, -1],
+                            [1, 1, 1, -1],
+                            [-1, -1, -1, 1]])
 
 # I \otimes Z channel or gate (two qubits)
 two_qubit_paulis = n_qubit_pauli_basis(2)
 IZKraus = two_qubit_paulis.ops_by_label['IZ']
-IZSuper = np.diag([1,-1,1,-1,-1,1,-1,1,1,-1,1,-1,-1,1,-1,1])
-
+IZSuper = np.diag([1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, -1, -1, 1, -1, 1])
 
 # one and zero state as a density matrix
 ONE_STATE = np.asarray([[0, 0], [0, 1]])
 ZERO_STATE = np.asarray([[1, 0], [0, 0]])
 
 # Amplitude damping Kraus operators with p = 0.1
-[Ad0,Ad1] = amplitude_damping_kraus(0.1)
-AdKrausOps = [Ad0, Ad1]
+AdKrausOps = relaxation_operators(.1)
 
-# Use Kraus operators to find out put of channel i.e.
+# Use Kraus operators to find output of channel i.e.
 #    rho_out = A_0 rho A_0^\dag + A_1 rho A_1^\dag.
-rho_out = np.matmul(np.matmul(Ad0, ONE_STATE), Ad0.transpose().conj()) + \
-          np.matmul(np.matmul(Ad1, ONE_STATE), Ad1.transpose().conj())
+rho_out = np.matmul(np.matmul(AdKrausOps[0], ONE_STATE), AdKrausOps[0].transpose().conj()) + \
+          np.matmul(np.matmul(AdKrausOps[1], ONE_STATE), AdKrausOps[1].transpose().conj())
+
 
 def test_vec():
     A = np.asarray([[1, 2], [3, 4]])
@@ -98,51 +91,59 @@ def test_vec():
     np.testing.assert_array_equal(np.array([[1], [3], [2], [4]]), vec(A))
     np.testing.assert_array_equal(np.array([[1], [3], [2], [4], [5], [6]]), vec(B))
 
+
 def test_unvec():
     A = np.asarray([[1, 2], [3, 4]])
     C = np.asarray([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
     np.testing.assert_array_equal(A, unvec(vec(A)))
     np.testing.assert_array_equal(C, unvec(vec(C)))
 
+
 def test_kraus_ops_sum_to_identity():
     # Check kraus ops sum to identity
     p = np.random.rand()
-    [Ay0,Ay1] = amplitude_damping_kraus(p)
-    np.testing.assert_array_almost_equal_nulp(np.matmul(Ay0.transpose().conj(), Ay0)
-                                              + np.matmul(Ay1.transpose().conj(), Ay1), np.eye(2))
+    Ad0, Ad1 = relaxation_operators(p)
+    np.testing.assert_array_almost_equal_nulp(np.matmul(Ad0.transpose().conj(), Ad0)
+                                              + np.matmul(Ad1.transpose().conj(), Ad1), np.eye(2))
+
+
 def test_kraus2chi():
-    assert  np.allclose(HADChi, kraus2chi(HADKraus))
+    assert np.allclose(HADChi, kraus2chi(H))
     p = np.random.rand()
-    AdKraus = amplitude_damping_kraus(p)
+    AdKraus = relaxation_operators(p)
     AdChi = amplitude_damping_chi(p)
     assert np.allclose(AdChi, kraus2chi(AdKraus))
     assert np.allclose(superop2chi(IZSuper), kraus2chi(IZKraus))
 
+
 def test_kraus2pauli_liouville():
     p = np.random.rand()
-    AdKraus = amplitude_damping_kraus(p)
+    AdKraus = relaxation_operators(p)
     AdPauli = amplitude_damping_pauli(p)
-    assert np.allclose(kraus2pauli_liouville(AdKraus),AdPauli)
-    assert np.allclose(kraus2pauli_liouville(HADKraus), HADPauli)
+    assert np.allclose(kraus2pauli_liouville(AdKraus), AdPauli)
+    assert np.allclose(kraus2pauli_liouville(H), HADPauli)
+
 
 def test_kraus2superop():
     p = np.random.rand()
-    AdKraus = amplitude_damping_kraus(p)
+    AdKraus = relaxation_operators(p)
     AdSuper = amplitude_damping_super(p)
-    np.testing.assert_array_almost_equal_nulp(kraus2superop(AdKraus),AdSuper)
+    np.testing.assert_array_almost_equal_nulp(kraus2superop(AdKraus), AdSuper)
     # test application of super operator is the same as application of Kraus ops
     ONE_STATE_VEC = vec(ONE_STATE)
     np.testing.assert_array_almost_equal_nulp(unvec(np.matmul(kraus2superop(AdKrausOps),
                                                               ONE_STATE_VEC)), rho_out)
-    assert np.allclose(kraus2superop(HADKraus), HADSuper)
+    assert np.allclose(kraus2superop(H), HADSuper)
     assert np.allclose(kraus2superop(IZKraus), IZSuper)
+
 
 def test_kraus2choi():
     p = np.random.rand()
-    AdKraus = amplitude_damping_kraus(p)
+    AdKraus = relaxation_operators(p)
     AdChoi = amplitude_damping_choi(p)
-    assert np.allclose(kraus2choi(AdKraus),AdChoi)
-    assert np.allclose(kraus2choi(HADKraus), HADChoi)
+    assert np.allclose(kraus2choi(AdKraus), AdChoi)
+    assert np.allclose(kraus2choi(H), HADChoi)
+
 
 def test_chi2pauli_liouville():
     p = np.random.rand()
@@ -151,15 +152,20 @@ def test_chi2pauli_liouville():
     assert np.allclose(AdPauli, chi2pauli_liouville(AdChi))
     assert np.allclose(HADPauli, chi2pauli_liouville(HADChi))
 
+
 def test_basis_transform_p_to_c():
     xz_pauli_basis = np.zeros((16, 1))
     xz_pauli_basis[7] = [1.]
-    assert np.allclose(unvec(pauli2computational_basis_matrix(4) @ xz_pauli_basis), np.kron(sigma_x, sigma_z))
+    assert np.allclose(unvec(pauli2computational_basis_matrix(4) @ xz_pauli_basis),
+                       np.kron(X, Z))
+
 
 def test_basis_transform_c_to_p():
     xz_pauli_basis = np.zeros((16, 1))
     xz_pauli_basis[7] = [1.]
-    assert np.allclose(computational2pauli_basis_matrix(4) @ vec(np.kron(sigma_x, sigma_z)), xz_pauli_basis)
+    assert np.allclose(computational2pauli_basis_matrix(4) @ vec(np.kron(X, Z)),
+                       xz_pauli_basis)
+
 
 def test_pl_to_choi():
     for i, pauli in enumerate(n_qubit_pauli_basis(2)):
@@ -167,20 +173,21 @@ def test_pl_to_choi():
         choi = kraus2choi(pauli[1])
         assert np.allclose(choi, pauli_liouville2choi(pl))
 
-    pl = kraus2pauli_liouville(HADAMARD)
-    choi = kraus2choi(HADAMARD)
+    pl = kraus2pauli_liouville(H)
+    choi = kraus2choi(H)
     assert np.allclose(choi, pauli_liouville2choi(pl))
+
 
 def test_superop_to_kraus():
     assert np.allclose(superop2kraus(IZSuper), IZKraus)
     p = np.random.rand()
     AdSuper = amplitude_damping_super(p)
-    AdKraus = amplitude_damping_kraus(p)
+    AdKraus = relaxation_operators(p)
     kraus_ops = superop2kraus(AdSuper)
-    print(kraus_ops)
+
     # the order of the Kraus ops matters
     # TODO: fix the sign problem in Kraus operators
-    assert np.allclose([np.abs(kraus_ops[1]),np.abs(kraus_ops[0])],AdKraus)
+    assert np.allclose([np.abs(kraus_ops[1]), np.abs(kraus_ops[0])], AdKraus)
 
 
 def test_superop_to_choi():
@@ -192,29 +199,32 @@ def test_superop_to_choi():
     AdSuper = amplitude_damping_super(p)
     AdChoi = amplitude_damping_choi(p)
     assert np.allclose(AdChoi, superop2choi(AdSuper))
-    superop = kraus2superop(HADKraus)
-    choi = kraus2choi(HADKraus)
+    superop = kraus2superop(H)
+    choi = kraus2choi(H)
     assert np.allclose(choi, superop2choi(superop))
+
 
 def test_superop_to_pl():
     p = np.random.rand()
     AdSuper = amplitude_damping_super(p)
     AdPauli = amplitude_damping_pauli(p)
     assert np.allclose(AdPauli, superop2pauli_liouville(AdSuper))
-    AdKraus = amplitude_damping_kraus(p)
+    AdKraus = relaxation_operators(p)
     superop = kraus2superop(AdKraus)
     pauli = kraus2pauli_liouville(AdKraus)
     assert np.allclose(pauli, superop2pauli_liouville(superop))
+
 
 def test_pauli_liouville_to_superop():
     p = np.random.rand()
     AdSuper = amplitude_damping_super(p)
     AdPauli = amplitude_damping_pauli(p)
     assert np.allclose(AdSuper, pauli_liouville2superop(AdPauli))
-    AdKraus = amplitude_damping_kraus(p)
+    AdKraus = relaxation_operators(p)
     superop = kraus2superop(AdKraus)
     pauli = kraus2pauli_liouville(AdKraus)
     assert np.allclose(superop, pauli_liouville2superop(pauli))
+
 
 def test_choi_to_kraus():
     for i, pauli in enumerate(n_qubit_pauli_basis(2)):
@@ -226,16 +236,18 @@ def test_choi_to_kraus():
     for kraus in choi2kraus(id_choi):
         assert np.allclose(abs(kraus), np.eye(2)) or np.allclose(kraus, np.zeros((2, 2)))
 
+
 def test_choi_to_super():
     p = np.random.rand()
     AdSuper = amplitude_damping_super(p)
     AdChoi = amplitude_damping_choi(p)
     assert np.allclose(AdSuper, choi2superop(AdChoi))
 
+
 def test_choi_pl_bijectivity():
     assert np.allclose(choi2superop(choi2superop(np.eye(4))), np.eye(4))
     assert np.allclose(superop2choi(superop2choi(np.eye(4))), np.eye(4))
-    h_choi = kraus2choi(HADAMARD)
-    h_superop = kraus2superop(HADAMARD)
+    h_choi = kraus2choi(H)
+    h_superop = kraus2superop(H)
     assert np.allclose(choi2superop(choi2superop(h_choi)), h_choi)
     assert np.allclose(superop2choi(superop2choi(h_superop)), h_superop)

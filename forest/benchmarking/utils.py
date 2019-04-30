@@ -12,6 +12,7 @@ import pandas as pd
 from pandas import DataFrame
 
 from pyquil.gates import I, RX, RY, RZ
+from pyquil.gate_matrices import X, Y, Z
 from pyquil.paulis import PauliTerm
 from pyquil.quil import Program
 from pyquil.api import QuantumComputer
@@ -429,11 +430,7 @@ class OperatorBasis(object):
         return "<span[{}]>".format(",".join(self.labels))
 
 
-sigma_x = np.array([[0, 1], [1, 0]])
-sigma_y = np.array([[0, -1.j], [1.j, 0]])
-sigma_z = np.array([[1, 0], [0, -1]])
-
-pauli_label_ops = [('I', np.eye(2)), ('X', sigma_x), ('Y', sigma_y), ('Z', sigma_z)]
+pauli_label_ops = [('I', np.eye(2)), ('X', X), ('Y', Y), ('Z', Z)]
 
 
 def pauli_basis_measurements(qubit):
