@@ -321,39 +321,43 @@ def test_apply_choi_matrix_2_state():
 # Test physicality of Channels
 # ==================================================================================================
 
-def test_is_hermitian_preserving():
+def test_choi_is_hermitian_preserving():
     D = 2
     K = 2
     choi = rand_ops.rand_map_with_BCSZ_dist(D, K)
-    assert is_hermitian_preserving(choi)
+    assert choi_is_hermitian_preserving(choi)
 
-def test_is_trace_preserving():
+def test_choi_is_trace_preserving():
     D = 2
     K = 2
     choi = rand_ops.rand_map_with_BCSZ_dist(D, K)
-    assert is_trace_preserving(choi,rtolu=1e-2)
+    assert choi_is_trace_preserving(choi)
 
-def test_is_completely_positive():
+def test_choi_is_completely_positive():
     D = 2
     K = 2
     choi = rand_ops.rand_map_with_BCSZ_dist(D, K)
-    assert is_completely_positive(choi)
+    assert choi_is_completely_positive(choi)
+    D = 3
+    K = 2
+    choi = rand_ops.rand_map_with_BCSZ_dist(D, K)
+    assert choi_is_completely_positive(choi)
 
-def test_is_unital():
+def test_choi_is_unital():
     px = np.random.rand()
     py = np.random.rand()
     pz = np.random.rand()
     choi = chi2choi(one_q_pauli_channel_chi(px,py,pz))
-    assert is_unital(choi)
-    assert is_unital(HADChoi)
-    assert not is_unital(amplitude_damping_choi(0.1))
+    assert choi_is_unital(choi)
+    assert choi_is_unital(HADChoi)
+    assert not choi_is_unital(amplitude_damping_choi(0.1))
 
-def test_is_unitary():
+def test_choi_is_unitary():
     px = np.random.rand()
     py = np.random.rand()
     pz = np.random.rand()
     choi = chi2choi(one_q_pauli_channel_chi(px,py,pz))
-    assert not is_unitary(choi)
-    assert is_unital(choi)
-    assert is_unitary(HADChoi)
-    assert not is_unitary(amplitude_damping_choi(0.1))
+    assert not choi_is_unitary(choi)
+    assert choi_is_unital(choi)
+    assert choi_is_unitary(HADChoi)
+    assert not choi_is_unitary(amplitude_damping_choi(0.1))

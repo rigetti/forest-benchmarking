@@ -453,7 +453,8 @@ def apply_choi_matrix_2_state(choi: np.ndarray, state: np.ndarray) -> np.ndarray
 # ==================================================================================================
 # Check physicality of Channels
 # ==================================================================================================
-def is_hermitian_preserving(choi: np.ndarray, rtolu: float=1e-05, atolu: float=1e-08,) -> bool:
+def choi_is_hermitian_preserving(choi: np.ndarray, rtolu: float = 1e-05,
+                                 atolu: float = 1e-08, ) -> bool:
     '''
     Checks if  a quantum process, specified by a Choi matrix, is hermitian-preserving.
 
@@ -471,7 +472,7 @@ def is_hermitian_preserving(choi: np.ndarray, rtolu: float=1e-05, atolu: float=1
     return herm_pres
 
 
-def is_trace_preserving(choi: np.ndarray, rtolu: float = 1e-05, atolu: float = 1e-08) -> bool:
+def choi_is_trace_preserving(choi: np.ndarray, rtolu: float = 1e-05, atolu: float = 1e-08) -> bool:
     '''
     Checks if  a quantum process, specified by a Choi matrix, is trace-preserving.
 
@@ -483,13 +484,10 @@ def is_trace_preserving(choi: np.ndarray, rtolu: float = 1e-05, atolu: float = 1
     '''
     rows, cols = choi.shape
     dim = int(np.sqrt(rows))
-    # tensor product of hilbert space H_0 \otimes H_1. We want to "keep" H_0 and trace over H_1
-    keep = [0]
-    #===
-    #choi_tensor = choi.reshape([D, D, D, D])
-    #choi_red = np.trace(choi_tensor, axis1=0, axis2=2)
-    #====
-    possibly_Id = partial_trace(choi, keep, [dim,dim])
+    # tensor product of hilbert space H_0 \otimes H_1.
+    keep = [1]
+    possibly_Id = partial_trace(choi, keep, [dim, dim])
+    print(possibly_Id)
     # Equation 3.33 of [GRAPTN]
     if np.allclose(possibly_Id, np.identity(dim), rtol=rtolu, atol=atolu):
         trace_pres = True
@@ -498,7 +496,7 @@ def is_trace_preserving(choi: np.ndarray, rtolu: float = 1e-05, atolu: float = 1
     return trace_pres
 
 
-def is_completely_positive(choi: np.ndarray, limit: float=1e-09) -> bool:
+def choi_is_completely_positive(choi: np.ndarray, limit: float = 1e-09) -> bool:
     '''
     Checks if  a quantum process, specified by a Choi matrix, is completely positive.
 
@@ -514,7 +512,7 @@ def is_completely_positive(choi: np.ndarray, limit: float=1e-09) -> bool:
     return is_cp
 
 
-def is_unital(choi: np.ndarray, rtolu: float=1e-05, atolu: float=1e-08,) -> bool:
+def choi_is_unital(choi: np.ndarray, rtolu: float = 1e-05, atolu: float = 1e-08, ) -> bool:
     '''
     Checks if  a quantum process, specified by a Choi matrix, is unital.
 
@@ -534,7 +532,7 @@ def is_unital(choi: np.ndarray, rtolu: float=1e-05, atolu: float=1e-08,) -> bool
     return unital
 
 
-def is_unitary(choi: np.ndarray, limit: float=1e-09) -> bool:
+def choi_is_unitary(choi: np.ndarray, limit: float = 1e-09) -> bool:
     '''
     Checks if  a quantum process, specified by a Choi matrix, is unitary.
 
@@ -543,7 +541,7 @@ def is_unitary(choi: np.ndarray, limit: float=1e-09) -> bool:
     :return: Returns True if the quantum channel is unitary with the given tolerance; False
     otherwise.
     '''
-    kraus_ops = choi2kraus(choi, tol = limit)
+    kraus_ops = choi2kraus(choi, tol=limit)
     if len(kraus_ops) == 1:
         unitary = True
     else:
