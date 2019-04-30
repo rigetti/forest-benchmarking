@@ -122,7 +122,7 @@ def _pauli_process_tomo_settings(qubits):
             )
 
 
-def generate_process_tomography_experiment(program: Program, qubits: List[int], in_basis='sic'):
+def generate_process_tomography_experiment(program: Program, qubits: List[int], in_basis='pauli'):
     """
     Generate a (pyQuil) TomographyExperiment containing the experiment settings required to
     characterize a quantum process.
