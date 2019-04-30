@@ -1,6 +1,6 @@
 import numpy as np
 from forest.benchmarking.utils import *
-from forest.benchmarking.superoperator_conversion import *
+from forest.benchmarking.superoperator_tools import *
 
 # Test philosophy:
 # Using the by hand calculations found in the docs we check conversion
