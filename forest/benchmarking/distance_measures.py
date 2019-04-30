@@ -202,8 +202,9 @@ def process_fidelity(pauli_lio0: np.ndarray, pauli_lio1: np.ndarray) -> float:
     return (dim * Fe + 1) / (dim + 1)
 
 
-def diamond_norm(choi0: np.ndarray, choi1: np.ndarray) -> float:
-    """Return the diamond norm between two completely positive
+def diamond_norm_distance(choi0: np.ndarray, choi1: np.ndarray) -> float:
+    """
+    Return the diamond norm distance between two completely positive
     trace-preserving (CPTP) superoperators, represented as Choi matrices.
 
     The calculation uses the simplified semidefinite program of Watrous
