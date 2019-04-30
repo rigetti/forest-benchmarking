@@ -1,7 +1,8 @@
 import numpy as np
 from forest.benchmarking.utils import *
 from forest.benchmarking.superoperator_tools import *
-import pytest
+import forest.benchmarking.random_operators as rand_ops
+
 # Test philosophy:
 # Using the by hand calculations found in the docs we check conversion
 # between one qubit channels with one Kraus operator (Hadamard) and two
@@ -318,3 +319,45 @@ def test_apply_lioville_matrix_2_state():
         assert str(e) == "Dimensions of the vectorized state and superoperator are incompatible"
     rho_out_s = apply_lioville_matrix_2_state(super, vec(ONE_STATE))
     assert np.allclose(vec(rho_out), rho_out_s)
+
+# ==================================================================================================
+# Test physicality of Channels
+# ==================================================================================================
+
+def test_is_hermitian_preserving():
+    D = 2
+    K = 2
+    choi = rand_ops.rand_map_with_BCSZ_dist(D, K)
+    assert is_hermitian_preserving(choi)
+
+def test_is_trace_preserving():
+    D = 2
+    K = 2
+    choi = rand_ops.rand_map_with_BCSZ_dist(D, K)
+    assert is_trace_preserving(choi,rtolu=1e-2)
+
+def test_is_completely_positive():
+    D = 2
+    K = 2
+    choi = rand_ops.rand_map_with_BCSZ_dist(D, K)
+    assert is_completely_positive(choi)
+
+def test_is_unital():
+    px = np.random.rand()
+    py = np.random.rand()
+    pz = np.random.rand()
+    choi = chi2choi(one_q_pauli_channel_chi(px,py,pz))
+    assert is_unital(choi)
+    assert is_unital(HADChoi)
+    assert not is_unital(amplitude_damping_choi(0.1))
+
+def test_is_unitary():
+    px = np.random.rand()
+    py = np.random.rand()
+    pz = np.random.rand()
+    choi = chi2choi(one_q_pauli_channel_chi(px,py,pz))
+    assert not is_unitary(choi)
+    assert is_unital(choi)
+    assert is_unitary(HADChoi)
+    assert not is_unitary(amplitude_damping_choi(0.1))
+
