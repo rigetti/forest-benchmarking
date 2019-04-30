@@ -316,11 +316,3 @@ def test_apply_choi_matrix_2_state():
     assert np.allclose(rho_out, apply_choi_matrix_2_state(choi, ONE_STATE))
 
 
-def test_apply_lioville_matrix_2_state():
-    super = amplitude_damping_super(0.1)
-    try:
-            apply_lioville_matrix_2_state(super, ONE_STATE)
-    except ValueError as e:
-        assert str(e) == "Dimensions of the vectorized state and superoperator are incompatible"
-    rho_out_s = apply_lioville_matrix_2_state(super, vec(ONE_STATE))
-    assert np.allclose(vec(rho_out), rho_out_s)
