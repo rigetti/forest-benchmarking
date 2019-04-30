@@ -267,9 +267,11 @@ def test_choi_pl_bijectivity():
     assert np.allclose(choi2superop(choi2superop(h_choi)), h_choi)
     assert np.allclose(superop2choi(superop2choi(h_superop)), h_superop)
 
-#===================================================================================================
+
+# ===================================================================================================
 # Test channel and superoperator approximation tools
-#===================================================================================================
+# ===================================================================================================
+
 
 def test_pauli_twirl_of_pauli_channel():
     # diagonal channel so should not change anything
@@ -280,6 +282,7 @@ def test_pauli_twirl_of_pauli_channel():
     pauli_twirled_chi_matrix = pauli_twirl_chi_matrix(pauli_chan_chi_matrix)
     assert np.allclose(pauli_chan_chi_matrix, pauli_twirled_chi_matrix)
 
+
 def test_pauli_twirl_of_amp_damp():
     p = np.random.rand()
     ana_chi = analytical_pauli_twirl_of_AD_chi(p)
@@ -289,36 +292,30 @@ def test_pauli_twirl_of_amp_damp():
 # ==================================================================================================
 # Test apply channel
 # ==================================================================================================
+
+
 def test_apply_kraus_ops_2_state():
     AD_kraus = amplitude_damping_kraus(0.1)
-    assert np.allclose(rho_out,apply_kraus_ops_2_state(AD_kraus,ONE_STATE))
+    assert np.allclose(rho_out, apply_kraus_ops_2_state(AD_kraus, ONE_STATE))
+
 
 def test_apply_non_square_kraus_ops_2_state():
-    Id = np.asarray([[1, 0], [0, 1]])
+    Id = np.eye(2)
     bra_zero = np.asarray([[1], [0]])
     bra_one = np.asarray([[0], [1]])
-    state_one = np.kron(Id/2,ONE_STATE)
+    state_one = np.kron(Id / 2, ONE_STATE)
     state_zero = np.kron(Id / 2, ZERO_STATE)
     Kraus1 = np.kron(Id, bra_one.transpose())
     Kraus0 = np.kron(Id, bra_zero.transpose())
-    assert np.allclose(apply_kraus_ops_2_state(Kraus0,state_zero),Id/2)
+    assert np.allclose(apply_kraus_ops_2_state(Kraus0, state_zero), Id / 2)
     assert np.allclose(apply_kraus_ops_2_state(Kraus1, state_one), Id / 2)
     assert np.allclose(apply_kraus_ops_2_state(Kraus0, state_one), 0)
+
 
 def test_apply_choi_matrix_2_state():
     choi = amplitude_damping_choi(0.1)
     assert np.allclose(rho_out, apply_choi_matrix_2_state(choi, ONE_STATE))
 
-
-def test_apply_lioville_matrix_2_state():
-    super = amplitude_damping_super(0.1)
-    try:
-            apply_lioville_matrix_2_state(super, ONE_STATE)
-    except ValueError as e:
-        print(e)
-        assert str(e) == "Dimensions of the vectorized state and superoperator are incompatible"
-    rho_out_s = apply_lioville_matrix_2_state(super, vec(ONE_STATE))
-    assert np.allclose(vec(rho_out), rho_out_s)
 
 # ==================================================================================================
 # Test physicality of Channels
@@ -360,4 +357,3 @@ def test_is_unitary():
     assert is_unital(choi)
     assert is_unitary(HADChoi)
     assert not is_unitary(amplitude_damping_choi(0.1))
-
