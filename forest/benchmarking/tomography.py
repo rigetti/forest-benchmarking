@@ -74,7 +74,7 @@ def generate_state_tomography_experiment(program: Program, qubits: List[int]):
     :param qubits: The qubits to tomographize
     """
     return PyQuilTomographyExperiment(settings=list(_state_tomo_settings(qubits)),
-                                      program=program, qubits=qubits)
+                                      program=program)
 
 
 def _sic_process_tomo_settings(qubits: Sequence[int]):
@@ -144,7 +144,7 @@ def generate_process_tomography_experiment(program: Program, qubits: List[int], 
     else:
         raise ValueError(f"Unknown basis {in_basis}")
 
-    return PyQuilTomographyExperiment(settings=list(func(qubits)), program=program, qubits=qubits)
+    return PyQuilTomographyExperiment(settings=list(func(qubits)), program=program)
 
 
 @dataclass
