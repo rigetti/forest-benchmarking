@@ -1,4 +1,5 @@
-"""A module for converting between different representations of superoperators.
+"""A module containing tools for working with superoperators. Eg. converting between different
+representations of superoperators.
 
 We have arbitrarily decided to use a column stacking convention.
 
@@ -27,8 +28,11 @@ Further references include:
 """
 from typing import Sequence, Tuple, List
 import numpy as np
-from forest.benchmarking.utils import n_qubit_pauli_basis
+from forest.benchmarking.utils import n_qubit_pauli_basis, partial_trace
 
+# ==================================================================================================
+# Superoperator conversion tools
+# ==================================================================================================
 
 def vec(matrix: np.ndarray) -> np.ndarray:
     """
@@ -105,6 +109,11 @@ def kraus2superop(kraus_ops: Sequence[np.ndarray]) -> np.ndarray:
     where A^* is the complex conjugate of a matrix A, A^T is the transpose,
     and A^\dagger is the complex conjugate and transpose.
 
+    Note: This function can also convert non-square Kraus operators to a superoperator,
+    these frequently arise in quantum measurement theory and quantum error correction. In that
+    situation consider a single Kraus operator that is M by N then the superoperator will be a
+    M**2 by N**2 matrix.
+
     :param kraus_ops: A tuple of N Kraus operators
     :return: Returns a dim**2 by dim**2 matrix.
     """
@@ -112,8 +121,14 @@ def kraus2superop(kraus_ops: Sequence[np.ndarray]) -> np.ndarray:
         if len(kraus_ops[0].shape) < 2:  # first elem is not a matrix
             kraus_ops = [kraus_ops]
 
-    dim_squared = np.asarray(kraus_ops[0]).size
-    superop = np.zeros((dim_squared, dim_squared), dtype=complex)
+    rows, cols = np.asarray(kraus_ops[0]).shape
+
+    # Standard case of square Kraus operators is if rows==cols.
+    # When representing a partial projection, e.g. a single measurement operator
+    # M_i = Id \otimes <i| for i \in {0,1}, rows!=cols.
+    # However the following will work in both cases:
+
+    superop = np.zeros((rows**2, cols**2), dtype=complex)
 
     for op in kraus_ops:
         superop += np.kron(np.asarray(op).conj(), op)
@@ -363,3 +378,85 @@ def computational2pauli_basis_matrix(dim) -> np.ndarray:
     :return: A dim**2 by dim**2 basis transform matrix
     """
     return pauli2computational_basis_matrix(dim).conj().T / dim
+
+
+# ==================================================================================================
+# Channel and Superoperator approximation tools
+# ==================================================================================================
+def pauli_twirl_chi_matrix(chi_matrix: np.ndarray) -> np.ndarray:
+    r"""
+    Implements a Pauli twirl of a chi matrix (aka a process matrix).
+
+    See the folloiwng reference for more details
+
+    [SPICC] Scalable protocol for identification of correctable codes
+            Silva et al.,
+            PRA 78, 012347 2008
+            http://dx.doi.org/10.1103/PhysRevA.78.012347
+            https://arxiv.org/abs/0710.1900
+
+    Note: Pauli twirling a quantum channel can give rise to a channel that is less noisy; use with
+    care.
+
+    :param chi_matrix:  a dim**2 by dim**2 chi or process matrix
+    :return: dim**2 by dim**2 chi or process matrix
+    """
+    return np.diag(chi_matrix.diagonal())
+
+
+#TODO Honest approximations for Channels that act on one or MORE qubits.
+
+# ==================================================================================================
+# Apply channel
+# ==================================================================================================
+def apply_kraus_ops_2_state(kraus_ops: Sequence[np.ndarray], state: np.ndarray) -> np.ndarray:
+    r"""
+    Apply a quantum channel, specified by Kraus operators, to state.
+
+    The Kraus operators need not be square.
+
+    :param kraus_ops: A list or tuple of N Kraus operators, each operator is M by dim ndarray
+    :param state: A dim by dim ndarray which is the density matrix for the state
+    :return: M by M ndarray which is the density matrix for the state after the action of kraus_ops
+    """
+    if isinstance(kraus_ops, np.ndarray):  # handle input of single kraus op
+        if len(kraus_ops[0].shape) < 2:  # first elem is not a matrix
+            kraus_ops = [kraus_ops]
+
+    dim, _ = state.shape
+    rows, cols = kraus_ops[0].shape
+
+    if dim != cols:
+        raise ValueError("Dimensions of state and Kraus operator are incompatible")
+
+    new_state = np.zeros((rows, rows))
+    for M in kraus_ops:
+        new_state += M @ state @ np.transpose(M.conj())
+
+    return new_state
+
+
+def apply_choi_matrix_2_state(choi: np.ndarray, state: np.ndarray) -> np.ndarray:
+    r"""
+    Apply a quantum channel, specified by a Choi matrix (using the column stacking convention),
+    to a state.
+
+    The Choi matrix is a dim**2 by dim**2 matrix and the state rho is a dim by dim matrix. The
+    output state is
+
+    rho_{out} = Tr_{A}[(rho^T \otimes Id) Choi_matrix ],
+
+    where Tr_{A} is the partial trace over hilbert space H_A with respect to the tensor product
+    H_A \otimes H_B, and T denotes transposition.
+
+
+    :param choi: a dim**2 by dim**2 matrix
+    :param state: A dim by dim ndarray which is the density matrix for the state
+    :return: a dim by dim matrix.
+    """
+    dim = int(np.sqrt(np.asarray(choi).shape[0]))
+    dims = [dim, dim]
+    tot_matrix = np.kron(state.transpose(), np.identity(dim)) @ choi
+    return partial_trace(tot_matrix, [1], dims)
+
+
