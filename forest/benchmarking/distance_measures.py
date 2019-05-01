@@ -263,7 +263,7 @@ def _is_square(n):
 
 
 def watrous_bounds(choi: np.ndarray) -> float:
-    """Return the Watrous bounds for the diamon norm of a superoperator in
+    """Return the Watrous bounds for the diamond norm of a superoperator in
     the Choi representation. If this is applied to the difference of two Choi 
     representations, it yields bounds to the diamond norm distance.
 
