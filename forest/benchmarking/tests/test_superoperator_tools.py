@@ -168,6 +168,13 @@ def test_kraus2superop():
                                                               ONE_STATE_VEC)), rho_out)
     assert np.allclose(kraus2superop(H), HADSuper)
     assert np.allclose(kraus2superop(IZKraus), IZSuper)
+    # Below here tests non square Kraus operators
+    # In this example The Kraus operator is M_0 =  I \otimes <0| where <0| = (1,0)
+    Idd = np.asarray([[1, 0], [0, 1]])
+    M0 = np.kron(Idd, np.asarray([[1, 0]]))
+    attempt = kraus2superop(M0)
+    answer = np.kron(M0.conj(), M0)
+    assert np.allclose(answer, attempt)
 
 
 def test_kraus2choi():
