@@ -10,7 +10,7 @@ from forest.benchmarking.superoperator_tools import *
 # a few two qubit channel conversions to get additional confidence.
 
 def amplitude_damping_kraus(p):
-    Ad0 = np.asarray([[1, 0], [0, np.sqrt(1-p)]])
+    Ad0 = np.asarray([[1, 0], [0, np.sqrt(1 - p)]])
     Ad1 = np.asarray([[0, np.sqrt(p)], [0, 0]])
     return [Ad0, Ad1]
 
@@ -72,6 +72,30 @@ HADChoi = 0.5 * np.asarray([[1, 1, 1, -1],
                             [1, 1, 1, -1],
                             [-1, -1, -1, 1]])
 
+
+# Single Qubit Pauli Channel
+def one_q_pauli_channel_chi(px, py, pz):
+    p = (px + py + pz)
+    pp_chi = np.asarray([[1 - p, 0, 0, 0],
+                         [0, px, 0, 0],
+                         [0, 0, py, 0],
+                         [0, 0, 0, pz]])
+    return pp_chi
+
+
+# Pauli twirled Amplitude damping channel
+def analytical_pauli_twirl_of_AD_chi(p):
+    # see equation 7 of  https://arxiv.org/pdf/1701.03708.pdf
+    poly1 = (2 + 2 * np.sqrt(1 - p) - p) / 4
+    poly2 = p / 4
+    poly3 = (2 - 2 * np.sqrt(1 - p) - p) / 4
+    pp_chi = np.asarray([[poly1, 0, 0, 0],
+                         [0, poly2, 0, 0],
+                         [0, 0, poly2, 0],
+                         [0, 0, 0, poly3]])
+    return pp_chi
+
+
 # I \otimes Z channel or gate (two qubits)
 two_qubit_paulis = n_qubit_pauli_basis(2)
 IZKraus = two_qubit_paulis.ops_by_label['IZ']
@@ -89,6 +113,10 @@ AdKrausOps = amplitude_damping_kraus(.1)
 rho_out = np.matmul(np.matmul(AdKrausOps[0], ONE_STATE), AdKrausOps[0].transpose().conj()) + \
           np.matmul(np.matmul(AdKrausOps[1], ONE_STATE), AdKrausOps[1].transpose().conj())
 
+
+# ===================================================================================================
+# Test superoperator conversion tools
+# ===================================================================================================
 
 def test_vec():
     A = np.asarray([[1, 2], [3, 4]])
@@ -256,3 +284,53 @@ def test_choi_pl_bijectivity():
     h_superop = kraus2superop(H)
     assert np.allclose(choi2superop(choi2superop(h_choi)), h_choi)
     assert np.allclose(superop2choi(superop2choi(h_superop)), h_superop)
+
+
+# ===================================================================================================
+# Test channel and superoperator approximation tools
+# ===================================================================================================
+
+
+def test_pauli_twirl_of_pauli_channel():
+    # diagonal channel so should not change anything
+    px = np.random.rand()
+    py = np.random.rand()
+    pz = np.random.rand()
+    pauli_chan_chi_matrix = one_q_pauli_channel_chi(px, py, pz)
+    pauli_twirled_chi_matrix = pauli_twirl_chi_matrix(pauli_chan_chi_matrix)
+    assert np.allclose(pauli_chan_chi_matrix, pauli_twirled_chi_matrix)
+
+
+def test_pauli_twirl_of_amp_damp():
+    p = np.random.rand()
+    ana_chi = analytical_pauli_twirl_of_AD_chi(p)
+    num_chi = pauli_twirl_chi_matrix(amplitude_damping_chi(p))
+    assert np.allclose(ana_chi, num_chi)
+
+
+# ==================================================================================================
+# Test apply channel
+# ==================================================================================================
+
+
+def test_apply_kraus_ops_2_state():
+    AD_kraus = amplitude_damping_kraus(0.1)
+    assert np.allclose(rho_out, apply_kraus_ops_2_state(AD_kraus, ONE_STATE))
+
+
+def test_apply_non_square_kraus_ops_2_state():
+    Id = np.eye(2)
+    bra_zero = np.asarray([[1], [0]])
+    bra_one = np.asarray([[0], [1]])
+    state_one = np.kron(Id / 2, ONE_STATE)
+    state_zero = np.kron(Id / 2, ZERO_STATE)
+    Kraus1 = np.kron(Id, bra_one.transpose())
+    Kraus0 = np.kron(Id, bra_zero.transpose())
+    assert np.allclose(apply_kraus_ops_2_state(Kraus0, state_zero), Id / 2)
+    assert np.allclose(apply_kraus_ops_2_state(Kraus1, state_one), Id / 2)
+    assert np.allclose(apply_kraus_ops_2_state(Kraus0, state_one), 0)
+
+
+def test_apply_choi_matrix_2_state():
+    choi = amplitude_damping_choi(0.1)
+    assert np.allclose(rho_out, apply_choi_matrix_2_state(choi, ONE_STATE))
