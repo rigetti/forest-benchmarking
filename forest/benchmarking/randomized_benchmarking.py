@@ -287,7 +287,7 @@ def run_unitarity_measurement(df: DataFrame, qc: QuantumComputer, num_trials: in
             _rs = list(measure_observables(qc, tomo_exp, num_trials))
             # Inelegant shim from state tomo refactor. To clean up!
             expectations=[r.expectation for r in _rs[1:]]
-            variances=[r.stddev ** 2 for r in _rs[1:]]
+            variances=[r.std_err ** 2 for r in _rs[1:]]
             results.append((expectations, variances))
         return results
 
