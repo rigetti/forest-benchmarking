@@ -30,9 +30,11 @@ from typing import Sequence, Tuple, List
 import numpy as np
 from forest.benchmarking.utils import n_qubit_pauli_basis, partial_trace
 
+
 # ==================================================================================================
 # Superoperator conversion tools
 # ==================================================================================================
+
 
 def vec(matrix: np.ndarray) -> np.ndarray:
     """
@@ -404,7 +406,7 @@ def pauli_twirl_chi_matrix(chi_matrix: np.ndarray) -> np.ndarray:
     return np.diag(chi_matrix.diagonal())
 
 
-#TODO Honest approximations for Channels that act on one or MORE qubits.
+# TODO: Honest approximations for Channels that act on one or MORE qubits.
 
 # ==================================================================================================
 # Apply channel
@@ -460,3 +462,83 @@ def apply_choi_matrix_2_state(choi: np.ndarray, state: np.ndarray) -> np.ndarray
     return partial_trace(tot_matrix, [1], dims)
 
 
+# ==================================================================================================
+# Check physicality of Channels
+# ==================================================================================================
+def choi_is_hermitian_preserving(choi: np.ndarray, rtol: float = 1e-05,
+                                 atol: float = 1e-08) -> bool:
+    """
+    Checks if  a quantum process, specified by a Choi matrix, is hermitian-preserving.
+
+    :param choi: a dim**2 by dim**2 Choi matrix
+    :param rtol: The relative tolerance parameter in np.allclose
+    :param atol: The absolute tolerance parameter in np.allclose
+    :return: Returns True if the quantum channel is hermitian preserving with the given tolerance;
+        False otherwise.
+    """
+    # Equation 3.31 of [GRAPTN]
+    return np.allclose(choi, choi.conj().T, rtol=rtol, atol=atol)
+
+
+def choi_is_trace_preserving(choi: np.ndarray, rtol: float = 1e-05, atol: float = 1e-08) -> bool:
+    """
+    Checks if  a quantum process, specified by a Choi matrix, is trace-preserving.
+
+    :param choi: A dim**2 by dim**2 Choi matrix
+    :param rtol: The relative tolerance parameter in np.allclose
+    :param atol: The absolute tolerance parameter in np.allclose
+    :return: Returns True if the quantum channel is trace-preserving with the given tolerance;
+        False otherwise.
+    """
+    rows, cols = choi.shape
+    dim = int(np.sqrt(rows))
+    # tensor product of hilbert space H_0 \otimes H_1.
+    keep = [1]
+    id_iff_tp = partial_trace(choi, keep, [dim, dim])
+    # Equation 3.33 of [GRAPTN]
+    return np.allclose(id_iff_tp, np.identity(dim), rtol=rtol, atol=atol)
+
+
+def choi_is_completely_positive(choi: np.ndarray, limit: float = 1e-09) -> bool:
+    """
+    Checks if  a quantum process, specified by a Choi matrix, is completely positive.
+
+    :param choi: A dim**2 by dim**2 Choi matrix
+    :param limit: A tolerance parameter, all eigenvalues must be greater than -|limit|.
+    :return: Returns True if the quantum channel is completely positive with the given tolerance;
+        False otherwise.
+    """
+    evals, evecs = np.linalg.eig(choi)
+    # Equation 3.35 of [GRAPTN]
+    return all(x >= -abs(limit) for x in evals)
+
+
+def choi_is_unital(choi: np.ndarray, rtol: float = 1e-05, atol: float = 1e-08) -> bool:
+    """
+    Checks if  a quantum process, specified by a Choi matrix, is unital.
+
+    A process is unital iff it maps the identity to itself.
+
+    :param choi: A dim**2 by dim**2 Choi matrix
+    :param rtol: The relative tolerance parameter in np.allclose
+    :param atol: The absolute tolerance parameter in np.allclose
+    :return: Returns True if the quantum channel is unital with the given tolerance; False
+        otherwise.
+    """
+    rows, cols = choi.shape
+    dim = int(np.sqrt(rows))
+    id_iff_unital = apply_choi_matrix_2_state(choi, np.identity(dim))
+    return np.allclose(id_iff_unital, np.identity(dim), rtol=rtol, atol=atol)
+
+
+def choi_is_unitary(choi: np.ndarray, limit: float = 1e-09) -> bool:
+    """
+    Checks if  a quantum process, specified by a Choi matrix, is unitary.
+
+    :param choi: A dim**2 by dim**2 Choi matrix
+    :param limit: A tolerance parameter to discard Kraus operators with small norm.
+    :return: Returns True if the quantum channel is unitary with the given tolerance; False
+        otherwise.
+    """
+    kraus_ops = choi2kraus(choi, tol=limit)
+    return len(kraus_ops) == 1
