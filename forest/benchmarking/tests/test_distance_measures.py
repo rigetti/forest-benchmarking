@@ -195,7 +195,7 @@ def test_diamond_norm():
 
     choi0 = _gate_to_choi(I_MAT)
     choi1 = _gate_to_choi(X_MAT)
-    dnorm = dm.diamond_norm(choi0, choi1)
+    dnorm = dm.diamond_norm_distance(choi0, choi1)
     assert np.isclose(2.0, dnorm, rtol=0.01)
 
     turns_dnorm = [[1.000000e-03, 3.141591e-03],
@@ -208,7 +208,7 @@ def test_diamond_norm():
     for turns, target in turns_dnorm:
         choi0 = _gate_to_choi(X_MAT)
         choi1 = _gate_to_choi(matpow(X_MAT, 1 + turns))
-        dnorm = dm.diamond_norm(choi0, choi1)
+        dnorm = dm.diamond_norm_distance(choi0, choi1)
         assert np.isclose(target, dnorm, rtol=0.01)
 
     hadamard_mixtures = [[1.000000e-03, 2.000000e-03],
@@ -224,12 +224,12 @@ def test_diamond_norm():
 
         choi0 = _superop_to_choi(chan0)
         choi1 = _superop_to_choi(chan1)
-        dnorm = dm.diamond_norm(choi0, choi1)
+        dnorm = dm.diamond_norm_distance(choi0, choi1)
         assert np.isclose(dnorm, target, rtol=0.01)
 
     choi0 = _gate_to_choi(I_MAT)
     choi1 = _gate_to_choi(matpow(Y_MAT, 0.5))
-    dnorm = dm.diamond_norm(choi0, choi1)
+    dnorm = dm.diamond_norm_distance(choi0, choi1)
     assert np.isclose(dnorm, np.sqrt(2), rtol=0.01)
 
 def test_watrous_bounds():
