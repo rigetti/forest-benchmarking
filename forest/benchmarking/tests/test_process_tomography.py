@@ -115,7 +115,7 @@ def wfn_measure_observables(n_qubits, tomo_expt: TomographyExperiment):
             yield ExperimentResult(
                 setting=setting,
                 expectation=wfn.reset().do_program(prog).expectation(setting.out_operator),
-                stddev=0.,
+                std_err=0.,
                 total_counts=1,  # don't set to zero unless you want nans
             )
 
@@ -131,7 +131,7 @@ def measurement_func(request, test_qc):
         return lambda expt: list(wfn_measure_observables(n_qubits=2, tomo_expt=expt))
     elif request.param == 'sampling':
         return lambda expt: list(measure_observables(qc=test_qc,
-                                                     tomo_experiment=expt, n_shots=4000))
+                                                     tomo_experiment=expt, n_shots=500))
     else:
         raise ValueError()
 
@@ -162,7 +162,7 @@ def test_single_q_pgdb(single_q_tomo_fixture):
 
     process_choi_est = pgdb_process_estimate(results, qubits=qubits)
     process_choi_true = kraus2choi(u_rand)
-    np.testing.assert_allclose(process_choi_true, process_choi_est, atol=1e-2)
+    np.testing.assert_allclose(process_choi_true, process_choi_est, atol=.05)
 
 
 @pytest.fixture(params=['CNOT', 'haar'])
