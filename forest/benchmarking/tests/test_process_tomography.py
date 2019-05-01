@@ -114,7 +114,7 @@ def wfn_measure_observables(n_qubits, tomo_expt: TomographyExperiment):
             yield ExperimentResult(
                 setting=setting,
                 expectation=wfn.reset().do_program(prog).expectation(setting.out_operator),
-                stddev=0.,
+                std_err=0.,
                 total_counts=1,  # don't set to zero unless you want nans
             )
 

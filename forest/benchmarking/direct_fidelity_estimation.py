@@ -145,7 +145,7 @@ def generate_exhaustive_process_dfe_experiment(program: Program, qubits: list,
                         qubits=qubits,
                         in_states=[None, plusX, minusX, plusY, minusY, plusZ, minusZ],
                         benchmarker=benchmarker)),
-        program=program, qubits=qubits)
+        program=program)
     return expr
 
 
@@ -184,7 +184,7 @@ def generate_exhaustive_state_dfe_experiment(program: Program, qubits: list,
                         qubits=qubits,
                         in_states=[None, plusZ],
                         benchmarker=benchmarker)),
-        program=program, qubits=qubits)
+        program=program)
     return expr
 
 
@@ -253,7 +253,7 @@ def generate_monte_carlo_state_dfe_experiment(program: Program, qubits: List[int
         _monte_carlo_dfe(program=program, qubits=qubits,
                          in_states=[None, plusZ],
                          n_terms=n_terms, benchmarker=benchmarker)),
-        program=program, qubits=qubits)
+        program=program)
     return expr
 
 
@@ -288,7 +288,7 @@ def generate_monte_carlo_process_dfe_experiment(program: Program, qubits: List[i
         _monte_carlo_dfe(program=program, qubits=qubits,
                          in_states=[None, plusX, minusX, plusY, minusY, plusZ, minusZ],
                          n_terms=n_terms, benchmarker=benchmarker)),
-        program=program, qubits=qubits)
+        program=program)
     return expr
 
 
@@ -318,9 +318,9 @@ def acquire_dfe_data(qc: QuantumComputer, expr: TomographyExperiment, n_shots=10
                    program=expr.program,
                    out_pauli=[str(e[0].out_operator) for e in expr],
                    pauli_point_est=np.array([r.expectation for r in res]),
-                   pauli_std_err=np.array([r.stddev for r in res]),
+                   pauli_std_err=np.array([r.std_err for r in res]),
                    cal_point_est=np.array([r.calibration_expectation for r in res]),
-                   cal_std_err=np.array([r.calibration_stddev for r in res]),
+                   cal_std_err=np.array([r.calibration_std_err for r in res]),
                    dimension=2**len(expr.qubits),
                    qubits=expr.qubits)
 
