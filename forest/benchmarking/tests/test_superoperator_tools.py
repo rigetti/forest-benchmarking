@@ -1,7 +1,7 @@
 import numpy as np
 from forest.benchmarking.utils import *
 from forest.benchmarking.superoperator_tools import *
-import pytest
+
 # Test philosophy:
 # Using the by hand calculations found in the docs we check conversion
 # between one qubit channels with one Kraus operator (Hadamard) and two
