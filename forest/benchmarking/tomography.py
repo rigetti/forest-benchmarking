@@ -74,7 +74,7 @@ def generate_state_tomography_experiment(program: Program, qubits: List[int]):
     :param qubits: The qubits to tomographize
     """
     return PyQuilTomographyExperiment(settings=list(_state_tomo_settings(qubits)),
-                                      program=program, qubits=qubits)
+                                      program=program)
 
 
 def _sic_process_tomo_settings(qubits: Sequence[int]):
@@ -144,7 +144,7 @@ def generate_process_tomography_experiment(program: Program, qubits: List[int], 
     else:
         raise ValueError(f"Unknown basis {in_basis}")
 
-    return PyQuilTomographyExperiment(settings=list(func(qubits)), program=program, qubits=qubits)
+    return PyQuilTomographyExperiment(settings=list(func(qubits)), program=program)
 
 
 @dataclass
@@ -181,7 +181,7 @@ def shim_pyquil_results_to_TomographyData(program, qubits, results: List[Experim
         in_ops=[r.setting.in_operator for r in results[1:]],
         out_ops=[r.setting.out_operator for r in results[1:]],
         expectations=[r.expectation for r in results[1:]],
-        variances=[r.stddev ** 2 for r in results[1:]],
+        variances=[r.std_err ** 2 for r in results[1:]],
         program=program,
         number_qubits=len(qubits),
         dimension=2 ** len(qubits),
@@ -858,7 +858,7 @@ def _resample_expectations_with_beta(results, prior_counts=1):
         resampled_results += [ExperimentResult(
             setting=result.setting,
             expectation=resampled_expect,
-            stddev=result.stddev,
+            std_err=result.std_err,
             total_counts=result.total_counts,
         )]
     return resampled_results
