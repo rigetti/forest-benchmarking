@@ -1,5 +1,6 @@
 import forest.benchmarking.random_operators as rand_ops
-from forest.benchmarking.superoperator_tools import kraus2pauli_liouville
+from forest.benchmarking.superoperator_tools import kraus2pauli_liouville, \
+    kraus2superop, kraus2choi, superop2choi
 import numpy.random
 from scipy.linalg import fractional_matrix_power as matpow
 import forest.benchmarking.distance_measures as dm
@@ -176,25 +177,8 @@ def test_diamond_norm():
     # https://github.com/qutip/qutip/blob/master/qutip/tests/test_metrics.py
     # which were in turn generated using QuantumUtils for MATLAB
     # (https://goo.gl/oWXhO9) by Christopher Granade
-
-    def _gate_to_superop(gate):
-        dim = gate.shape[0]
-        superop = np.outer(gate, gate.conj().T)
-        superop = np.reshape(superop, [dim]*4)
-        superop = np.transpose(superop, [0, 3, 1, 2])
-        return superop
-
-    def _superop_to_choi(superop):
-        dim = superop.shape[0]
-        superop = np.transpose(superop, (0, 2, 1, 3))
-        choi = np.reshape(superop, [dim**2] * 2)
-        return choi
-
-    def _gate_to_choi(gate):
-        return _superop_to_choi(_gate_to_superop(gate))
-
-    choi0 = _gate_to_choi(I_MAT)
-    choi1 = _gate_to_choi(X_MAT)
+    choi0 = kraus2choi(I_MAT)
+    choi1 = kraus2choi(X_MAT)
     dnorm = dm.diamond_norm_distance(choi0, choi1)
     assert np.isclose(2.0, dnorm, rtol=0.01)
 
@@ -206,8 +190,8 @@ def test_diamond_norm():
                    [3.100000e-01, 9.358596e-01]]
 
     for turns, target in turns_dnorm:
-        choi0 = _gate_to_choi(X_MAT)
-        choi1 = _gate_to_choi(matpow(X_MAT, 1 + turns))
+        choi0 = kraus2choi(X_MAT)
+        choi1 = kraus2choi(matpow(X_MAT, 1 + turns))
         dnorm = dm.diamond_norm_distance(choi0, choi1)
         assert np.isclose(target, dnorm, rtol=0.01)
 
@@ -219,16 +203,16 @@ def test_diamond_norm():
                          [3.100000e-01, 6.200000e-01]]
 
     for p, target in hadamard_mixtures:
-        chan0 = _gate_to_superop(I_MAT) * (1 - p) + _gate_to_superop(H_MAT) * p
-        chan1 = _gate_to_superop(I_MAT)
+        chan0 = kraus2superop(I_MAT) * (1 - p) + kraus2superop(H_MAT) * p
+        chan1 = kraus2superop(I_MAT)
 
-        choi0 = _superop_to_choi(chan0)
-        choi1 = _superop_to_choi(chan1)
+        choi0 = superop2choi(chan0)
+        choi1 = superop2choi(chan1)
         dnorm = dm.diamond_norm_distance(choi0, choi1)
         assert np.isclose(dnorm, target, rtol=0.01)
 
-    choi0 = _gate_to_choi(I_MAT)
-    choi1 = _gate_to_choi(matpow(Y_MAT, 0.5))
+    choi0 = kraus2choi(I_MAT)
+    choi1 = kraus2choi(matpow(Y_MAT, 0.5))
     dnorm = dm.diamond_norm_distance(choi0, choi1)
     assert np.isclose(dnorm, np.sqrt(2), rtol=0.01)
 
@@ -238,24 +222,8 @@ def test_watrous_bounds():
     # which were in turn generated using QuantumUtils for MATLAB
     # (https://goo.gl/oWXhO9) by Christopher Granade
 
-    def _gate_to_superop(gate):
-        dim = gate.shape[0]
-        superop = np.outer(gate, gate.conj().T)
-        superop = np.reshape(superop, [dim]*4)
-        superop = np.transpose(superop, [0, 3, 1, 2])
-        return superop
-
-    def _superop_to_choi(superop):
-        dim = superop.shape[0]
-        superop = np.transpose(superop, (0, 2, 1, 3))
-        choi = np.reshape(superop, [dim**2] * 2)
-        return choi
-
-    def _gate_to_choi(gate):
-        return _superop_to_choi(_gate_to_superop(gate))
-
-    choi0 = _gate_to_choi(I_MAT)
-    choi1 = _gate_to_choi(X_MAT)
+    choi0 = kraus2choi(I_MAT)
+    choi1 = kraus2choi(X_MAT)
     wbounds = dm.watrous_bounds(choi0-choi1)
     assert wbounds[0]/2 <= 2.0 or np.isclose(wbounds[0]/2, 2.0, rtol=1e-2)
     assert wbounds[1]/2 >= 2.0 or np.isclose(wbounds[1]/2, 2.0, rtol=1e-2)
@@ -268,8 +236,8 @@ def test_watrous_bounds():
                    [3.100000e-01, 9.358596e-01]]
 
     for turns, target in turns_dnorm:
-        choi0 = _gate_to_choi(X_MAT)
-        choi1 = _gate_to_choi(matpow(X_MAT, 1 + turns))
+        choi0 = kraus2choi(X_MAT)
+        choi1 = kraus2choi(matpow(X_MAT, 1 + turns))
         wbounds = dm.watrous_bounds(choi0-choi1)
         assert wbounds[0]/2 <= target or np.isclose(wbounds[0]/2, target, rtol=1e-2)
         assert wbounds[1]/2 >= target or np.isclose(wbounds[1]/2, target, rtol=1e-2)
@@ -282,17 +250,17 @@ def test_watrous_bounds():
                          [3.100000e-01, 6.200000e-01]]
 
     for p, target in hadamard_mixtures:
-        chan0 = _gate_to_superop(I_MAT) * (1 - p) + _gate_to_superop(H_MAT) * p
-        chan1 = _gate_to_superop(I_MAT)
+        chan0 = kraus2superop(I_MAT) * (1 - p) + kraus2superop(H_MAT) * p
+        chan1 = kraus2superop(I_MAT)
 
-        choi0 = _superop_to_choi(chan0)
-        choi1 = _superop_to_choi(chan1)
+        choi0 = superop2choi(chan0)
+        choi1 = superop2choi(chan1)
         wbounds = dm.watrous_bounds(choi0-choi1)
         assert wbounds[0]/2 <= target or np.isclose(wbounds[0]/2, target, rtol=1e-2)
         assert wbounds[1]/2 >= target or np.isclose(wbounds[1]/2, target, rtol=1e-2)
 
-    choi0 = _gate_to_choi(I_MAT)
-    choi1 = _gate_to_choi(matpow(Y_MAT, 0.5))
+    choi0 = kraus2choi(I_MAT)
+    choi1 = kraus2choi(matpow(Y_MAT, 0.5))
     wbounds = dm.watrous_bounds(choi0-choi1)
     assert wbounds[0]/2 <= np.sqrt(2) or np.isclose(wbounds[0]/2, np.sqrt(2), rtol=1e-2)
     assert wbounds[1]/2 >= np.sqrt(2) or np.isclose(wbounds[0]/2, np.sqrt(2), rtol=1e-2)
