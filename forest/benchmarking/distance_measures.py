@@ -12,19 +12,25 @@ from scipy.optimize import minimize_scalar
 
 def purity(rho, dim_renorm=False):
     """
-    Calculates the purity P of a quantum state.
+    Calculates the purity P = tr[ρ**2] of a quantum state ρ.
 
-    If the dimensional renormalization flag is FALSE (default) then  1/D ≤ P ≤ 1.
+    As stated above lower value of the purity depends on the dimension of ρ's Hilbert space. For
+    some applications this can be undesirable. For this reason we introduce an optional dimensional
+    renormalization flag with the following behavior
+
+    If the dimensional renormalization flag is FALSE (default) then  1/dim ≤ P ≤ 1.
     If the dimensional renormalization flag is TRUE then 0 ≤ P ≤ 1.
 
-    :param rho: Is a D x D positive matrix.
+    where dim is the dimension of ρ's Hilbert space.
+
+    :param rho: Is a dim by dim positive matrix.
     :param dim_renorm: Boolean, default False.
     :return: P the purity of the state.
     """
     if dim_renorm:
-        D = np.shape(rho)[0]
+        dim = np.shape(rho)[0]
         Ptemp = np.trace(np.matmul(rho, rho))
-        P = (D / (D - 1.0)) * (Ptemp - 1.0 / D)
+        P = (dim / (dim - 1.0)) * (Ptemp - 1.0 / dim)
     else:
         P = np.trace(np.matmul(rho, rho))
     return P
