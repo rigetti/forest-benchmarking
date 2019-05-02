@@ -254,7 +254,7 @@ def process_fidelity(pauli_lio0: np.ndarray, pauli_lio1: np.ndarray) -> float:
     dim_squared = pauli_lio0.shape[0]
     dim = int(np.sqrt(dim_squared))
 
-    Fe = np.trace(np.matmul(np.transpose(np.conj(pauli_lio0)), pauli_lio1)) / (dim ** 2)
+    Fe = entanglement_fidelity(pauli_lio0, pauli_lio1)
 
     return (dim * Fe + 1) / (dim + 1)
 
