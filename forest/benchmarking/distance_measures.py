@@ -102,7 +102,7 @@ def quantum_chernoff_bound(rho, sigma):
     The quantum Chernoff bound has many nice properties, see [QCB]. Importantly it is
     operationally important in the following context. Given n copies of rho or sigma the minimum
     error probability for discriminating for rho from sigma is P_{e,min,n} ~ exp[-n ξ_{QCB}].
-
+    
     [QCB] The Quantum Chernoff Bound
           Audenaert et al.,
           Phys. Rev. Lett. 98, 160501 (2007)
@@ -320,7 +320,7 @@ def _is_square(n):
 
 
 def watrous_bounds(choi: np.ndarray) -> float:
-    """Return the Watrous bounds for the diamon norm of a superoperator in
+    """Return the Watrous bounds for the diamond norm of a superoperator in
     the Choi representation. If this is applied to the difference of two Choi 
     representations, it yields bounds to the diamond norm distance.
 
