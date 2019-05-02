@@ -144,12 +144,6 @@ def rand_map_with_BCSZ_dist(D, K):
     # TODO: this ^^ is CPTP, might want a flag that allows for just CP quantum operations.
     X = ginibre_matrix_complex(D ** 2, K)
     rho = X @ X.conj().T
-    # Now compute the partial trace using method from:
-    # https://www.peijun.me/reduced-density-matrix-and-partial-trace.html
-    #
-    # [[ TODO: might be better to do: rho_red = np.einsum('jiki->jk', reshaped_dm) 
-    # ^^ see https://scicomp.stackexchange.com/questions/27496/calculating-partial-trace-of-array-in-numpy/27659 ]]
-
     rho_red = partial_trace(rho, [0], [D, D])
     # Now sqrt 
     Q = np.kron(sqrtm(la.inv(rho_red)), np.eye(D))
