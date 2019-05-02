@@ -217,8 +217,8 @@ def process_fidelity(pauli_lio0: np.ndarray, pauli_lio1: np.ndarray) -> float:
     """
     assert pauli_lio0.shape == pauli_lio1.shape
     assert pauli_lio0.shape[0] == pauli_lio1.shape[1]
-    dim2 = pauli_lio0.shape[0]
-    dim = int(np.sqrt(dim2))
+    dim_squared = pauli_lio0.shape[0]
+    dim = int(np.sqrt(dim_squared))
 
     Fe = np.trace(np.matmul(np.transpose(np.conj(pauli_lio0)), pauli_lio1)) / (dim ** 2)
 
