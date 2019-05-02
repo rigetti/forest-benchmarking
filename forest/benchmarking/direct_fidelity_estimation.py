@@ -310,7 +310,7 @@ def acquire_dfe_data(qc: QuantumComputer, expr: TomographyExperiment, n_shots=10
     if mitigate_readout_errors:
         res = list(measure_observables(qc, expr, n_shots=n_shots, active_reset=active_reset))
     else:
-        res = list(measure_observables(qc, expr, n_shots=n_shots, active_reset=active_reset, readout_symmetrize=None,
+        res = list(measure_observables(qc, expr, n_shots=n_shots, active_reset=active_reset, symmetrize_readout=None,
                                        calibrate_readout=None))
 
     # identify the qubits being measured
