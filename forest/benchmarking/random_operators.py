@@ -145,7 +145,9 @@ def rand_map_with_BCSZ_dist(D, K):
     X = ginibre_matrix_complex(D ** 2, K)
     rho = X @ X.conj().T
     rho_red = partial_trace(rho, [0], [D, D])
-    # Now sqrt 
+    # Note that Eqn. 8 of [RQO] uses a *row* stacking convention so in that case we would write
+    # Q = np.kron(np.eye(D), sqrtm(la.inv(rho_red)))
+    # But as we use column stacking we need:
     Q = np.kron(sqrtm(la.inv(rho_red)), np.eye(D))
     Z = Q @ rho @ Q
     return Z
