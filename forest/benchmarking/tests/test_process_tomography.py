@@ -6,70 +6,16 @@ from rpcq.messages import PyQuilExecutableResponse
 
 from forest.benchmarking.compilation import basic_compile
 from forest.benchmarking.random_operators import haar_rand_unitary
-from forest.benchmarking.superoperator_tools import vec, unvec, kraus2choi
-from forest.benchmarking.tomography import proj_to_cp, proj_to_tni, \
-    generate_process_tomography_experiment, pgdb_process_estimate, proj_to_tp, _constraint_project
-from forest.benchmarking.utils import partial_trace
+from forest.benchmarking.superoperator_tools import kraus2choi
+from forest.benchmarking.tomography import generate_process_tomography_experiment, \
+    pgdb_process_estimate
 from pyquil import Program
 from pyquil import gate_matrices as mat
 from pyquil.api import QVM
 from pyquil.gates import CNOT, X
-from pyquil.gate_matrices import X as X_MAT, Y, Z
 from pyquil.numpy_simulator import NumpyWavefunctionSimulator
 from pyquil.operator_estimation import measure_observables, ExperimentResult, TomographyExperiment, \
     _one_q_state_prep
-
-
-def test_proj_to_cp():
-    state = vec(np.eye(2))
-    assert np.allclose(state, proj_to_cp(state))
-
-    state = vec(np.array([[1.5, 0], [0, 10]]))
-    assert np.allclose(state, proj_to_cp(state))
-
-    state = vec(-Z)
-    cp_state = vec(np.array([[0, 0], [0, 1.]]))
-    assert np.allclose(cp_state, proj_to_cp(state))
-
-    state = vec(X_MAT)
-    cp_state = vec(np.array([[.5, .5], [.5, .5]]))
-    assert np.allclose(cp_state, proj_to_cp(state))
-
-    state = vec(Y)
-    cp_state = vec(np.array([[.5, -.5j], [.5j, .5]]))
-    assert np.allclose(cp_state, proj_to_cp(state))
-
-
-def test_proj_to_tp():
-    # Identity process is trace preserving, so no change
-    state = vec(kraus2choi(np.eye(2)))
-    assert np.allclose(state, proj_to_tp(state))
-
-    # Bit flip process is trace preserving, so no change
-    state = vec(kraus2choi(X_MAT))
-    assert np.allclose(state, proj_to_tp(state))
-
-
-def test_cptp():
-    # Identity process is cptp, so no change
-    state = np.array(kraus2choi(np.eye(2)))
-    assert np.allclose(state, _constraint_project(state))
-
-    # Small perturbation shouldn't change too much
-    state = np.array([[1.001, 0., 0., .99], [0., 0., 0., 0.],
-                      [0., 0., 0., 0.], [1.004, 0., 0., 1.01]])
-    assert np.allclose(state, _constraint_project(state), atol=.01)
-
-    # Bit flip process is cptp, so no change
-    state = kraus2choi(X_MAT)
-    assert np.allclose(state, _constraint_project(state))
-
-
-def test_proj_to_tni():
-    state = np.array([[0., 0., 0., 0.], [0., 1.01, 1.01, 0.], [0., 1., 1., 0.], [0., 0., 0., 0.]])
-    trace_non_increasing = unvec(proj_to_tni(vec(state)))
-    pt = partial_trace(trace_non_increasing, dims=[2, 2], keep=[0])
-    assert np.allclose(pt, np.eye(2))
 
 
 @pytest.fixture
