@@ -156,7 +156,7 @@ def permute_tensor_factors(D, perm):
     Return a permutation matrix of the given dimension.
 
     Given a Hilbert space dimension $D$ and an list representing the permutation $perm$ of the
-    tensor product Hilbert spaces, returns a $D^len(perm) x D^len(perm)$ permutation matrix.
+    tensor product Hilbert spaces, returns a $D^len(perm)$ by $D^len(perm)$ permutation matrix.
     
     E.g. 1) Suppose D=2 and perm=[0,1] 
             Returns the identity operator on two qubits
@@ -177,7 +177,7 @@ def permute_tensor_factors(D, perm):
     thinking about higher moment (N>2) integrals over the Haar measure.
 
     :param D: Hilbert space dimension (scalar).
-    :param perm: The rank of a state (list).
+    :param perm: A list representing the permutation of the tensor factors.
     """
     dim_list = [D for i in range(2 * len(perm))]
 
