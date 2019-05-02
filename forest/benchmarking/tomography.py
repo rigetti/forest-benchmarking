@@ -11,7 +11,7 @@ from scipy.linalg import logm, pinv, eigh
 
 import forest.benchmarking.distance_measures as dm
 import forest.benchmarking.operator_estimation as est
-from forest.benchmarking.superoperator_tools import vec, unvec
+from forest.benchmarking.superoperator_tools import vec, unvec, proj_choi_to_physical
 from forest.benchmarking.utils import prepare_prod_sic_state, n_qubit_pauli_basis, partial_trace
 from pyquil import Program
 from pyquil.api import QuantumComputer
@@ -532,117 +532,6 @@ def _LL(state, effects, observed_frequencies) -> float:
     return sum(np.log10(predicted_probs) * observed_frequencies)
 
 
-def proj_to_cp(choi_vec):
-    """
-    Projects the vectorized Choi representation of a process, into the nearest vectorized choi matrix in the space of
-    completely positive maps. Equation 9 of [PGD]
-    :param choi_vec: vectorized density matrix or Choi representation of a process
-    :return: closest vectorized choi matrix in the space of completely positive maps
-    """
-    matrix = unvec(choi_vec)
-    hermitian = (matrix + matrix.conj().T) / 2  # enforce Hermiticity
-    d, v = np.linalg.eigh(hermitian)
-    d[d < 0] = 0  # enforce completely positive by removing negative eigenvalues
-    D = np.diag(d)
-    return vec(v @ D @ v.conj().T)
-
-
-def proj_to_tni(choi_vec):
-    """
-    Projects the vectorized Choi matrix of a process into the space of trace non-increasing maps. Equation 33 of [PGD]
-    :param choi_vec: vectorized Choi representation of a process
-    :return: The vectorized Choi representation of the projected TNI process
-    """
-    dim = int(np.sqrt(np.sqrt(choi_vec.size)))
-
-    # trace out the output Hilbert space
-    pt = partial_trace(unvec(choi_vec), dims=[dim, dim], keep=[0])
-
-    hermitian = (pt + pt.conj().T) / 2  # enforce Hermiticity
-    d, v = np.linalg.eigh(hermitian)
-    d[d > 1] = 1  # enforce trace preserving
-    D = np.diag(d)
-    projection = v @ D @ v.conj().T
-
-    trace_increasing_part = np.kron((pt - projection) / dim, np.eye(dim))
-
-    return choi_vec - vec(trace_increasing_part)
-
-
-def proj_to_tp(choi_vec):
-    """
-    Projects the vectorized Choi representation of a process into the closest processes in the space of trace preserving
-    maps. Equation 13 of [PGD]
-    :param choi_vec: vectorized Choi representation of a process
-    :return: The vectorized Choi representation of the projected TP process
-    """
-    dim = int(np.sqrt(np.sqrt(choi_vec.size)))
-    b = vec(np.eye(dim, dim))
-    # construct M, which acts as partial trace over output Hilbert space
-    M = np.zeros((dim ** 2, dim ** 4))
-    for i in range(dim):
-        e = np.zeros((dim, 1))
-        e[i] = 1
-        B = np.kron(np.eye(dim, dim), e.T)
-        M = M + np.kron(B, B)
-    return choi_vec + 1 / dim * (M.conj().T @ b - M.conj().T @ M @ choi_vec)
-
-
-def _constraint_project(choi_mat, trace_preserving=True):
-    """
-    Projects the given Choi matrix into the subspace of Completetly Positive and either Trace Perserving (TP) or
-    Trace-Non-Increasing maps.
-    Uses Dykstra's algorithm with the stopping criterion presented in:
-
-    [DYKALG] Dykstra’s algorithm and robust stopping criteria
-             Birgin et al.,
-             (Springer US, Boston, MA, 2009), pp. 828–833, ISBN 978-0-387-74759-0.
-             https://doi.org/10.1007/978-0-387-74759-0_143
-
-    This method is suggested in [PGD]
-
-    :param choi_mat: A density matrix corresponding to the Choi representation estimate of a quantum process.
-    :param trace_preserving: Default project the estimate to a trace-preserving process. False for trace non-increasing
-    :return: The choi representation of CPTP map that is closest to the given state.
-    """
-    shape = choi_mat.shape
-    old_CP_change = vec(np.zeros(shape))
-    old_TP_change = vec(np.zeros(shape))
-    last_CP_projection = vec(np.zeros(shape))
-    last_state = vec(choi_mat)
-
-    while True:
-        # Dykstra's algorithm
-        pre_CP = last_state - old_CP_change
-        CP_projection = proj_to_cp(pre_CP)
-        new_CP_change = CP_projection - pre_CP
-
-        pre_TP = CP_projection - old_TP_change
-        if trace_preserving:
-            new_state = proj_to_tp(pre_TP)
-        else:
-            new_state = proj_to_tni(pre_TP)
-        new_TP_change = new_state - pre_TP
-
-        CP_change_change = new_CP_change - old_CP_change
-        TP_change_change = new_TP_change - old_TP_change
-        state_change = new_state - last_state
-
-        # stopping criterion
-        if np.linalg.norm(CP_change_change, ord=2) ** 2 + np.linalg.norm(TP_change_change, ord=2) ** 2 \
-                + 2 * abs(np.dot(old_TP_change.conj().T, state_change)) \
-                + 2 * abs(np.dot(old_CP_change.conj().T, (CP_projection - last_CP_projection))) < 1e-4:
-            break
-
-        # store results from this iteration
-        old_CP_change = new_CP_change
-        old_TP_change = new_TP_change
-        last_CP_projection = CP_projection
-        last_state = new_state
-
-    return unvec(new_state)
-
-
 def _extract_from_results(results: List[ExperimentResult], qubits: List[int]):
     """
     Construct the matrix A such that the probabilities p_ij of outcomes n_ij given an estimate E
@@ -716,7 +605,7 @@ def pgdb_process_estimate(results: List[ExperimentResult], qubits: List[int],
     gamma = .3  # tolerance of letting the constrained update deviate from true gradient; larger is more demanding
     while True:
         gradient = _grad_cost(A, n, est)
-        update = _constraint_project(est - gradient / mu, trace_preserving) - est
+        update = proj_choi_to_physical(est - gradient / mu, trace_preserving) - est
 
         # determine step size factor, alpha
         alpha = 1
