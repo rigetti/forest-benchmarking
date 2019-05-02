@@ -8,7 +8,7 @@ from pyquil.numpy_simulator import NumpyWavefunctionSimulator
 from pyquil.operator_estimation import _one_q_state_prep
 
 from numpy.testing import assert_almost_equal, assert_allclose
-
+import pytest
 from test_process_tomography import test_qc
 
 def test_exhaustive_state_dfe(benchmarker: BenchmarkConnection):
@@ -95,10 +95,12 @@ def test_monte_carlo_state_dfe(benchmarker: BenchmarkConnection):
         assert_almost_equal(expectation,1.,decimal=7)
 
 
-def test_acquire_dfe_data(benchmarker: BenchmarkConnection, qc=test_qc()):
+@pytest.fixture()
+def test_acquire_dfe_data(benchmarker: BenchmarkConnection, test_qc):
     process = Program(X(0))
     texpt = generate_exhaustive_state_dfe_experiment(program=process, qubits=[0], benchmarker=benchmarker)
-    dfe_data = acquire_dfe_data(qc, texpt)
+    test_qc.make_full()
+    dfe_data = acquire_dfe_data(qc=test_qc, expr=texpt)
     dfe_estimate = estimate_dfe(dfe_data, 'state')
 
     assert dfe_estimate.dimension == 2
