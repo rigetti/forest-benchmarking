@@ -240,8 +240,8 @@ def diamond_norm_distance(choi0: np.ndarray, choi1: np.ndarray) -> float:
 
     This calculation becomes very slow for 4 or more qubits.
 
-    :param choi0: A 4^N x 4^N matrix (where N is the number of qubits)
-    :param choi1: A 4^N x 4^N matrix (where N is the number of qubits)
+    :param choi0: A 4**N by 4**N matrix (where N is the number of qubits)
+    :param choi1: A 4**N by 4**N matrix (where N is the number of qubits)
 
     """
     # Kudos: Based on MatLab code written by Marcus P. da Silva
@@ -249,8 +249,8 @@ def diamond_norm_distance(choi0: np.ndarray, choi1: np.ndarray) -> float:
     import cvxpy as cvx
     assert choi0.shape == choi1.shape
     assert choi0.shape[0] == choi1.shape[1]
-    dim2 = choi0.shape[0]
-    dim = int(np.sqrt(dim2))
+    dim_squared = choi0.shape[0]
+    dim = int(np.sqrt(dim_squared))
 
     delta_choi = choi0 - choi1
     delta_choi = (delta_choi.conj().T + delta_choi) / 2  # Enforce Hermiticity
@@ -262,13 +262,13 @@ def diamond_norm_distance(choi0: np.ndarray, choi1: np.ndarray) -> float:
     constraints += [cvx.trace(rho) == 1]
 
     # W must be Hermitian, positive semidefinite
-    W = cvx.Variable([dim2, dim2], complex=True)
+    W = cvx.Variable([dim_squared, dim_squared], complex=True)
     constraints += [W == W.H]
     constraints += [W >> 0]
 
     constraints += [(W - cvx.kron(np.eye(dim), rho)) << 0]
 
-    J = cvx.Parameter([dim2, dim2], complex=True)
+    J = cvx.Parameter([dim_squared, dim_squared], complex=True)
     objective = cvx.Maximize(cvx.real(cvx.trace(J.H * W)))
 
     prob = cvx.Problem(objective, constraints)
