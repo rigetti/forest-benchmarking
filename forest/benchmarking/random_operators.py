@@ -15,6 +15,7 @@ from numpy import linalg as la
 from scipy.linalg import sqrtm
 from sympy.combinatorics import Permutation
 from numpy.random import RandomState
+from forest.benchmarking.utils import partial_trace
 
 
 def ginibre_matrix_complex(D, K, rs: Optional[RandomState] = None):
@@ -141,20 +142,18 @@ def rand_map_with_BCSZ_dist(D, K):
     :return: D^2 × D^2 Choi matrix, drawn from the BCSZ distribution with Kraus rank K.
     """
     # TODO: this ^^ is CPTP, might want a flag that allows for just CP quantum operations.
-    # TODO: we now have a partial trace in utils.py  replace below with that...
     X = ginibre_matrix_complex(D ** 2, K)
-    rho = X.dot(np.transpose(np.conjugate(X)))
+    rho = X @ X.conj().T
     # Now compute the partial trace using method from:
     # https://www.peijun.me/reduced-density-matrix-and-partial-trace.html
     #
     # [[ TODO: might be better to do: rho_red = np.einsum('jiki->jk', reshaped_dm) 
     # ^^ see https://scicomp.stackexchange.com/questions/27496/calculating-partial-trace-of-array-in-numpy/27659 ]]
 
-    rho_tensor = rho.reshape([D, D, D, D])
-    rho_red = np.trace(rho_tensor, axis1=0, axis2=2)
+    rho_red = partial_trace(rho, [0], [D, D])
     # Now sqrt 
-    Q = np.kron(np.eye(D), sqrtm(la.inv(rho_red)))
-    Z = Q.dot(rho).dot(Q)
+    Q = np.kron(sqrtm(la.inv(rho_red)), np.eye(D))
+    Z = Q @ rho @ Q
     return Z
 
 
