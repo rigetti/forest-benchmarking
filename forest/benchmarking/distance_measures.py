@@ -182,6 +182,40 @@ def total_variation_distance(P, Q):
 # ============================================================================
 # Functions for quantum processes
 # ============================================================================
+def entanglement_fidelity(pauli_lio0: np.ndarray, pauli_lio1: np.ndarray) -> float:
+    """Returns the entanglement fidelity (F_e) between two channels, E and F, represented as Pauli
+    Liouville matrix. The expression is
+
+            F_e(E,F) = Tr[E^\dagger F] / (dim ** 2),
+
+    where dim is the dimension of the Hilbert space associated with E and F.
+
+    See the following references for more information see:
+
+    [GRAPTN] referenced in the superoperator_tools module. In particular section V subsection G.
+
+    [H**3] General teleportation channel, singlet fraction and quasi-distillation
+           Horodecki et al.,
+           PRA 60, 1888 (1999).
+           https://doi.org/10.1103/PhysRevA.60.1888
+           https://arxiv.org/abs/quant-ph/9807091
+
+    [GFID] A simple formula for the average gate fidelity of a quantum dynamical operation
+           M. Nielsen,
+           Physics Letters A 303, 249 (2002)
+           https://doi.org/10.1016/S0375-9601(02)01272-0
+           https://arxiv.org/abs/quant-ph/0205035
+
+    :param pauli_lio0: A dim**2 by dim**2 Pauli-Liouville matrix
+    :param pauli_lio1: A dim**2 by dim**2 Pauli-Liouville matrix
+    :return: Returns the entanglement fidelity between pauli_lio0 and pauli_lio1 which is a scalar.
+    """
+    assert pauli_lio0.shape == pauli_lio1.shape
+    assert pauli_lio0.shape[0] == pauli_lio1.shape[1]
+    dim_squared = pauli_lio0.shape[0]
+    dim = int(np.sqrt(dim_squared))
+    return np.trace(np.matmul(np.transpose(np.conj(pauli_lio0)), pauli_lio1)) / (dim ** 2)
+
 
 def process_fidelity(pauli_lio0: np.ndarray, pauli_lio1: np.ndarray) -> float:
     r"""Returns the fidelity between two channels, E and F, represented as Pauli Liouville matrix.
