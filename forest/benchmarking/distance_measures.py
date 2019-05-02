@@ -23,7 +23,7 @@ def purity(rho, dim_renorm=False):
 
     where dim is the dimension of ρ's Hilbert space.
 
-    :param rho: Is a dim by dim positive matrix.
+    :param rho: Is a dim by dim positive matrix with unit trace.
     :param dim_renorm: Boolean, default False.
     :return: P the purity of the state.
     """
@@ -44,8 +44,9 @@ def fidelity(rho, sigma):
 
     The fidelity obeys 0 ≤ F(rho,sigma) ≤ 1, where F(rho,sigma)=1 iff rho = sigma and
     F(rho,sigma)= 0 iff
-    :param rho: Is a D x D positive matrix.
-    :param sigma: Is a D x D positive matrix.
+
+    :param rho: Is a dim by dim positive matrix with unit trace.
+    :param sigma: Is a dim by dim positive matrix with unit trace.
     :return: Fidelity which is a scalar.
     """
     return (np.trace(sqrtm(np.matmul(np.matmul(sqrtm(rho), sigma), sqrtm(rho))))) ** 2
@@ -56,8 +57,8 @@ def trace_distance(rho, sigma):
     Computes the trace distance between two states rho and sigma i.e.
     T(rho,sigma) = (1/2)||rho-sigma||_1 , where ||X||_1 denotes the 1 norm of X.
 
-    :param rho: Is a D x D positive matrix.
-    :param sigma: Is a D x D positive matrix.
+    :param rho: Is a dim by dim positive matrix with unit trace.
+    :param sigma: Is a dim by dim positive matrix with unit trace.
     :return: Trace distance which is a scalar.
     """
     return (0.5) * np.linalg.norm(rho - sigma, 1)
@@ -68,8 +69,8 @@ def bures_distance(rho, sigma):
     Computes the Bures distance between two states rho and sigma i.e.
     D_B(rho,sigma)^2 = 2(1- sqrt[F(rho,sigma)]) , where F(rho,sigma) is the fidelity.
 
-    :param rho: Is a D x D positive matrix with unit trace.
-    :param sigma: Is a D x D positive matrix with unit trace.
+    :param rho: Is a dim by dim positive matrix with unit trace.
+    :param sigma: Is a dim by dim positive matrix with unit trace.
     :return: Bures distance which is a scalar.
     """
     return np.sqrt(2 * (1 - np.sqrt(fidelity(rho, sigma))))
@@ -81,8 +82,8 @@ def bures_angle(rho, sigma):
     D_A(rho,sigma) = arccos(sqrt[F(rho,sigma)]) , where F(rho,sigma) is the fidelity.
     The Bures angle is a measure of statistical distance between quantum states.
 
-    :param rho: Is a D x D positive matrix.
-    :param sigma: Is a D x D positive matrix.
+    :param rho: Is a dim by dim positive matrix with unit trace.
+    :param sigma: Is a dim by dim positive matrix with unit trace.
     :return: Bures angle which is a scalar.
     """
     return np.arccos(np.sqrt(fidelity(rho, sigma)))
@@ -90,13 +91,28 @@ def bures_angle(rho, sigma):
 
 def quantum_chernoff_bound(rho, sigma):
     """
-    Computes the exponent of the quantum Chernoff bound between rho and sigma.
+    Computes the quantum Chernoff bound between rho and sigma. It is defined as
 
-    :param rho: Is a D x D positive matrix.
-    :param sigma: Is a D x D positive matrix.
-    :return: the exponent of the quantum Chernoff bound angle which is a scalar.
+    ξ_{QCB}(rho,sigma) = - log[ min_{0\le s\le 1} tr(rho**s sigma**{1-s} ].
+
+    It is also common to study the non-logarithmic variety of the quantum Chernoff bound denoted as
+
+    Q_{QCB}(rho,sigma) = min_{0\le s\le 1} tr(rho**s sigma**{1-s}.
+
+    The quantum Chernoff bound has many nice properties, see [QCB]. Importantly it is
+    operationally important in the following context. Given n copies of rho or sigma the minimum
+    error probability for discriminating for rho from sigma is P_{e,min,n} ~ exp[-n ξ_{QCB}].
+
+    [QCB] The Quantum Chernoff Bound
+          Audenaert et al.,
+          Phys. Rev. Lett. 98, 160501 (2007)
+          https://dx.doi.org/10.1103/PhysRevLett.98.160501
+          https://arxiv.org/abs/quant-ph/0610027
+
+    :param rho: Is a dim by dim positive matrix with unit trace.
+    :param sigma: Is a dim by dim positive matrix with unit trace.
+    :return: the non-logarithmic quantum Chernoff bound and the s achieving the minimum.
     """
-
     def f(s):
         s = np.real_if_close(s)
         return np.trace(
@@ -114,8 +130,8 @@ def hilbert_schmidt_ip(A, B):
         HS = (A|B) = Tr[A^\dagger B]
     where |B) = vec(B) and (A| is the dual vector to |A).
 
-    :param A: Is a D x D matrix.
-    :param B: Is a D x D matrix.
+    :param A: Is a dim by dim positive matrix with unit trace.
+    :param B: Is a dim by dim positive matrix with unit trace.
     :return: HS inner product which is a scalar.
     """
     return np.trace(np.matmul(np.transpose(np.conj(A)), B))
@@ -130,8 +146,8 @@ def smith_fidelity(rho, sigma, power):
     At present there is no known operational interpretation of the Smith fidelity for an arbitrary
     power.
 
-    :param rho: Is a D x D positive matrix.
-    :param sigma: Is a D x D positive matrix.
+    :param rho: Is a dim by dim positive matrix with unit trace.
+    :param sigma: Is a dim by dim positive matrix with unit trace.
     :param power: Is a positive scalar less than 2.
     :return: Smith Fidelity which is a scalar.
     """
@@ -153,8 +169,8 @@ def total_variation_distance(P, Q):
     where tvd(P,Q) is in [0,1]. There is an alternate definition for non-finite alphabet measures
     involving a supremum.
 
-    :param P: Is a numpy array of length D.
-    :param Q: Is a numpy array of length D.
+    :param P: Is a numpy array of length dim.
+    :param Q: Is a numpy array of length dim.
     :return: total variation distance which is a scalar.
     """
     if len(P) != len(Q):
@@ -172,13 +188,14 @@ def process_fidelity(pauli_lio0: np.ndarray, pauli_lio1: np.ndarray) -> float:
 
     The expression is
 
-             F_process(E,F) = ( Tr[E^\dagger F] + d ) / (d^2 + d),
+             F_process(E,F) = ( Tr[E^\dagger F] + dim ) / (dim^2 + dim),
 
     which is sometimes written as
 
-            F_process(E,F) = ( d F_e + 1 ) / (d + 1)
+            F_process(E,F) = ( dim F_e + 1 ) / (dim + 1)
 
-    where F_e is the entanglement fidelity see https://arxiv.org/abs/quant-ph/9807091 .
+    where dim is the dimension of the Hilbert space asociated with E and F, and F_e is the
+    entanglement fidelity see https://arxiv.org/abs/quant-ph/9807091 .
 
     NOTE: F_process is sometimes "gate fidelity" and F_e is sometimes called "process fidelity".
 
@@ -194,8 +211,8 @@ def process_fidelity(pauli_lio0: np.ndarray, pauli_lio1: np.ndarray) -> float:
            https://doi.org/10.1016/S0375-9601(02)01272-0
            https://arxiv.org/abs/quant-ph/0205035
 
-    :param pauli_lio0: A D^2 x D^2 pauli-liouville matrix (where D is the Hilbert space dimension)
-    :param pauli_lio1: A D^2 x D^2 pauli-liouville matrix (where D is the Hilbert space dimension)
+    :param pauli_lio0: A dim**2 by dim**2 Pauli-Liouville matrix
+    :param pauli_lio1: A dim**2 by dim**2 Pauli-Liouville matrix
     :return: The process fidelity between pauli_lio0 and pauli_lio1 which is a scalar.
     """
     assert pauli_lio0.shape == pauli_lio1.shape
