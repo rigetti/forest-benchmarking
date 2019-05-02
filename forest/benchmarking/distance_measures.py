@@ -294,7 +294,7 @@ def watrous_bounds(choi: np.ndarray) -> float:
     StackOverflow answer, although the results can also be found scattered in 
     the literature.
 
-    :param choi: d1 x d2 matrix (for qubits, di = 4^Ni, where Ni is a number of qubits)
+    :param choi: dim1 by dim2 matrix (for qubits, dimi = 4^Ni, where Ni is a number of qubits)
     """
 
     if len(choi.shape) != 2:
