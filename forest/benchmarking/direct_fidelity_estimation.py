@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pyquil import Program
 from pyquil.api import BenchmarkConnection, QuantumComputer
 from pyquil.operator_estimation import ExperimentResult, ExperimentSetting, TomographyExperiment, \
-    TensorProductState, measure_observables, plusX, minusX, plusY, minusY, plusZ, minusZ
+    TensorProductState, measure_observables, plusX, minusX, plusY, minusY, plusZ, minusZ, _max_weight_operator
 from pyquil.paulis import PauliTerm, sI, sX, sY, sZ
 
 
@@ -313,6 +313,10 @@ def acquire_dfe_data(qc: QuantumComputer, expr: TomographyExperiment, n_shots=10
         res = list(measure_observables(qc, expr, n_shots=n_shots, active_reset=active_reset, readout_symmetrize=None,
                                        calibrate_readout=None))
 
+    # identify the qubits being measured
+    max_weight_op = _max_weight_operator([e[0].out_operator for e in expr])
+    qubits = max_weight_op.get_qubits()
+
     return DFEData(results=res,
                    in_states=[str(e[0].in_state) for e in expr],
                    program=expr.program,
@@ -321,8 +325,8 @@ def acquire_dfe_data(qc: QuantumComputer, expr: TomographyExperiment, n_shots=10
                    pauli_std_err=np.array([r.std_err for r in res]),
                    cal_point_est=np.array([r.calibration_expectation for r in res]),
                    cal_std_err=np.array([r.calibration_std_err for r in res]),
-                   dimension=2**len(expr.qubits),
-                   qubits=expr.qubits)
+                   dimension=2**len(qubits),
+                   qubits=qubits)
 
 
 def estimate_dfe(data: DFEData, kind: str) -> DFEEstimate:

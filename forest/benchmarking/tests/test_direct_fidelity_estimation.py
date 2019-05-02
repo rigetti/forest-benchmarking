@@ -1,13 +1,15 @@
 from forest.benchmarking.direct_fidelity_estimation import generate_exhaustive_state_dfe_experiment, generate_exhaustive_process_dfe_experiment, \
-    generate_monte_carlo_state_dfe_experiment, generate_monte_carlo_process_dfe_experiment
+    generate_monte_carlo_state_dfe_experiment, generate_monte_carlo_process_dfe_experiment, acquire_dfe_data, estimate_dfe
 
 from pyquil import Program
-from pyquil.api import BenchmarkConnection
+from pyquil.api import BenchmarkConnection, get_qc
 from pyquil.gates import *
 from pyquil.numpy_simulator import NumpyWavefunctionSimulator
 from pyquil.operator_estimation import _one_q_state_prep
 
-from numpy.testing import assert_almost_equal
+from numpy.testing import assert_almost_equal, assert_allclose
+
+from test_process_tomography import test_qc
 
 def test_exhaustive_state_dfe(benchmarker: BenchmarkConnection):
     texpt = generate_exhaustive_state_dfe_experiment(program=Program(X(0), X(1)), qubits=[0, 1],
@@ -91,3 +93,15 @@ def test_monte_carlo_state_dfe(benchmarker: BenchmarkConnection):
 
         expectation = wfnsim.reset().do_program(prog).expectation(setting.out_operator)
         assert_almost_equal(expectation,1.,decimal=7)
+
+
+def test_acquire_dfe_data(benchmarker: BenchmarkConnection, qc=test_qc()):
+    process = Program(X(0))
+    texpt = generate_exhaustive_state_dfe_experiment(program=process, qubits=[0], benchmarker=benchmarker)
+    dfe_data = acquire_dfe_data(qc, texpt)
+    dfe_estimate = estimate_dfe(dfe_data, 'state')
+
+    assert dfe_estimate.dimension == 2
+    assert dfe_estimate.qubits == [0]
+    assert_allclose(dfe_estimate.fid_point_est, 1.0)
+    assert_allclose(dfe_estimate.fid_std_err, 0.0)

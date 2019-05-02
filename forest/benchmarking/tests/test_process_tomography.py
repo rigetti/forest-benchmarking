@@ -81,6 +81,10 @@ def test_qc():
     from pyquil.gates import I
 
     class BasicQVMCompiler(AbstractCompiler):
+
+        def __init__(self):
+            self.compiler = self
+
         def quil_to_native_quil(self, program: Program):
             return basic_compile(program)
 
