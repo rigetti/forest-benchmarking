@@ -97,12 +97,12 @@ def test_monte_carlo_state_dfe(benchmarker: BenchmarkConnection):
 
 
 def test_acquire_dfe_data(benchmarker: BenchmarkConnection, test_qc):
-    process = Program(X(2), X(3))   # this (Clifford) process acts as identity on qubits 0 and 1
-    texpt = generate_exhaustive_state_dfe_experiment(program=process, qubits=[0, 1], benchmarker=benchmarker)
+    # pick (Clifford) process that acts as identity on qubits 0 and 1
+    process = Program(X(2), X(3))
+    texpt = generate_exhaustive_state_dfe_experiment(program=process,
+                                                     qubits=[0, 1], benchmarker=benchmarker)
     dfe_data = acquire_dfe_data(qc=test_qc, expr=texpt)
     dfe_estimate = estimate_dfe(dfe_data, 'state')
-
-    assert 1 == 2
 
     assert dfe_estimate.dimension == 4
     assert dfe_estimate.qubits == [0, 1]
