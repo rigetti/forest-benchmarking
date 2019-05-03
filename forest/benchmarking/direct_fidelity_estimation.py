@@ -314,7 +314,7 @@ def acquire_dfe_data(qc: QuantumComputer, expr: TomographyExperiment, n_shots=10
                                        calibrate_readout=None))
 
     # identify the qubits being measured
-    qubits = list(set(e[0].out_operator.get_qubits() for e in expr))
+    qubits = list(functools.reduce(lambda x, y: set(x) | set(y), [e[0].out_operator.get_qubits() for e in expr]))
 
     return DFEData(results=res,
                    in_states=[str(e[0].in_state) for e in expr],
