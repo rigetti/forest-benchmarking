@@ -2,7 +2,7 @@ from forest.benchmarking.direct_fidelity_estimation import generate_exhaustive_s
     generate_monte_carlo_state_dfe_experiment, generate_monte_carlo_process_dfe_experiment, acquire_dfe_data, estimate_dfe
 
 from pyquil import Program
-from pyquil.api import BenchmarkConnection, get_qc
+from pyquil.api import BenchmarkConnection
 from pyquil.gates import *
 from pyquil.numpy_simulator import NumpyWavefunctionSimulator
 from pyquil.operator_estimation import _one_q_state_prep
