@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pyquil import Program
 from pyquil.api import BenchmarkConnection, QuantumComputer
 from pyquil.operator_estimation import ExperimentResult, ExperimentSetting, TomographyExperiment, \
-    TensorProductState, measure_observables, plusX, minusX, plusY, minusY, plusZ, minusZ, _max_weight_operator
+    TensorProductState, measure_observables, plusX, minusX, plusY, minusY, plusZ, minusZ
 from pyquil.paulis import PauliTerm, sI, sX, sY, sZ
 
 
@@ -314,8 +314,7 @@ def acquire_dfe_data(qc: QuantumComputer, expr: TomographyExperiment, n_shots=10
                                        calibrate_readout=None))
 
     # identify the qubits being measured
-    max_weight_op = _max_weight_operator([e[0].out_operator for e in expr])
-    qubits = max_weight_op.get_qubits()
+    qubits = list(set(e[0].out_operator for e in expr))
 
     return DFEData(results=res,
                    in_states=[str(e[0].in_state) for e in expr],
