@@ -11,6 +11,7 @@ from numpy.testing import assert_almost_equal, assert_allclose
 import pytest
 from test_process_tomography import test_qc
 
+
 def test_exhaustive_state_dfe(benchmarker: BenchmarkConnection):
     texpt = generate_exhaustive_state_dfe_experiment(program=Program(X(0), X(1)), qubits=[0, 1],
                                                      benchmarker=benchmarker)
