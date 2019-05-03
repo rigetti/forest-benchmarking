@@ -310,8 +310,11 @@ def acquire_dfe_data(qc: QuantumComputer, expr: TomographyExperiment, n_shots=10
     if mitigate_readout_errors:
         res = list(measure_observables(qc, expr, n_shots=n_shots, active_reset=active_reset))
     else:
-        res = list(measure_observables(qc, expr, n_shots=n_shots, active_reset=active_reset, readout_symmetrize=None,
+        res = list(measure_observables(qc, expr, n_shots=n_shots, active_reset=active_reset, symmetrize_readout=None,
                                        calibrate_readout=None))
+
+    # identify the qubits being measured
+    qubits = list(functools.reduce(lambda x, y: set(x) | set(y), [e[0].out_operator.get_qubits() for e in expr]))
 
     return DFEData(results=res,
                    in_states=[str(e[0].in_state) for e in expr],
@@ -321,8 +324,8 @@ def acquire_dfe_data(qc: QuantumComputer, expr: TomographyExperiment, n_shots=10
                    pauli_std_err=np.array([r.std_err for r in res]),
                    cal_point_est=np.array([r.calibration_expectation for r in res]),
                    cal_std_err=np.array([r.calibration_std_err for r in res]),
-                   dimension=2**len(expr.qubits),
-                   qubits=expr.qubits)
+                   dimension=2**len(qubits),
+                   qubits=qubits)
 
 
 def estimate_dfe(data: DFEData, kind: str) -> DFEEstimate:
