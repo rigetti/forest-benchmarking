@@ -15,6 +15,7 @@ from numpy import linalg as la
 from scipy.linalg import sqrtm
 from sympy.combinatorics import Permutation
 from numpy.random import RandomState
+from forest.benchmarking.utils import partial_trace
 
 
 def ginibre_matrix_complex(D, K, rs: Optional[RandomState] = None):
@@ -141,20 +142,14 @@ def rand_map_with_BCSZ_dist(D, K):
     :return: D^2 × D^2 Choi matrix, drawn from the BCSZ distribution with Kraus rank K.
     """
     # TODO: this ^^ is CPTP, might want a flag that allows for just CP quantum operations.
-    # TODO: we now have a partial trace in utils.py  replace below with that...
     X = ginibre_matrix_complex(D ** 2, K)
-    rho = X.dot(np.transpose(np.conjugate(X)))
-    # Now compute the partial trace using method from:
-    # https://www.peijun.me/reduced-density-matrix-and-partial-trace.html
-    #
-    # [[ TODO: might be better to do: rho_red = np.einsum('jiki->jk', reshaped_dm) 
-    # ^^ see https://scicomp.stackexchange.com/questions/27496/calculating-partial-trace-of-array-in-numpy/27659 ]]
-
-    rho_tensor = rho.reshape([D, D, D, D])
-    rho_red = np.trace(rho_tensor, axis1=0, axis2=2)
-    # Now sqrt 
-    Q = np.kron(np.eye(D), sqrtm(la.inv(rho_red)))
-    Z = Q.dot(rho).dot(Q)
+    rho = X @ X.conj().T
+    rho_red = partial_trace(rho, [0], [D, D])
+    # Note that Eqn. 8 of [RQO] uses a *row* stacking convention so in that case we would write
+    # Q = np.kron(np.eye(D), sqrtm(la.inv(rho_red)))
+    # But as we use column stacking we need:
+    Q = np.kron(sqrtm(la.inv(rho_red)), np.eye(D))
+    Z = Q @ rho @ Q
     return Z
 
 
@@ -163,7 +158,7 @@ def permute_tensor_factors(D, perm):
     Return a permutation matrix of the given dimension.
 
     Given a Hilbert space dimension $D$ and an list representing the permutation $perm$ of the
-    tensor product Hilbert spaces, returns a $D^len(perm) x D^len(perm)$ permutation matrix.
+    tensor product Hilbert spaces, returns a $D^len(perm)$ by $D^len(perm)$ permutation matrix.
     
     E.g. 1) Suppose D=2 and perm=[0,1] 
             Returns the identity operator on two qubits
@@ -184,7 +179,7 @@ def permute_tensor_factors(D, perm):
     thinking about higher moment (N>2) integrals over the Haar measure.
 
     :param D: Hilbert space dimension (scalar).
-    :param perm: The rank of a state (list).
+    :param perm: A list representing the permutation of the tensor factors.
     """
     dim_list = [D for i in range(2 * len(perm))]
 
