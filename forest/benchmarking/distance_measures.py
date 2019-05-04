@@ -190,7 +190,7 @@ def entanglement_fidelity(pauli_lio0: np.ndarray, pauli_lio1: np.ndarray) -> flo
 
     where dim is the dimension of the Hilbert space associated with E and F.
 
-    See the following references for more information see:
+    See the following references for more information:
 
     [GRAPTN] referenced in the superoperator_tools module. In particular section V subsection G.
 
