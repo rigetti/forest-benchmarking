@@ -434,6 +434,7 @@ pauli_label_ops = [('I', np.eye(2)), ('X', X), ('Y', Y), ('Z', Z)]
 
 PAULI_BASIS = OperatorBasis(pauli_label_ops)
 
+
 def n_qubit_pauli_basis(n):
     """
     Construct the tensor product operator basis of `n` PAULI_BASIS's.
@@ -451,6 +452,7 @@ def n_qubit_pauli_basis(n):
 computational_label_ops = [('0', np.array([[1], [0]])), ('1', np.array([[0], [1]]))]
 
 COMPUTATIONAL_BASIS = OperatorBasis(computational_label_ops)
+
 
 def n_qubit_computational_basis(n):
     """
