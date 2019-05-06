@@ -432,19 +432,7 @@ class OperatorBasis(object):
 
 pauli_label_ops = [('I', np.eye(2)), ('X', X), ('Y', Y), ('Z', Z)]
 
-
-def pauli_basis_measurements(qubit):
-    """
-    Generates the Programs required to measure the expectation values of the pauli operators.
-
-    :param qubit: Required argument (so that the caller has a reference).
-    """
-    pauli_label_meas_progs = [Program(), Program(RY(-np.pi / 2, qubit)), Program(RX(-np.pi / 2, qubit)), Program()]
-    return pauli_label_meas_progs
-
-
 PAULI_BASIS = OperatorBasis(pauli_label_ops)
-
 
 def n_qubit_pauli_basis(n):
     """
@@ -458,6 +446,34 @@ def n_qubit_pauli_basis(n):
         return PAULI_BASIS ** n
     else:
         raise ValueError("n = {} should be at least 1.".format(n))
+
+
+computational_label_ops = [('0', np.array([[1], [0]])), ('1', np.array([[0], [1]]))]
+
+COMPUTATIONAL_BASIS = OperatorBasis(computational_label_ops)
+
+def n_qubit_computational_basis(n):
+    """
+    Construct the tensor product operator basis of `n` PAULI_BASIS's.
+
+    :param int n: The number of qubits.
+    :return: The product Pauli operator basis of `n` qubits
+    :rtype: OperatorBasis
+    """
+    if n >= 1:
+        return PAULI_BASIS ** n
+    else:
+        raise ValueError("n = {} should be at least 1.".format(n))
+        
+
+def pauli_basis_measurements(qubit):
+    """
+    Generates the Programs required to measure the expectation values of the pauli operators.
+
+    :param qubit: Required argument (so that the caller has a reference).
+    """
+    pauli_label_meas_progs = [Program(), Program(RY(-np.pi / 2, qubit)), Program(RX(-np.pi / 2, qubit)), Program()]
+    return pauli_label_meas_progs
 
 
 def transform_pauli_moments_to_bit(mean_p, var_p):
