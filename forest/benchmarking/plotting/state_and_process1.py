@@ -3,7 +3,7 @@ import numpy as np
 
 
 def plot_pauli_rep_of_state(state_pl_basis, ax, labels, title):
-    """
+    r"""
     Visualize a quantum state in the Pauli-Liouville basis.
 
     :param numpy.ndarray state_pl_basis: The quantum state represented in the Pauli-Liouville basis.
