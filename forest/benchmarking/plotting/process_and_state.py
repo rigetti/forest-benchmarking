@@ -59,6 +59,26 @@ def plot_pauli_rep_of_state(state_pl_basis, ax, labels, title):
     ax.grid(False)
 
 
+def plot_pauli_bar_rep_of_state(state_pl_basis, ax, labels, title):
+    """
+    Visualize a quantum state in the Pauli-Liouville basis. The magnitude of the operator
+    coeffiences are represent by the height of a bar in the bargraph.
+
+    :param numpy.ndarray state_pl_basis: The quantum state represented in the Pauli-Liouville basis.
+    :param ax: The matplotlib axes.
+    :param labels: The labels for the operator basis states.
+    :param title: The title for the plot.
+    """
+    dim = len(labels)
+    im = ax.bar(np.arange(dim) - .4, np.real(state_pl_basis), width=.8)
+    ax.set_xticks(range(dim))
+    ax.set_xlabel("Pauli Operator")
+    ax.set_ylabel("Coefficient")
+    ax.set_title(title)
+    ax.set_xticklabels(labels, rotation=45)
+    ax.grid(False)
+
+
 def plot_pauli_transfer_matrix(ptransfermatrix, ax, labels, title):
     """
     Visualize a quantum process using the Pauli-Liouville representation (aka the Pauli Transfer
