@@ -463,7 +463,7 @@ def n_qubit_computational_basis(n):
     :rtype: OperatorBasis
     """
     if n >= 1:
-        return PAULI_BASIS ** n
+        return COMPUTATIONAL_BASIS ** n
     else:
         raise ValueError("n = {} should be at least 1.".format(n))
         
