@@ -1,6 +1,9 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
+THREE_COLOR_MAP = ['#48737F', '#FFFFFF', '#D6619E']
+rigetti_3_color_cm = LinearSegmentedColormap.from_list("Rigetti", THREE_COLOR_MAP[::-1], N=100)
+
 
 def plot_pauli_rep_of_state(state_pl_basis, ax, labels, title):
     """
@@ -79,7 +82,7 @@ def plot_pauli_bar_rep_of_state(state_pl_basis, ax, labels, title):
     ax.grid(False)
 
 
-def plot_pauli_transfer_matrix(ptransfermatrix, ax, labels, title):
+def plot_pauli_transfer_matrix(ptransfermatrix, ax, labels, title, fontsizes: int = 20):
     """
     Visualize a quantum process using the Pauli-Liouville representation (aka the Pauli Transfer
     Matrix) of the process.
@@ -88,6 +91,9 @@ def plot_pauli_transfer_matrix(ptransfermatrix, ax, labels, title):
     :param ax: The matplotlib axes.
     :param labels: The labels for the operator basis states.
     :param title: The title for the plot
+    :param fontsizes: Font size for axis labels
+    :return: The modified axis object.
+    :rtype: AxesSubplot
     """
     im = ax.imshow(ptransfermatrix, interpolation="nearest", cmap="RdBu", vmin=-1, vmax=1)
     dim = len(labels)
@@ -96,10 +102,11 @@ def plot_pauli_transfer_matrix(ptransfermatrix, ax, labels, title):
     cb.ax.set_yticklabels(ticklabs, ha='right')
     cb.ax.yaxis.set_tick_params(pad=35)
     ax.set_xticks(range(dim))
-    ax.set_xlabel("Input Pauli Operator")
+    ax.set_xlabel("Input Pauli Operator", fontsize=fontsizes)
     ax.set_yticks(range(dim))
-    ax.set_ylabel("Output Pauli Operator")
-    ax.set_title(title)
+    ax.set_ylabel("Output Pauli Operator", fontsize=fontsizes)
+    ax.set_title(title, int(floor(1.2*fontsizes))
     ax.set_xticklabels(labels, rotation=45)
     ax.set_yticklabels(labels)
     ax.grid(False)
+    return ax
