@@ -4,9 +4,7 @@ from dataclasses import dataclass
 from operator import mul
 from typing import Callable, Tuple, List, Optional, Union, Sequence
 
-import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.colors import LinearSegmentedColormap
 from scipy.linalg import logm, pinv, eigh
 
 import forest.benchmarking.distance_measures as dm
@@ -801,4 +799,3 @@ def estimate_variance(results: List[ExperimentResult],
             sample_estimate.append(np.real(functional(target_state, rho)))
 
     return np.mean(sample_estimate), np.var(sample_estimate)
-
