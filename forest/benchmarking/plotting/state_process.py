@@ -105,7 +105,7 @@ def plot_pauli_transfer_matrix(ptransfermatrix, ax, labels, title, fontsizes: in
     ax.set_xlabel("Input Pauli Operator", fontsize=fontsizes)
     ax.set_yticks(range(dim))
     ax.set_ylabel("Output Pauli Operator", fontsize=fontsizes)
-    ax.set_title(title, int(floor(1.2*fontsizes))
+    ax.set_title(title, int(floor(1.2*fontsizes)))
     ax.set_xticklabels(labels, rotation=45)
     ax.set_yticklabels(labels)
     ax.grid(False)
