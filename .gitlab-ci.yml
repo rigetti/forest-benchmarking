@@ -16,5 +16,5 @@ test:
     - pip install -r requirements.txt && pip install -e .
   script:
     - export QVM_URL='http://qvm:5000'
-    - export COMPILER_URL='tcp://quilc:5555'
+    - export QUILC_URL='tcp://quilc:5555'
     - MPLBACKEND=Agg pytest
