@@ -45,11 +45,11 @@ def _blob(x, y, w, w_max, area, cmap=None):
     xcorners = np.array([x - hs, x + hs, x + hs, x - hs])
     ycorners = np.array([y - hs, y - hs, y + hs, y + hs])
 
-    plt.fill(xcorners, ycorners,
-             color=cmap(int((w + w_max) * 256 / (2 * w_max))))
+    plt.fill(xcorners, ycorners, color=cmap(int((w + w_max) * 256 / (2 * w_max))))
 
 
-# From QuTip (see https://bit.ly/2LrbayH ) which in turn modified the code from the SciPy Cookbook.
+# Modified from QuTip (see https://bit.ly/2LrbayH ) which in turn modified the code from the
+# SciPy Cookbook.
 def hinton_real(matrix: np.ndarray,
                 max_weight: float = None,
                 xlabels: List[str] = None,
@@ -82,7 +82,7 @@ def hinton_real(matrix: np.ndarray,
         cmap = cm.RdBu
 
     if title and fig:
-        ax.set_title(title)
+        ax.set_title(title,y=1.1)
 
     ax.set_aspect('equal', 'box')
     ax.set_frame_on(False)
@@ -99,11 +99,11 @@ def hinton_real(matrix: np.ndarray,
             _x = x + 1
             _y = y + 1
             if np.real(matrix[x, y]) > 0.0:
-                _blob(_x - 0.5, height - _y + 0.5, np.abs(matrix[x, y]), max_weight,
-                      np.min(1, np.abs(matrix[x, y]) / max_weight), cmap=cmap)
+                _blob(_x - 0.5, height - _y + 0.5, abs(matrix[x, y]), max_weight,
+                      min(1, abs(matrix[x, y]) / max_weight), cmap=cmap)
             else:
-                _blob(_x - 0.5, height - _y + 0.5, -np.abs(matrix[x, y]), max_weight,
-                      np.min(1, np.abs(matrix[x, y]) / max_weight), cmap=cmap)
+                _blob(_x - 0.5, height - _y + 0.5, -abs(matrix[x, y]), max_weight,
+                      min(1, abs(matrix[x, y]) / max_weight), cmap=cmap)
 
     # color axis
     if max_weight is None:
