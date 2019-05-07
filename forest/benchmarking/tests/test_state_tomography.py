@@ -13,29 +13,32 @@ from pyquil.api._qac import AbstractCompiler
 from pyquil.device import NxDevice
 from pyquil.gates import I, H, CZ
 from pyquil.numpy_simulator import NumpyWavefunctionSimulator
-from pyquil.operator_estimation import measure_observables
+from pyquil.operator_estimation import measure_observables, ExperimentResult, ExperimentSetting, \
+    zeros_state
+from pyquil.paulis import sI, sZ, sX
 from pyquil.quil import Program
 from rpcq.messages import PyQuilExecutableResponse
 
 from forest.benchmarking import distance_measures as dm
 
 # Single qubit defs
+Q0 = 0
 PROJ_ZERO = np.array([[1, 0], [0, 0]])
 PROJ_ONE = np.array([[0, 0], [0, 1]])
 ID = PROJ_ZERO + PROJ_ONE
 PLUS = np.array([[1], [1]]) / np.sqrt(2)
 PROJ_PLUS = PLUS @ PLUS.T.conj()
 PROJ_MINUS = ID - PROJ_PLUS
-Z_EFFECTS = [PROJ_ZERO, PROJ_ONE]
-X_EFFECTS = [PROJ_PLUS, PROJ_MINUS]
+
+ID_SETTING = ExperimentSetting(in_state=zeros_state([Q0]), out_operator=sI(Q0))
+Z_SETTING = ExperimentSetting(in_state=zeros_state([Q0]), out_operator=sZ(Q0))
+X_SETTING = ExperimentSetting(in_state=zeros_state([Q0]), out_operator=sX(Q0))
 
 # Two qubit defs
 P00 = np.kron(PROJ_ZERO, PROJ_ZERO)
 P01 = np.kron(PROJ_ZERO, PROJ_ONE)
 P10 = np.kron(PROJ_ONE, PROJ_ZERO)
 P11 = np.kron(PROJ_ONE, PROJ_ONE)
-ID_2Q = P00 + P01 + P10 + P11
-ZZ_EFFECTS = [P00, P01, P10, P11]
 
 
 def test_generate_1q_state_tomography_experiment():
@@ -64,34 +67,60 @@ def test_generate_2q_state_tomography_experiment():
 
 def test_R_operator_fixed_point_1_qubit():
     # Check fixed point of operator. See Eq. 5 in Řeháček et al., PRA 75, 042108 (2007).
-    obs_freqs = [1, 0]
+    qubits = [Q0]
 
-    def test_trace(rho, effects):
-        return np.trace(_R(rho, effects, obs_freqs) @ rho @ _R(rho, effects, obs_freqs) - rho)
+    id_result = ExperimentResult(setting=ID_SETTING, expectation=1, total_counts=1)
+    zplus_result = ExperimentResult(setting=Z_SETTING, expectation=1, total_counts=1)
+    xplus_result = ExperimentResult(setting=X_SETTING, expectation=1, total_counts=1)
 
-    np.testing.assert_allclose(test_trace(PROJ_ZERO, Z_EFFECTS), 0.0, atol=1e-12)
-    np.testing.assert_allclose(test_trace(PROJ_PLUS, X_EFFECTS), 0.0, atol=1e-12)
+    z_results = [id_result, zplus_result]
+    x_results = [id_result, xplus_result]
+
+    def test_trace(rho, results):
+        return _R(rho, results, qubits) @ rho @ _R(rho, results, qubits)
+
+    np.testing.assert_allclose(test_trace(PROJ_ZERO, z_results), PROJ_ZERO, atol=1e-12)
+    np.testing.assert_allclose(test_trace(PROJ_PLUS, x_results), PROJ_PLUS, atol=1e-12)
 
 
 def test_R_operator_with_hand_calc_example_1_qubit():
     # This example was worked out by hand
     rho = ID / 2
     obs_freqs = [3, 7]
-    my_by_hand_calc_ans_Z = ((3 / 0.5) * PROJ_ZERO + (7 / 0.5) * PROJ_ONE) / np.sum(obs_freqs)
-    my_by_hand_calc_ans_X = ((3 / 0.5) * PROJ_PLUS + (7 / 0.5) * PROJ_MINUS) / np.sum(obs_freqs)
+    my_by_hand_calc_ans_Z = ((3 / 0.5) * PROJ_ZERO + (7 / 0.5) * PROJ_ONE) / sum(obs_freqs)
+    my_by_hand_calc_ans_X = ((3 / 0.5) * PROJ_PLUS + (7 / 0.5) * PROJ_MINUS) / sum(obs_freqs)
+
+    qubits = [Q0]
+    exp = (obs_freqs[0] - obs_freqs[1]) / sum(obs_freqs)
+    zplus_result = ExperimentResult(setting=Z_SETTING, expectation=exp, total_counts=sum(obs_freqs))
+    xplus_result = ExperimentResult(setting=X_SETTING, expectation=exp, total_counts=sum(obs_freqs))
+
+    z_results = [zplus_result]
+    x_results = [xplus_result]
 
     # Z basis test
-    assert np.trace(_R(rho, Z_EFFECTS, obs_freqs / np.sum(obs_freqs)) - my_by_hand_calc_ans_Z) == 0
+    np.testing.assert_allclose(_R(rho, z_results, qubits), my_by_hand_calc_ans_Z, atol=1e-12)
     # X basis test
-    assert np.trace(_R(rho, X_EFFECTS, obs_freqs / np.sum(obs_freqs)) - my_by_hand_calc_ans_X) == 0
+    np.testing.assert_allclose(_R(rho, x_results, qubits), my_by_hand_calc_ans_X, atol=1e-12)
 
 
 def test_R_operator_fixed_point_2_qubit():
     # Check fixed point of operator. See Eq. 5 in Řeháček et al., PRA 75, 042108 (2007).
-    obs_freqs = [1, 0, 0, 0]
+    qubits = [0, 1]
+    id_setting = ExperimentSetting(in_state=zeros_state(qubits), out_operator=sI(qubits[0])*sI(
+        qubits[1]))
+    zz_setting = ExperimentSetting(in_state=zeros_state(qubits), out_operator=sZ(qubits[0])*sI(
+        qubits[1]))
+
+    id_result = ExperimentResult(setting=id_setting, expectation=1, total_counts=1)
+    zzplus_result = ExperimentResult(setting=zz_setting, expectation=1, total_counts=1)
+
+    zz_results = [id_result, zzplus_result]
+
     # Z basis test
-    actual = np.trace(_R(P00, ZZ_EFFECTS, obs_freqs) @ P00 @ _R(P00, ZZ_EFFECTS, obs_freqs) - P00)
-    np.testing.assert_allclose(actual, 0.0, atol=1e-12)
+    r = _R(P00, zz_results, qubits)
+    actual = r @ P00 @ r
+    np.testing.assert_allclose(actual, P00, atol=1e-12)
 
 
 def get_test_qc(n_qubits):
@@ -134,16 +163,9 @@ def single_q_tomo_fixture():
 
     # Get data from QVM
     tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
-    results = list(measure_observables(qc=qc, tomo_experiment=tomo_expt, n_shots=4000))
+    results = list(measure_observables(qc=qc, tomo_experiment=tomo_expt, n_shots=752))
 
     return results, rho_true
-
-
-def test_single_qubit_linear_inv(single_q_tomo_fixture):
-    qubits = [0]
-    results, rho_true = single_q_tomo_fixture
-    rho_est = linear_inv_state_estimate(results, qubits)
-    np.testing.assert_allclose(rho_true, rho_est, atol=1e-2)
 
 
 @pytest.fixture(scope='module')
@@ -166,68 +188,72 @@ def two_q_tomo_fixture():
 
     # Get data from QVM
     tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
-    results = list(measure_observables(qc=qc, tomo_experiment=tomo_expt, n_shots=4000))
+    results = list(measure_observables(qc=qc, tomo_experiment=tomo_expt, n_shots=752))
 
     return results, rho_true
+
+
+def test_single_qubit_linear_inv(single_q_tomo_fixture):
+    qubits = [0]
+    results, rho_true = single_q_tomo_fixture
+    rho_est = linear_inv_state_estimate(results, qubits)
+    np.testing.assert_allclose(rho_true, rho_est, atol=5e-2)
 
 
 def test_two_qubit_linear_inv(two_q_tomo_fixture):
     qubits = [0, 1]
     results, rho_true = two_q_tomo_fixture
     rho_est = linear_inv_state_estimate(results, qubits)
-    np.testing.assert_allclose(rho_true, rho_est, atol=0.01)
+    np.testing.assert_allclose(rho_true, rho_est, atol=5e-2)
 
 
 def test_single_qubit_mle(single_q_tomo_fixture):
     qubits = [0]
     results, rho_true = single_q_tomo_fixture
-    estimate, status = iterative_mle_state_estimate(results=results, qubits=qubits, dilution=0.5)
-    rho_est = estimate.estimate.state_point_est
+    rho_est = iterative_mle_state_estimate(results=results, qubits=qubits)
+
     np.testing.assert_allclose(rho_true, rho_est, atol=0.01)
 
 
 def test_two_qubit_mle(two_q_tomo_fixture):
     qubits = [0, 1]
     results, rho_true = two_q_tomo_fixture
-    estimate, status = iterative_mle_state_estimate(results=results, qubits=qubits, dilution=0.5)
-    rho_est = estimate.estimate.state_point_est
+    rho_est = iterative_mle_state_estimate(results=results, qubits=qubits)
+
     np.testing.assert_allclose(rho_true, rho_est, atol=0.01)
 
 
 def test_maxent_single_qubit(single_q_tomo_fixture):
     qubits = [0]
     results, rho_true = single_q_tomo_fixture
-    estimate, status = iterative_mle_state_estimate(results=results, qubits=qubits,
-                                                    dilution=0.5, entropy_penalty=1.0)
-    rho_est = estimate.estimate.state_point_est
+    rho_est = iterative_mle_state_estimate(results=results, qubits=qubits, entropy_penalty=.01)
+
     np.testing.assert_allclose(rho_true, rho_est, atol=0.01)
 
 
 def test_maxent_two_qubit(two_q_tomo_fixture):
     qubits = [0, 1]
     results, rho_true = two_q_tomo_fixture
-    estimate, status = iterative_mle_state_estimate(results=results, qubits=qubits,
-                                                    dilution=0.5, entropy_penalty=1.0, tol=1e-5)
-    rho_est = estimate.estimate.state_point_est
-    np.testing.assert_allclose(rho_true, rho_est, atol=0.01)
+    rho_est = iterative_mle_state_estimate(results=results, qubits=qubits, entropy_penalty=.01,
+                                           tol=1e-5)
+
+    np.testing.assert_allclose(rho_true, rho_est, atol=0.02)
 
 
 def test_hedged_single_qubit(single_q_tomo_fixture):
     qubits = [0]
     results, rho_true = single_q_tomo_fixture
-    estimate, status = iterative_mle_state_estimate(results=results, qubits=qubits,
-                                                    dilution=0.5, beta=0.5)
-    rho_est = estimate.estimate.state_point_est
+    rho_est = iterative_mle_state_estimate(results=results, qubits=qubits, epsilon=.001, beta=0.5)
+
     np.testing.assert_allclose(rho_true, rho_est, atol=0.01)
 
 
 def test_hedged_two_qubit(two_q_tomo_fixture):
     qubits = [0, 1]
     results, rho_true = two_q_tomo_fixture
-    estimate, status = iterative_mle_state_estimate(results=results, qubits=qubits,
-                                                    dilution=0.5, beta=0.5)
-    rho_est = estimate.estimate.state_point_est
-    np.testing.assert_allclose(rho_true, rho_est, atol=0.01)
+    rho_est = iterative_mle_state_estimate(results=results, qubits=qubits, epsilon=.0001, beta=0.5)
+
+    np.testing.assert_allclose(rho_true, rho_est, atol=0.02)
 
 
 def test_project_density_matrix():
@@ -248,20 +274,15 @@ def test_variance_bootstrap():
     state_prep = Program([H(q) for q in qubits])
     state_prep.inst(CZ(qubits[0], qubits[1]))
     tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
-    results = list(measure_observables(qc=qc, tomo_experiment=tomo_expt, n_shots=4000))
-    estimate, status = iterative_mle_state_estimate(results=results, qubits=qubits,
-                                                    dilution=0.5)
-    rho_est = estimate.estimate.state_point_est
+    results = list(measure_observables(qc=qc, tomo_experiment=tomo_expt, n_shots=100))
+    rho_est = iterative_mle_state_estimate(results=results, qubits=qubits)
     purity = np.trace(rho_est @ rho_est)
     purity = np.real_if_close(purity)
     assert purity.imag == 0.0
 
-    def my_mle_estimator(_r, _q):
-        return iterative_mle_state_estimate(results=_r, qubits=_q,
-                                            dilution=0.5, entropy_penalty=0.0, beta=0.0)[0]
-
     boot_purity, boot_var = estimate_variance(results=results, qubits=qubits,
-                                              tomo_estimator=my_mle_estimator, functional=dm.purity,
-                                              n_resamples=5, project_to_physical=False)
+                                              tomo_estimator=iterative_mle_state_estimate,
+                                              functional=dm.purity,  n_resamples=5,
+                                              project_to_physical=False)
 
     np.testing.assert_allclose(purity, boot_purity, atol=2 * np.sqrt(boot_var), rtol=0.01)
