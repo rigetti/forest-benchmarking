@@ -19,7 +19,6 @@ e.g.
 from typing import Sequence, Tuple
 import networkx as nx
 import numpy as np
-from numpy import pi
 from scipy.spatial.distance import hamming
 
 from pyquil.gates import CNOT, CCNOT, X, I, H, CZ, MEASURE, RESET
@@ -28,9 +27,11 @@ from pyquil.quil import Pragma
 from pyquil.api import QuantumComputer
 from pyquil.unitary_tools import all_bitstrings
 
-from forest.benchmarking.readout import _readout_group_parameterized_bitstring
 from forest.benchmarking.classical_logic.primitives import *
-from forest.benchmarking.utils import bit_array_to_int, int_to_bit_array
+from forest.benchmarking.utils import bit_array_to_int, int_to_bit_array, bitstring_prep, \
+    parameterized_bitstring_prep
+
+REG_NAME = 'input'
 
 
 def assign_registers_to_line_or_cycle(start: int, graph: nx.Graph, num_length: int) \
@@ -145,30 +146,6 @@ def get_qubit_registers_for_adder(qc: QuantumComputer, num_length: int,
     return assign_registers_to_line_or_cycle(start_node, subgraph, num_length)
 
 
-def prepare_bitstring(bitstring: Sequence[int], register: Sequence[int], in_x_basis: bool = False):
-    """
-    Creates a program to prepare the input bitstring on the qubits given by the corresponding
-    label in the register.
-
-    :param bitstring:
-    :param register: a list of qubits on which to prepare the bitstring. The first
-    :param in_x_basis: if true, prepare the bitstring-representation of the numbers in the x basis.
-    :returns: state_prep_prog - program
-    """
-    state_prep_prog = Program()
-
-    for bit, qubit_label in zip(bitstring, register):
-        if bit == 1:
-            state_prep_prog += X(qubit_label)
-
-        # if we are doing logic in X basis, follow each bit preparation with a Hadamard
-        # H |0> = |+> and H |1> = |-> where + and - label the X basis vectors.
-        if in_x_basis:
-            state_prep_prog += H(qubit_label)
-
-    return state_prep_prog
-
-
 def adder(num_a: Sequence[int], num_b: Sequence[int], register_a: Sequence[int],
           register_b: Sequence[int], carry_ancilla: int, z_ancilla: int, in_x_basis: bool = False,
           use_param_program: bool = False) -> Program:
@@ -231,14 +208,11 @@ def adder(num_a: Sequence[int], num_b: Sequence[int], register_a: Sequence[int],
     # First, generate a set preparation program in the desired basis.
     prog = Program(Pragma('PRESERVE_BLOCK'))
     if use_param_program:
-        # do_measure set to False makes the returned program a parameterized prep program
         input_register = register_a + register_b
-        prog += _readout_group_parameterized_bitstring(input_register[::-1], do_measure=False)
-        if in_x_basis:
-            prog += [H(qubit) for qubit in input_register]
+        prog += parameterized_bitstring_prep(input_register[::-1], REG_NAME, in_x_basis=in_x_basis)
     else:
-        prog += prepare_bitstring(num_a[::-1], register_a, in_x_basis)
-        prog += prepare_bitstring(num_b[::-1], register_b, in_x_basis)
+        prog += bitstring_prep(register_a, num_a[::-1], in_x_basis=in_x_basis)
+        prog += bitstring_prep(register_b, num_b[::-1], in_x_basis=in_x_basis)
 
     if in_x_basis:
         prog += [H(carry_ancilla), H(z_ancilla)]
@@ -329,7 +303,7 @@ def get_n_bit_adder_results(qc: QuantumComputer, n_bits: int,
 
         # Run it on the QPU or QVM
         if use_param_program:
-            results = qc.run(exe, memory_map={'target': [bit * pi for bit in bits]})
+            results = qc.run(exe, memory_map={REG_NAME: bits})
         else:
             results = qc.run(exe)
         all_results.append(results)
