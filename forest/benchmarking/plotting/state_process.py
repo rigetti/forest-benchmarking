@@ -83,7 +83,7 @@ def plot_pauli_bar_rep_of_state(state_pl_basis, ax, labels, title):
     ax.grid(False)
 
 
-def plot_pauli_transfer_matrix(ptransfermatrix, ax, labels=None, title='', fontsizes: int = 20):
+def plot_pauli_transfer_matrix(ptransfermatrix, ax, labels=None, title='', fontsizes: int = 16):
     """
     Visualize a quantum process using the Pauli-Liouville representation (aka the Pauli Transfer
     Matrix) of the process.
@@ -113,7 +113,7 @@ def plot_pauli_transfer_matrix(ptransfermatrix, ax, labels=None, title='', fonts
     ax.set_yticks(range(dim_squared))
     ax.set_ylabel("Output Pauli Operator", fontsize=fontsizes)
     ax.set_title(title, fontsize= int(np.floor(1.2*fontsizes)))
-    ax.set_xticklabels(labels, rotation=45)
-    ax.set_yticklabels(labels)
+    ax.set_xticklabels(labels, rotation=45, fontsize=int(np.floor(0.7*fontsizes)))
+    ax.set_yticklabels(labels, fontsize=int(np.floor(0.7*fontsizes)))
     ax.grid(False)
     return ax
