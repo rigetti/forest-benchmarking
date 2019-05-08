@@ -44,7 +44,7 @@ def _blob(x, y, w, w_max, area, cmap=None):
     xcorners = np.array([x - hs, x + hs, x + hs, x - hs])
     ycorners = np.array([y - hs, y - hs, y + hs, y + hs])
 
-    plt.fill(xcorners, ycorners, color=cmap(int((w + w_max) * 256 / (2 * w_max))))
+    plt.fill(xcorners, ycorners, color=cmap)  # cmap(int((w + w_max) * 256 / (2 * w_max))))
 
 
 # Modified from QuTip (see https://bit.ly/2LrbayH ) which in turn modified the code from the
@@ -77,11 +77,22 @@ def hinton_real(matrix: np.ndarray,
     '''
     if ax is None:
         fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+
+    # Grays in increasing darkness: smokewhite, gainsboro, lightgrey, lightgray, silver
+    backgnd_gray = 'gainsboro'
+
     if cmap is None:
         cmap = cm.RdBu
+        cneg = cmap(0)
+        cpos = cmap(256)
+        cmap = mpl.colors.ListedColormap([cneg, backgnd_gray, cpos])
+    else:
+        cneg = cmap(0)
+        cpos = cmap(256)
+        cmap = mpl.colors.ListedColormap([cneg, backgnd_gray, cpos])
 
     if title and fig:
-        ax.set_title(title,y=1.1)
+        ax.set_title(title, y=1.1, fontsize=18)
 
     ax.set_aspect('equal', 'box')
     ax.set_frame_on(False)
@@ -92,25 +103,29 @@ def hinton_real(matrix: np.ndarray,
         if max_weight <= 0.0:
             max_weight = 1.0
 
-    ax.fill(np.array([0, width, width, 0]), np.array([0, 0, height, height]), color=cmap(128))
+    bounds = [-max_weight, -0.0001, 0.0001, max_weight]
+    tick_loc = [-max_weight / 2, 0, max_weight / 2]
+
+    ax.fill(np.array([0, width, width, 0]), np.array([0, 0, height, height]), color=cmap(1))
     for x in range(width):
         for y in range(height):
             _x = x + 1
             _y = y + 1
             if np.real(matrix[x, y]) > 0.0:
                 _blob(_x - 0.5, height - _y + 0.5, abs(matrix[x, y]), max_weight,
-                      min(1, abs(matrix[x, y]) / max_weight), cmap=cmap)
+                      min(1, abs(matrix[x, y]) / max_weight), cmap=cmap(2))
             else:
                 _blob(_x - 0.5, height - _y + 0.5, -abs(matrix[x, y]), max_weight,
-                      min(1, abs(matrix[x, y]) / max_weight), cmap=cmap)
+                      min(1, abs(matrix[x, y]) / max_weight), cmap=cmap(0))
 
-    # color axis
-    if max_weight is None:
-        norm = mpl.colors.Normalize(-np.abs(matrix).max(), np.abs(matrix).max())
-    else:
-        norm = mpl.colors.Normalize(-np.abs(max_weight), max_weight)
+    norm = mpl.colors.BoundaryNorm(bounds, cmap.N)
     cax, kw = mpl.colorbar.make_axes(ax, shrink=0.75, pad=.1)
-    mpl.colorbar.ColorbarBase(cax, norm=norm, cmap=cmap)
+    mpl.colorbar.ColorbarBase(cax,
+                              norm=norm,
+                              cmap=cmap,
+                              boundaries=bounds,
+                              ticks=tick_loc).set_ticklabels(['$-$', '$0$', '$+$'])
+    cax.tick_params(labelsize=14)
     # x axis
     ax.xaxis.set_major_locator(plt.IndexLocator(1, 0.5))
     if xlabels:
