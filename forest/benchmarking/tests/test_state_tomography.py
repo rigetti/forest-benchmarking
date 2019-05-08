@@ -270,9 +270,9 @@ def test_project_density_matrix():
     assert np.allclose(phys, np.diag([0, 0, 1.0 / 5, 7.0 / 20, 9.0 / 20]))
 
 
-def test_variance_bootstrap():
+def test_variance_bootstrap(two_q_tomo_fixture):
     qubits = [0, 1]
-    results, rho_true = two_q_tomo_fixture()
+    results, rho_true = two_q_tomo_fixture
     rho_est = iterative_mle_state_estimate(results=results, qubits=qubits, tol=1e-4)
     purity = np.trace(rho_est @ rho_est)
     purity = np.real_if_close(purity)
