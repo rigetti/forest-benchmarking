@@ -17,7 +17,7 @@ from pyquil.operator_estimation import ExperimentSetting, \
     TomographyExperiment as PyQuilTomographyExperiment, ExperimentResult, SIC0, SIC1, SIC2, SIC3, \
     plusX, minusX, plusY, minusY, plusZ, minusZ, TensorProductState, zeros_state
 from pyquil.paulis import sI, sX, sY, sZ, PauliSum, PauliTerm, is_identity
-from pyquil.unitary_tools import lifted_pauli, lifted_state_operator
+from pyquil.unitary_tools import lifted_pauli as pauli2matrix, lifted_state_operator as state2matrix
 
 MAXITER = "maxiter"
 OPTIMAL = "optimal"
@@ -152,7 +152,7 @@ def linear_inv_state_estimate(results: List[ExperimentResult],
     :return: A point estimate of the quantum state rho.
     """
     measurement_matrix = np.vstack([
-        vec(lifted_pauli(result.setting.out_operator, qubits=qubits)).T.conj()
+        vec(pauli2matrix(result.setting.out_operator, qubits=qubits)).T.conj()
         for result in results
     ])
     expectations = np.array([result.expectation for result in results])
@@ -310,7 +310,7 @@ def _R(state, results, qubits):
     IdH = np.eye(update.shape[0])
 
     for res in results:
-        op_matrix = lifted_pauli(res.setting.out_operator, qubits)
+        op_matrix = pauli2matrix(res.setting.out_operator, qubits)
         meas_exp = res.expectation
         pred_exp = np.trace(op_matrix @ state)
 
@@ -338,7 +338,7 @@ def state_log_likelihood(state, results, qubits) -> float:
     ll = 0
     for res in results:
         n = res.total_counts
-        op_matrix = lifted_pauli(res.setting.out_operator, qubits)
+        op_matrix = pauli2matrix(res.setting.out_operator, qubits)
         meas_exp = res.expectation
         pred_exp = np.real(np.trace(op_matrix @ state))
 
@@ -371,9 +371,9 @@ def _extract_from_results(results: List[ExperimentResult], qubits: List[int]):
     for result in results:
         # 'lift' the result's ExperimentSetting input TensorProductState to the corresponding
         # matrix. This is simply the density matrix of the state that was prepared.
-        in_state_matrix = lifted_state_operator(result.setting.in_state, qubits=qubits)
+        in_state_matrix = state2matrix(result.setting.in_state, qubits=qubits)
         # 'lift' the result's ExperimentSetting output PauliTerm to the corresponding matrix.
-        operator = lifted_pauli(result.setting.out_operator, qubits=qubits)
+        operator = pauli2matrix(result.setting.out_operator, qubits=qubits)
         proj_plus = (np.eye(2 ** len(qubits)) + operator) / 2
         proj_minus = (np.eye(2 ** len(qubits)) - operator) / 2
 

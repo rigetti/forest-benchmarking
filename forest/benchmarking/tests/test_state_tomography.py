@@ -1,6 +1,7 @@
 import networkx as nx
 import numpy as np
 import pytest
+from functools import partial
 from requests.exceptions import RequestException
 from forest.benchmarking.compilation import basic_compile
 from forest.benchmarking.random_operators import haar_rand_unitary
@@ -226,7 +227,8 @@ def test_two_qubit_mle(two_q_tomo_fixture):
 def test_maxent_single_qubit(single_q_tomo_fixture):
     qubits = [0]
     results, rho_true = single_q_tomo_fixture
-    rho_est = iterative_mle_state_estimate(results=results, qubits=qubits, entropy_penalty=.01)
+    rho_est = iterative_mle_state_estimate(results=results, qubits=qubits, entropy_penalty=.01,
+                                           tol=1e-4)
 
     np.testing.assert_allclose(rho_true, rho_est, atol=0.01)
 
@@ -243,16 +245,16 @@ def test_maxent_two_qubit(two_q_tomo_fixture):
 def test_hedged_single_qubit(single_q_tomo_fixture):
     qubits = [0]
     results, rho_true = single_q_tomo_fixture
-    rho_est = iterative_mle_state_estimate(results=results, qubits=qubits, epsilon=.001, beta=0.5)
-
+    rho_est = iterative_mle_state_estimate(results=results, qubits=qubits, epsilon=.001, beta=0.5,
+                                           tol=1e-3)
     np.testing.assert_allclose(rho_true, rho_est, atol=0.01)
 
 
 def test_hedged_two_qubit(two_q_tomo_fixture):
     qubits = [0, 1]
     results, rho_true = two_q_tomo_fixture
-    rho_est = iterative_mle_state_estimate(results=results, qubits=qubits, epsilon=.0001, beta=0.5)
-
+    rho_est = iterative_mle_state_estimate(results=results, qubits=qubits, epsilon=.0001, beta=0.5,
+                                           tol=1e-3)
     np.testing.assert_allclose(rho_true, rho_est, atol=0.02)
 
 
@@ -270,19 +272,17 @@ def test_project_density_matrix():
 
 def test_variance_bootstrap():
     qubits = [0, 1]
-    qc = get_test_qc(n_qubits=len(qubits))
-    state_prep = Program([H(q) for q in qubits])
-    state_prep.inst(CZ(qubits[0], qubits[1]))
-    tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
-    results = list(measure_observables(qc=qc, tomo_experiment=tomo_expt, n_shots=100))
-    rho_est = iterative_mle_state_estimate(results=results, qubits=qubits)
+    results, rho_true = two_q_tomo_fixture()
+    rho_est = iterative_mle_state_estimate(results=results, qubits=qubits, tol=1e-4)
     purity = np.trace(rho_est @ rho_est)
     purity = np.real_if_close(purity)
     assert purity.imag == 0.0
 
+    faster_tomo_est = partial(iterative_mle_state_estimate, epsilon=.0001, beta=.5, tol=1e-3)
+
     boot_purity, boot_var = estimate_variance(results=results, qubits=qubits,
-                                              tomo_estimator=iterative_mle_state_estimate,
-                                              functional=dm.purity,  n_resamples=5,
+                                              tomo_estimator=faster_tomo_est,
+                                              functional=dm.purity,  n_resamples=50,
                                               project_to_physical=False)
 
     np.testing.assert_allclose(purity, boot_purity, atol=2 * np.sqrt(boot_var), rtol=0.01)
