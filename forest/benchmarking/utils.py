@@ -456,7 +456,7 @@ COMPUTATIONAL_BASIS = OperatorBasis(computational_label_ops)
 
 def n_qubit_computational_basis(n):
     """
-    Construct the tensor product operator basis of `n` PAULI_BASIS's.
+    Construct the tensor product operator basis of `n` COMPUTATIONAL_BASIS's.
 
     :param int n: The number of qubits.
     :return: The product Pauli operator basis of `n` qubits
