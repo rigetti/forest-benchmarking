@@ -35,7 +35,6 @@ def hinton(matrix, max_weight=1.0, ax=None):
     ax.invert_yaxis()
 
 
-
 # From QuTiP which in turn modified the code from the SciPy Cookbook.
 def _blob(x, y, w, w_max, area, cmap=None):
     """
