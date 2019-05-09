@@ -4,9 +4,7 @@ from dataclasses import dataclass
 from operator import mul
 from typing import Callable, Tuple, List, Optional, Union, Sequence
 
-import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.colors import LinearSegmentedColormap
 from scipy.linalg import logm, pinv, eigh
 
 import forest.benchmarking.distance_measures as dm
@@ -801,33 +799,3 @@ def estimate_variance(results: List[ExperimentResult],
             sample_estimate.append(np.real(functional(target_state, rho)))
 
     return np.mean(sample_estimate), np.var(sample_estimate)
-
-
-THREE_COLOR_MAP = ['#48737F', '#FFFFFF', '#D6619E']
-rigetti_3_color_cm = LinearSegmentedColormap.from_list("Rigetti", THREE_COLOR_MAP[::-1], N=100)
-
-
-def plot_pauli_transfer_matrix(ptransfermatrix, ax, title = ''):
-    """
-    Visualize the Pauli Transfer Matrix of a process.
-    :param numpy.ndarray ptransfermatrix: The Pauli Transfer Matrix
-    :param ax: The matplotlib axes.
-    :param labels: The labels for the operator basis states.
-    :param title: The title for the plot
-    :return: The modified axis object.
-    :rtype: AxesSubplot
-    """
-    im = ax.imshow(np.real(ptransfermatrix), interpolation="nearest", cmap=rigetti_3_color_cm, vmin=-1,vmax=1)
-    dim_squared = ptransfermatrix.shape[0]
-    num_qubits = np.int(np.log2(np.sqrt(dim_squared)))
-    labels = [''.join(x) for x in itertools.product('IXYZ', repeat=num_qubits)]
-    plt.colorbar(im, ax=ax)
-    ax.set_xticks(range(dim_squared))
-    ax.set_xlabel("Input Pauli Operator", fontsize=20)
-    ax.set_yticks(range(dim_squared))
-    ax.set_ylabel("Output Pauli Operator", fontsize=20)
-    ax.set_title(title, fontsize=25)
-    ax.set_xticklabels(labels, rotation=45)
-    ax.set_yticklabels(labels)
-    ax.grid(False)
-    return ax
