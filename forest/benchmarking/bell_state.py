@@ -1,9 +1,26 @@
 import networkx as nx
-import numpy as np
-from pyquil.gates import H, CNOT, MEASURE
-from pyquil.quil import Program
+from forest.benchmarking.entangled_states import create_ghz_program
+from forest.benchmarking.entangled_states import ghz_state_statistics
 
+import warnings
+import functools
 
+def deprecated(func):
+    """This is a decorator which can be used to mark functions
+    as deprecated. It will result in a warning being emitted
+    when the function is used."""
+    @functools.wraps(func)
+    def new_func(*args, **kwargs):
+        warnings.simplefilter('always', DeprecationWarning)  # turn off filter
+        warnings.warn("Call to deprecated function {}. \r\n \r\n Use the GHZ functions in "
+                      "forest.benchmarking.entangled_states instead.\r\n".format(func.__name__),
+                      category=DeprecationWarning,
+                      stacklevel=2)
+        warnings.simplefilter('default', DeprecationWarning)  # reset filter
+        return func(*args, **kwargs)
+    return new_func
+
+@deprecated
 def create_bell_program(tree: nx.DiGraph):
     """
     Create a Bell/GHZ state with CNOTs described by tree.
@@ -11,22 +28,9 @@ def create_bell_program(tree: nx.DiGraph):
     :param tree: A tree that describes the CNOTs to perform to create a bell/GHZ state.
     :return: the program
     """
-    assert nx.is_tree(tree), 'Needs to be a tree'
-    nodes = list(nx.topological_sort(tree))
-    n_qubits = len(nodes)
-    program = Program(H(nodes[0]))
+    return create_ghz_program(tree)
 
-    for node in nodes:
-        for child in tree.successors(node):
-            program += CNOT(node, child)
-
-    ro = program.declare('ro', 'BIT', n_qubits)
-    for i, q in enumerate(nodes):
-        program += MEASURE(q, ro[i])
-
-    return program
-
-
+@deprecated
 def bell_state_statistics(bitstrings):
     """
     Compute statistics bitstrings sampled from a Bell/GHZ state
@@ -35,11 +39,4 @@ def bell_state_statistics(bitstrings):
     :return: A dictionary where bell = number of bitstrings consistent with a bell/GHZ state;
         total = total number of bitstrings.
     """
-    bitstrings = np.asarray(bitstrings)
-    bell = np.sum(np.logical_or(np.all(bitstrings == 0, axis=1),
-                                np.all(bitstrings == 1, axis=1)))
-    total = len(bitstrings)
-    return {
-        'bell': int(bell),
-        'total': int(total),
-    }
+    return ghz_state_statistics(bitstrings)
