@@ -1,30 +1,54 @@
 import networkx as nx
+import numpy as np
+
 from pyquil.api import QPUCompiler
+from pyquil.gates import H, RY, CZ, CNOT, MEASURE
+from pyquil.quil import Program
+from pyquil.quilbase import Pragma
+from forest.benchmarking.compilation import basic_compile
 
-from forest.benchmarking.entangled_states import create_graph_state as create_graph_state_good
-from forest.benchmarking.entangled_states import measure_graph_state as measure_graph_state_good
-from forest.benchmarking.entangled_states import compiled_parametric_graph_state as \
-    compiled_parametric_graph_state_good
 
-import warnings
-import functools
+def create_ghz_program(tree: nx.DiGraph):
+    """
+    Create a Bell/GHZ state with CNOTs described by tree.
 
-def deprecated(func):
-    """This is a decorator which can be used to mark functions
-    as deprecated. It will result in a warning being emitted
-    when the function is used."""
-    @functools.wraps(func)
-    def new_func(*args, **kwargs):
-        warnings.simplefilter('always', DeprecationWarning)  # turn off filter
-        warnings.warn("Call to deprecated function {}. \r\n \r\n Use the graph state functions in "
-                      "forest.benchmarking.entangled_states instead.\r\n".format(func.__name__),
-                      category=DeprecationWarning,
-                      stacklevel=2)
-        warnings.simplefilter('default', DeprecationWarning)  # reset filter
-        return func(*args, **kwargs)
-    return new_func
+    :param tree: A tree that describes the CNOTs to perform to create a bell/GHZ state.
+    :return: the program
+    """
+    assert nx.is_tree(tree), 'Needs to be a tree'
+    nodes = list(nx.topological_sort(tree))
+    n_qubits = len(nodes)
+    program = Program(H(nodes[0]))
 
-@deprecated
+    for node in nodes:
+        for child in tree.successors(node):
+            program += CNOT(node, child)
+
+    ro = program.declare('ro', 'BIT', n_qubits)
+    for i, q in enumerate(nodes):
+        program += MEASURE(q, ro[i])
+
+    return program
+
+
+def ghz_state_statistics(bitstrings):
+    """
+    Compute statistics bitstrings sampled from a Bell/GHZ state
+
+    :param bitstrings: An array of bitstrings
+    :return: A dictionary where bell = number of bitstrings consistent with a bell/GHZ state;
+        total = total number of bitstrings.
+    """
+    bitstrings = np.asarray(bitstrings)
+    bell = np.sum(np.logical_or(np.all(bitstrings == 0, axis=1),
+                                np.all(bitstrings == 1, axis=1)))
+    total = len(bitstrings)
+    return {
+        'bell': int(bell),
+        'total': int(total),
+    }
+
+
 def create_graph_state(graph: nx.Graph, use_pragmas=True):
     """Write a program to create a graph state according to the specified graph
 
@@ -51,9 +75,24 @@ def create_graph_state(graph: nx.Graph, use_pragmas=True):
     :param use_pragmas: Use COMMUTING_BLOCKS pragmas to hint at the compiler
     :return: A program that constructs a graph state.
     """
-    return create_graph_state_good(graph, use_pragmas)
+    program = Program()
+    for q in graph.nodes:
+        program += H(q)
 
-@deprecated
+    if use_pragmas:
+        program += Pragma('COMMUTING_BLOCKS')
+    for a, b in graph.edges:
+        if use_pragmas:
+            program += Pragma('BLOCK')
+        program += CZ(a, b)
+        if use_pragmas:
+            program += Pragma('END_BLOCK')
+    if use_pragmas:
+        program += Pragma('END_COMMUTING_BLOCKS')
+
+    return program
+
+
 def measure_graph_state(graph: nx.Graph, focal_node: int):
     """Given a graph state, measure a focal node and its neighbors with a particular measurement
     angle.
@@ -66,9 +105,21 @@ def measure_graph_state(graph: nx.Graph, focal_node: int):
         at an angle and all its neighbors are measured in the Z basis
     :return Program, list of classical offsets into the ``ro`` register.
     """
-    return measure_graph_state_good(graph, focal_node)
+    program = Program()
+    theta = program.declare('theta', 'REAL')
+    program += RY(theta, focal_node)
 
-@deprecated
+    neighbors = sorted(graph[focal_node])
+    ro = program.declare('ro', 'BIT', len(neighbors) + 1)
+
+    program += MEASURE(focal_node, ro[0])
+    for i, neighbor in enumerate(neighbors):
+        program += MEASURE(neighbor, ro[i + 1])
+
+    classical_addresses = list(range(len(neighbors) + 1))
+    return program, classical_addresses
+
+
 def compiled_parametric_graph_state(graph, focal_node, compiler: QPUCompiler, n_shots=1000):
     """
     Construct a program to create and measure a graph state, map it to qubits using ``addressing``,
@@ -84,4 +135,10 @@ def compiled_parametric_graph_state(graph, focal_node, compiler: QPUCompiler, n_
     :param n_shots: The number of shots to take when measuring the graph state.
     :return: an executable that constructs and measures a graph state.
     """
-    return compiled_parametric_graph_state_good(graph, focal_node, compiler, n_shots)
+    program = create_graph_state(graph)
+    measure_prog, c_addrs = measure_graph_state(graph, focal_node)
+    program += measure_prog
+    program.wrap_in_numshots_loop(n_shots)
+    nq_program = basic_compile(program)
+    executable = compiler.native_quil_to_executable(nq_program)
+    return executable
