@@ -22,6 +22,9 @@ OPTIMAL = "optimal"
 FRO = 'fro'
 
 
+# ==================================================================================================
+# Generate state and process tomography experiments
+# ==================================================================================================
 def _state_tomo_settings(qubits: Sequence[int]):
     """Yield settings over itertools.product(I, X, Y, Z).
 
@@ -125,6 +128,9 @@ def generate_process_tomography_experiment(program: Program, qubits: List[int], 
     return PyQuilTomographyExperiment(settings=list(func(qubits)), program=program)
 
 
+# ==================================================================================================
+# STATE tomography: estimation methods and helper functions
+# ==================================================================================================
 
 def linear_inv_state_estimate(results: List[ExperimentResult],
                               qubits: List[int]) -> np.ndarray:
@@ -350,6 +356,137 @@ def state_log_likelihood(state, results, qubits) -> float:
     return ll
 
 
+def project_density_matrix(rho) -> np.ndarray:
+    """
+    Project a possibly unphysical estimated density matrix to the closest (with respect to the
+    2-norm) positive semi-definite matrix with trace 1, that is a valid quantum state.
+
+    This is the so called "wizard" method. It is described in the following reference:
+
+    [MLEWIZ] Efficient Method for Computing the Maximum-Likelihood Quantum State from
+             Measurements with Additive Gaussian Noise
+             Smolin et al.,
+             Phys. Rev. Lett. 108, 070502 (2012)
+             https://doi.org/10.1103/PhysRevLett.108.070502
+             https://arxiv.org/abs/1106.5458
+
+    :param rho: Numpy array containing the density matrix with dimension (N, N)
+    :return rho_projected: The closest positive semi-definite trace 1 matrix to rho.
+    """
+
+    # Rescale to trace 1 if the matrix is not already
+    rho_impure = rho / np.trace(rho)
+
+    dimension = rho_impure.shape[0]  # the dimension of the Hilbert space
+    [eigvals, eigvecs] = eigh(rho_impure)
+
+    # If matrix is already trace one PSD, we are done
+    if np.min(eigvals) >= 0:
+        return rho_impure
+
+    # Otherwise, continue finding closest trace one, PSD matrix
+    eigvals = list(eigvals)
+    eigvals.reverse()
+    eigvals_new = [0.0] * len(eigvals)
+
+    i = dimension
+    accumulator = 0.0  # Accumulator
+    while eigvals[i - 1] + accumulator / float(i) < 0:
+        accumulator += eigvals[i - 1]
+        i -= 1
+    for j in range(i):
+        eigvals_new[j] = eigvals[j] + accumulator / float(i)
+    eigvals_new.reverse()
+
+    # Reconstruct the matrix
+    rho_projected = functools.reduce(np.dot, (eigvecs,
+                                              np.diag(eigvals_new),
+                                              np.conj(eigvecs.T)))
+
+    return rho_projected
+
+
+def _resample_expectations_with_beta(results, prior_counts=1):
+    """Resample expectation values by constructing a beta distribution and sampling from it.
+
+    Used by :py:func:`estimate_variance`.
+
+    :param results: A list of ExperimentResults
+    :param prior_counts: Number of "counts" to add to alpha and beta for the beta distribution
+        from which we sample.
+    :return: A new list of ``results`` where each ExperimentResult's ``expectation`` field
+        contained a resampled expectation value
+    """
+    resampled_results = []
+    for result in results:
+        # reconstruct the raw counts of observations from the pauli observable mean
+        num_plus = ((result.expectation + 1) / 2) * result.total_counts
+        num_minus = result.total_counts - num_plus
+
+        # We resample this data assuming it was from a beta distribution,
+        # with additive smoothing
+        alpha = num_plus + prior_counts
+        beta = num_minus + prior_counts
+
+        # transform bit bias back to pauli expectation value
+        resampled_expect = 2 * np.random.beta(alpha, beta) - 1
+        resampled_results += [ExperimentResult(
+            setting=result.setting,
+            expectation=resampled_expect,
+            std_err=result.std_err,
+            total_counts=result.total_counts,
+        )]
+    return resampled_results
+
+
+def estimate_variance(results: List[ExperimentResult],
+                      qubits: List[int],
+                      tomo_estimator: Callable,
+                      functional: Callable,
+                      target_state=None,
+                      n_resamples: int = 40,
+                      project_to_physical: bool = False) -> Tuple[float, float]:
+    """
+    Use a simple bootstrap-like method to return an errorbar on some functional of the
+    quantum state.
+
+    :param results: Measured results from a state tomography experiment
+    :param qubits: Qubits that were tomographized.
+    :param tomo_estimator: takes in ``results, qubits`` and returns a corresponding
+        estimate of the state rho, e.g. ``linear_inv_state_estimate``
+    :param functional: Which functional to find variance, e.g. ``dm.purity``.
+    :param target_state: A density matrix of the state with respect to which the distance
+        functional is measured. Not applicable if functional is ``dm.purity``.
+    :param n_resamples: The number of times to resample.
+    :param project_to_physical: Whether to project the estimated state to a physical one
+        with :py:func:`project_density_matrix`.
+    """
+    if functional != dm.purity:
+        if target_state is None:
+            raise ValueError("You're not using the `purity` functional. "
+                             "Please specify a target state.")
+
+    sample_estimate = []
+    for _ in range(n_resamples):
+        resampled_results = _resample_expectations_with_beta(results)
+        rho = tomo_estimator(resampled_results, qubits)
+
+        if project_to_physical:
+            rho = project_density_matrix(rho)
+
+        # Calculate functional of the state
+        if functional == dm.purity:
+            sample_estimate.append(np.real(dm.purity(rho, dim_renorm=False)))
+        else:
+            sample_estimate.append(np.real(functional(target_state, rho)))
+
+    return np.mean(sample_estimate), np.var(sample_estimate)
+
+
+# ==================================================================================================
+# PROCESS tomography: estimation methods and helper functions
+# ==================================================================================================
+
 def _extract_from_results(results: List[ExperimentResult], qubits: List[int]):
     """
     Construct the matrix A such that the probabilities p_ij of outcomes n_ij given an estimate E
@@ -489,130 +626,3 @@ def _grad_cost(A, n, estimate, eps=1e-6):
     p = np.clip(p, a_min=eps, a_max=None)
     eta = n / p
     return unvec(-A.conj().T @ eta)
-
-
-def project_density_matrix(rho) -> np.ndarray:
-    """
-    Project a possibly unphysical estimated density matrix to the closest (with respect to the
-    2-norm) positive semi-definite matrix with trace 1, that is a valid quantum state.
-
-    This is the so called "wizard" method. It is described in the following reference:
-
-    [MLEWIZ] Efficient Method for Computing the Maximum-Likelihood Quantum State from
-             Measurements with Additive Gaussian Noise
-             Smolin et al.,
-             Phys. Rev. Lett. 108, 070502 (2012)
-             https://doi.org/10.1103/PhysRevLett.108.070502
-             https://arxiv.org/abs/1106.5458
-
-    :param rho: Numpy array containing the density matrix with dimension (N, N)
-    :return rho_projected: The closest positive semi-definite trace 1 matrix to rho.
-    """
-
-    # Rescale to trace 1 if the matrix is not already
-    rho_impure = rho / np.trace(rho)
-
-    dimension = rho_impure.shape[0]  # the dimension of the Hilbert space
-    [eigvals, eigvecs] = eigh(rho_impure)
-
-    # If matrix is already trace one PSD, we are done
-    if np.min(eigvals) >= 0:
-        return rho_impure
-
-    # Otherwise, continue finding closest trace one, PSD matrix
-    eigvals = list(eigvals)
-    eigvals.reverse()
-    eigvals_new = [0.0] * len(eigvals)
-
-    i = dimension
-    accumulator = 0.0  # Accumulator
-    while eigvals[i - 1] + accumulator / float(i) < 0:
-        accumulator += eigvals[i - 1]
-        i -= 1
-    for j in range(i):
-        eigvals_new[j] = eigvals[j] + accumulator / float(i)
-    eigvals_new.reverse()
-
-    # Reconstruct the matrix
-    rho_projected = functools.reduce(np.dot, (eigvecs,
-                                              np.diag(eigvals_new),
-                                              np.conj(eigvecs.T)))
-
-    return rho_projected
-
-
-def _resample_expectations_with_beta(results, prior_counts=1):
-    """Resample expectation values by constructing a beta distribution and sampling from it.
-
-    Used by :py:func:`estimate_variance`.
-
-    :param results: A list of ExperimentResults
-    :param prior_counts: Number of "counts" to add to alpha and beta for the beta distribution
-        from which we sample.
-    :return: A new list of ``results`` where each ExperimentResult's ``expectation`` field
-        contained a resampled expectation value
-    """
-    resampled_results = []
-    for result in results:
-        # reconstruct the raw counts of observations from the pauli observable mean
-        num_plus = ((result.expectation + 1) / 2) * result.total_counts
-        num_minus = result.total_counts - num_plus
-
-        # We resample this data assuming it was from a beta distribution,
-        # with additive smoothing
-        alpha = num_plus + prior_counts
-        beta = num_minus + prior_counts
-
-        # transform bit bias back to pauli expectation value
-        resampled_expect = 2 * np.random.beta(alpha, beta) - 1
-        resampled_results += [ExperimentResult(
-            setting=result.setting,
-            expectation=resampled_expect,
-            std_err=result.std_err,
-            total_counts=result.total_counts,
-        )]
-    return resampled_results
-
-
-def estimate_variance(results: List[ExperimentResult],
-                      qubits: List[int],
-                      tomo_estimator: Callable,
-                      functional: Callable,
-                      target_state=None,
-                      n_resamples: int = 40,
-                      project_to_physical: bool = False) -> Tuple[float, float]:
-    """
-    Use a simple bootstrap-like method to return an errorbar on some functional of the
-    quantum state.
-
-    :param results: Measured results from a state tomography experiment
-    :param qubits: Qubits that were tomographized.
-    :param tomo_estimator: takes in ``results, qubits`` and returns a corresponding
-        estimate of the state rho, e.g. ``linear_inv_state_estimate``
-    :param functional: Which functional to find variance, e.g. ``dm.purity``.
-    :param target_state: A density matrix of the state with respect to which the distance
-        functional is measured. Not applicable if functional is ``dm.purity``.
-    :param n_resamples: The number of times to resample.
-    :param project_to_physical: Whether to project the estimated state to a physical one
-        with :py:func:`project_density_matrix`.
-    """
-    if functional != dm.purity:
-        if target_state is None:
-            raise ValueError("You're not using the `purity` functional. "
-                             "Please specify a target state.")
-
-    sample_estimate = []
-    for _ in range(n_resamples):
-        resampled_results = _resample_expectations_with_beta(results)
-        rho = tomo_estimator(resampled_results, qubits)
-
-        if project_to_physical:
-            rho = project_density_matrix(rho)
-
-        # Calculate functional of the state
-        if functional == dm.purity:
-            sample_estimate.append(np.real(dm.purity(rho, dim_renorm=False)))
-        else:
-            sample_estimate.append(np.real(functional(target_state, rho)))
-
-    return np.mean(sample_estimate), np.var(sample_estimate)
