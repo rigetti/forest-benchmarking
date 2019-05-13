@@ -164,21 +164,6 @@ def linear_inv_state_estimate(results: List[ExperimentResult],
     return unvec(rho)
 
 
-def construct_projection_operators_on_n_qubits(num_qubits) -> List[np.ndarray]:
-    """
-    """
-    # Identity prop to the size of Hilbert space
-    IdH = np.eye(2 ** num_qubits, 2 ** num_qubits)
-    effects = []
-    for i, operator in enumerate(n_qubit_pauli_basis(num_qubits).ops):
-        if i == 0:
-            continue
-            # Might need to change for >1Q.
-        effects.append((IdH + operator) / 2)
-        effects.append((IdH - operator) / 2)
-    return effects
-
-
 def iterative_mle_state_estimate(results: List[ExperimentResult], qubits: List[int], epsilon=.1,
                                  entropy_penalty=0.0, beta=0.0, tol=1e-9, maxiter=10_000) \
         -> np.ndarray:
