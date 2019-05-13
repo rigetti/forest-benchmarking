@@ -12,7 +12,7 @@ def out(command):
 
 
 def run_notebook(filename):
-    return out(EXAMPLES_PATH + f'/{filename}')
+    return out('pytest --nbval-lax ' + EXAMPLES_PATH + f'/{filename}')
 
 
 # NOTES:
