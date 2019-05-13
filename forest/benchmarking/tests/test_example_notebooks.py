@@ -15,8 +15,23 @@ def out(command):
 os.chdir(EXAMPLES_PATH)
 
 
-# NOTE: We are skipping any test that is longer than 30 seconds.
-#       Also each test function has a print, if the test fails then you can see where from stdout.
+# NOTES:
+# (1) By using the command `out` we are accessing the command line and running the basic command:
+#
+# >pytest --nbval-lax some_notebook.ipynb
+#
+# The --nbval flag runs the IPython Notebook Validation plugin which will collect and test
+# notebook cells, comparing their outputs with those saved in the file.
+# By adding the optional -lax flag we fail if there is an error in executing a cell.
+#
+# (2) We are skipping any test that is longer than 30 seconds.
+#
+# (3) Each test function has a print, if the test fails then you can see where it fails from stdout.
+
+
+# TODO: go through the slow notebooks and add the comment `# NBVAL_SKIP` on the offending slow
+#  cells. This will allow us to test imports and other functionality without sacrificing runtime.
+
 
 # ~ 6 min; passed 2019/05/13
 @pytest.mark.slow
