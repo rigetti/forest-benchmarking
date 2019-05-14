@@ -391,6 +391,9 @@ def test_choi_is_unitary():
     assert choi_is_unitary(HADChoi)
     assert not choi_is_unitary(amplitude_damping_choi(0.1))
 
+# ==================================================================================================
+# Test project Channels to CP, TNI, TP, and physical
+# ==================================================================================================
 
 def test_proj_to_cp():
     state = np.eye(2)
