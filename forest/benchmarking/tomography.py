@@ -1,47 +1,30 @@
 import functools
 import itertools
-from dataclasses import dataclass
 from operator import mul
-from typing import Callable, Tuple, List, Optional, Union, Sequence
+from typing import Callable, Tuple, List, Sequence
+import warnings
 
 import numpy as np
 from scipy.linalg import logm, pinv, eigh
 
 import forest.benchmarking.distance_measures as dm
-import forest.benchmarking.operator_estimation as est
 from forest.benchmarking.superoperator_tools import vec, unvec, proj_choi_to_physical
-from forest.benchmarking.utils import prepare_prod_sic_state, n_qubit_pauli_basis, partial_trace
+from forest.benchmarking.utils import n_qubit_pauli_basis
 from pyquil import Program
-from pyquil.api import QuantumComputer
 from pyquil.operator_estimation import ExperimentSetting, \
     TomographyExperiment as PyQuilTomographyExperiment, ExperimentResult, SIC0, SIC1, SIC2, SIC3, \
     plusX, minusX, plusY, minusY, plusZ, minusZ, TensorProductState, zeros_state
 from pyquil.paulis import sI, sX, sY, sZ, PauliSum, PauliTerm, is_identity
-from pyquil.unitary_tools import lifted_pauli, lifted_state_operator
+from pyquil.unitary_tools import lifted_pauli as pauli2matrix, lifted_state_operator as state2matrix
 
 MAXITER = "maxiter"
 OPTIMAL = "optimal"
 FRO = 'fro'
 
 
-@dataclass
-class TomographyExperiment:
-    """
-    A description of tomography experiments, i.e. preparation then operations then measurements, but not
-    the results of experiments.
-    """
-
-    in_ops: List[str]
-    """The (optional) state preparation operations that precede execution of the `program`"""
-
-    program: Program
-    """The pyquil Program to perform tomography on"""
-
-    out_ops: List[PauliTerm]
-    """The output Pauli operators measured after the action (by conjugation in the Heisenberg picture) of the `program' 
-    on the `in_op`"""
-
-
+# ==================================================================================================
+# Generate state and process tomography experiments
+# ==================================================================================================
 def _state_tomo_settings(qubits: Sequence[int]):
     """Yield settings over itertools.product(I, X, Y, Z).
 
@@ -145,166 +128,9 @@ def generate_process_tomography_experiment(program: Program, qubits: List[int], 
     return PyQuilTomographyExperiment(settings=list(func(qubits)), program=program)
 
 
-@dataclass
-class TomographyData:
-    """Experimental data from a tomography experiment"""
-    in_ops: Optional[List[str]]
-    """The (optional) state preparation operations that precede execution of the `program`"""
-
-    program: Program
-    """The pyquil Program to perform tomography on"""
-
-    out_ops: List[PauliTerm]
-    """The output Pauli operators measured after the action (by conjugation in the Heisenberg picture) of the `program' 
-    on the `in_op`"""
-
-    dimension: int
-    """Dimension of the Hilbert space"""
-
-    number_qubits: int
-    """number of qubits"""
-
-    expectations: List[float]
-    """expectation values as reported from the QPU"""
-
-    variances: List[float]
-    """variances associated with the `expectation`"""
-
-    counts: List[int]
-    """number of shots used to calculate the `expectation`"""
-
-
-def shim_pyquil_results_to_TomographyData(program, qubits, results: List[ExperimentResult]):
-    return TomographyData(
-        in_ops=[r.setting.in_operator for r in results[1:]],
-        out_ops=[r.setting.out_operator for r in results[1:]],
-        expectations=[r.expectation for r in results[1:]],
-        variances=[r.std_err ** 2 for r in results[1:]],
-        program=program,
-        number_qubits=len(qubits),
-        dimension=2 ** len(qubits),
-        counts=[r.total_counts for r in results[1:]],
-    )
-
-
-def acquire_tomography_data(experiment: TomographyExperiment, qc: QuantumComputer, var: float = 0.01,
-                            symmetrize=False) -> TomographyData:
-    """
-    Acquire tomographic data used to estimate a quantum state or process. If the experiment has no input operators
-    then state tomography is assumed.
-
-    :param symmetrize: dictates whether to symmetrize readout when estimating the Pauli expectations.
-    :param experiment: TomographyExperiment for the desired state or process
-    :param qc: quantum device used to collect data
-    :param float var: maximum tolerable variance per observable
-    :return: The "TomographyData" corresponding to the TomographyExperiment
-    """
-    # get qubit information
-    qubits = experiment.program.get_qubits()
-    n_qubits = len(qubits)
-    dimension = 2 ** len(qubits)
-
-    expectations = []
-    variances = []
-    counts = []
-
-    if experiment.in_ops is None:
-        # state tomography
-        for op in experiment.out_ops:
-            # data aqcuisition
-            expectation, variance, count = est.estimate_locally_commuting_operator(experiment.program, PauliSum([op]),
-                                                                                   var, qc, symmetrize=symmetrize)
-            expectations.append(np.real(expectation[0]))
-            variances.append(variance[0, 0].real)
-            counts.append(count)
-    else:
-        # process tomography
-        for in_op in experiment.in_ops:
-            for op in experiment.out_ops:
-                # data aqcuisition
-                tot_prog = prepare_prod_sic_state(in_op) + experiment.program
-                expectation, variance, count = est.estimate_locally_commuting_operator(tot_prog, PauliSum([op]), var,
-                                                                                       qc, symmetrize=symmetrize)
-
-                expectations.append(np.real(expectation[0]))
-                variances.append(variance[0, 0].real)
-                counts.append(count)
-
-    exp_data = TomographyData(
-        in_ops=experiment.in_ops,
-        program=experiment.program,
-        out_ops=experiment.out_ops,
-        dimension=dimension,
-        number_qubits=n_qubits,
-        expectations=expectations,
-        variances=variances,
-        counts=counts
-    )
-    return exp_data
-
-
-@dataclass
-class StateTomographyEstimate:
-    """State estimate from tomography experiment"""
-
-    state_point_est: np.ndarray
-    """A point estimate of the quantum state rho output from the program being tomographed"""
-
-    type: str
-    """Type of estimator used e.g. 'linear inversion' or 'hedged_MLE'"""
-
-    beta: Optional[float]
-    """The Hedging parameter"""
-
-    entropy: Optional[float]
-    """The entropy penalty parameter"""
-
-    dilution: Optional[float]
-    """A diluation parameter"""
-
-    loglike: Optional[float]
-    """The log likelihood at the current estimate"""
-
-
-@dataclass
-class ProcessTomographyEstimate:
-    """Process estimate from tomography experiment"""
-
-    process_choi_est: np.ndarray
-    """A point estimate of the quantum process being tomographed represented as a choi matrix"""
-
-    type: str
-    """Type of estimator used e.g. 'pgdb'"""
-
-
-@dataclass
-class TomographyEstimate:
-    """State/Process estimate from tomography experiment"""
-    in_ops: Optional[List[str]]
-    """The (optional) state preparation operations that precede execution of the `program`"""
-
-    program: Program
-    """The pyquil Program to perform DFE on"""
-
-    out_ops: List[PauliTerm]
-    """The output Pauli operators measured after the action (by conjugation in the Heisenberg picture) of the `program' 
-    on the `in_op`"""
-
-    dimension: int
-    """Dimension of the Hilbert space"""
-
-    number_qubits: int
-    """number of qubits"""
-
-    expectations: List[float]
-    """expectation values as reported from the QPU"""
-
-    variances: List[float]
-    """variances associated with the `expectation`"""
-
-    estimate: Union[StateTomographyEstimate, ProcessTomographyEstimate]
-    """State or process estimate from tomography experiment"""
-
+# ==================================================================================================
+# STATE tomography: estimation methods and helper functions
+# ==================================================================================================
 
 def linear_inv_state_estimate(results: List[ExperimentResult],
                               qubits: List[int]) -> np.ndarray:
@@ -330,7 +156,7 @@ def linear_inv_state_estimate(results: List[ExperimentResult],
     :return: A point estimate of the quantum state rho.
     """
     measurement_matrix = np.vstack([
-        vec(lifted_pauli(result.setting.out_operator, qubits=qubits)).T.conj()
+        vec(pauli2matrix(result.setting.out_operator, qubits=qubits)).T.conj()
         for result in results
     ])
     expectations = np.array([result.expectation for result in results])
@@ -338,24 +164,9 @@ def linear_inv_state_estimate(results: List[ExperimentResult],
     return unvec(rho)
 
 
-def construct_projection_operators_on_n_qubits(num_qubits) -> List[np.ndarray]:
-    """
-    """
-    # Identity prop to the size of Hilbert space
-    IdH = np.eye(2 ** num_qubits, 2 ** num_qubits)
-    effects = []
-    for i, operator in enumerate(n_qubit_pauli_basis(num_qubits).ops):
-        if i == 0:
-            continue
-            # Might need to change for >1Q.
-        effects.append((IdH + operator) / 2)
-        effects.append((IdH - operator) / 2)
-    return effects
-
-
-def iterative_mle_state_estimate(results: List[ExperimentResult], qubits: List[int], dilution=.005,
-                                 entropy_penalty=0.0, beta=0.0, tol=1e-9, maxiter=100_000) \
-        -> TomographyEstimate:
+def iterative_mle_state_estimate(results: List[ExperimentResult], qubits: List[int], epsilon=.1,
+                                 entropy_penalty=0.0, beta=0.0, tol=1e-9, maxiter=10_000) \
+        -> np.ndarray:
     """
     Given tomography data, use one of three iterative algorithms to return an estimate of the
     state.
@@ -396,276 +207,138 @@ def iterative_mle_state_estimate(results: List[ExperimentResult], qubits: List[i
              PhD Thesis, from National University of Singapore, (2013)
              https://arxiv.org/pdf/1302.3399.pdf
 
-    :param state_tomography_experiment_data data: namedtuple.
-    :param dilution: delta  = 1 / epsilon where epsilon is the dilution parameter used in [DIMLE1].
-        in practice epsilon= 1/N
-    :param entropy_penalty: the entropy penalty parameter from [DIMLE2].
-    :param beta: The Hedging parameter from [HMLE].
+    :param results: Measured results from a state tomography experiment
+    :param qubits: Qubits that were tomographized.
+    :param epsilon: the dilution parameter used in [DIMLE1]. In practice epsilon ~ 1/num_shots
+    :param entropy_penalty: the entropy penalty parameter from [DIMLE2], i.e. lambda
+    :param beta: The Hedging parameter from [HMLE], i.e. beta
     :param tol: The largest difference in the frobenious norm between update steps that will cause
          the algorithm to conclude that it has converged.
     :param maxiter: The maximum number of iterations to perform before aborting the procedure.
-    :return: A TomographyEstimate whose estimate is a StateTomographyEstimate
+    :return: A point estimate of the quantum state rho
     """
-    data = shim_pyquil_results_to_TomographyData(
-        program=None,
-        qubits=qubits,
-        results=results
-    )
-    exp_type = 'iterative_MLE'
+    # exp_type is vanilla by default, max_ent if entropy_penalty > 0, and hedged if beta > 0
     if (entropy_penalty != 0.0) and (beta != 0.0):
         raise ValueError("One can't sensibly do entropy penalty and hedging. Do one or the other"
                          " but not both.")
-    else:
-        if entropy_penalty != 0.0:
-            exp_type = 'max_entropy_MLE'
-        if beta != 0.0:
-            exp_type = 'heged_MLE'
 
     # Identity prop to the size of Hilbert space
     dim = 2**len(qubits)
-    IdH = np.eye(dim, dim)
+    IdH = np.eye(dim, dim) # Identity prop to the size of Hilbert space
+    num_meas = sum([res.total_counts for res in results])
 
-    freq = []
-    for expectation, count in zip(data.expectations, data.counts):
-        num_plus_one = int((expectation + 1) / 2 * count)
-        freq.append(num_plus_one)
-        freq.append(count - num_plus_one)
-
-    effects = construct_projection_operators_on_n_qubits(data.number_qubits)
-
-    rho = IdH / data.dimension
-    epsilon = 1 / dilution  # Dilution parameter used in [DIMLE1].
+    rho = IdH / dim
     iteration = 1
-    status = OPTIMAL
     while True:
         rho_temp = rho
         if iteration >= maxiter:
-            status = MAXITER
+            warnings.warn('Maximum number of iterations reached before convergence.')
             break
         # Vanilla Iterative MLE
-        Tk = _R(rho, effects, freq) - IdH  # Eq 6 of [DIMLE2] with \lambda = 0.
+        R = _R(rho, results, qubits)
+        Tk = R - IdH  # Eq 6 of [DIMLE2] with \lambda = 0.
 
         # MaxENT Iterative MLE
         if entropy_penalty > 0.0:
-            constraint = (logm(rho) - IdH * np.trace(rho.dot(logm(rho))))
-            Tk -= (entropy_penalty * constraint)  # Eq 6 of [DIMLE2] with \lambda \neq 0.
+            constraint = logm(rho) - IdH * np.trace(rho @ logm(rho))
+            Tk -= entropy_penalty * constraint  # Eq 6 of [DIMLE2] with \lambda \neq 0.
 
         # Hedged Iterative MLE
         if beta > 0.0:
-            num_meas = data.counts[0] * len(data.out_ops)
-            # TODO: decide if can use pinv consistently from one of np or scipy
-            Tk = (beta * (np.linalg.pinv(rho) - data.dimension * IdH)
-                  + num_meas * (_R(rho, effects, freq) - IdH))
+            # delta in equation (1.5.13) of [IHMLE]
+            Tk *= num_meas / 2
+            Tk += beta * (pinv(rho) - dim * IdH) / 2
 
         # compute iterative estimate of rho     
         update_map = (IdH + epsilon * Tk)
-        rho = update_map.dot(rho).dot(update_map)
+        rho = update_map @ rho @ update_map
         rho /= np.trace(rho)  # Eq 5 of [DIMLE2].
         if np.linalg.norm(rho - rho_temp, FRO) < tol:
             break
         iteration += 1
 
-    estimate = StateTomographyEstimate(
-        state_point_est=rho,
-        type=exp_type,
-        beta=beta,
-        entropy=entropy_penalty,
-        dilution=dilution,
-        loglike=_LL(rho, effects, freq)
-    )
-
-    est_data = TomographyEstimate(
-        in_ops=data.in_ops,
-        program=data.program,
-        out_ops=data.out_ops,
-        dimension=data.dimension,
-        number_qubits=data.number_qubits,
-        expectations=data.expectations,
-        variances=data.variances,
-        estimate=estimate
-    )
-
-    return est_data, status
+    return rho
 
 
-def _R(state, effects, observed_frequencies):
+def _R(state, results, qubits):
     r"""
-    This is Eqn 5 in [DIMLE1], i.e.
+    This implements Eqn 4 in [DIMLE1]
 
-    R(rho) = (1/N) \sum_j (n_j/Pr_j) Pi_j
-           = \sum_j (f_j/Pr_j) Pi_j
+    As stated in [DIMLE1] eqn 4 reads
+
+    R(rho) = (1/N) \sum_j (f_j/Pr_j) Pi_j
 
     N = total number of measurements
-    n_j = number of times j'th outcome was observed
-    f_j = n_j/N observed frequencies => \sum_j f_j  == 1
-    Pi_j = measurement operator or projector
-    Pr_j = Tr[Pi_j \rho]
+    f_j = number of times j'th outcome was observed
+    Pi_j = measurement operator or projector, with \sum_j Pi_j = Id and Pi_j \geq 0
+    Pr_j = Tr[Pi_j \rho]  (up to some normalization of the Pi_j)
+
+    We are working with results whose out_operators are elements of the un-normalized Pauli
+    basis. Each Pauli P_j can be split into projectors onto the plus and minus eigenspaces
+        P_k = Pi_k^+ - Pi_k^-   ;   Pi_k^+ = (I + P_k) / 2   ;   Pi_k^- = (I - P_k) / 2
+    where each Pi \geq 0 as required above. Hence for each P_k we associate two Pi_k,
+    and subsequently two f_k. We can express these in terms of Exp[P_k] := exp_k
+        plus: f_k^+ / N = (1 + exp_k) / 2
+        minus: f_k^- / N = (1 - exp_k) / 2
+
+    We use these f_k and Pi_k to arrive at the code below.
+
+    Finally, since our Pauli's are not normalized, i.e. Pi_k^+ + Pi_k^- = Id, in order to enforce
+    the condition  \sum_j Pi_j = Id stated above we need to divide our final answer by the number
+    of Paulis.
 
     :param state: The state (given as a density matrix) that we think we have.
-    :param effects: The measurements we've performed.
-    :param observed_frequencies: The frequencies (normalized histograms of results) we have observed
-     associated with effects.
+    :param results: Measured results from a state tomography experiment. (assumes Pauli basis)
+    :param qubits: Qubits that were tomographized.
+    :return: the operator of equation 4 in [DIMLE1] which fixes rho by left and right multiplication
     """
     # this small number ~ 10^-304 is added so that we don't get divide by zero errors
     machine_eps = np.finfo(float).tiny
-    # have a zero in the numerator, we can fix this is we look a little more carefully.
-    predicted_probs = np.array([np.real(np.trace(state.dot(effect))) for effect in effects])
-    update_operator = sum([effect * observed_frequencies[i] / (predicted_probs[i] + machine_eps)
-                           for i, effect in enumerate(effects)])
-    return update_operator
+
+    update = np.zeros_like(state, dtype=complex)
+    IdH = np.eye(update.shape[0])
+
+    for res in results:
+        op_matrix = pauli2matrix(res.setting.out_operator, qubits)
+        meas_exp = res.expectation
+        pred_exp = np.trace(op_matrix @ state)
+
+        for sign in [1, -1]:
+            f_j_over_n = (1 + sign * meas_exp) / 2
+            pr_j = (1 + sign * pred_exp) / 2
+            pi_j = (IdH + sign * op_matrix) / 2
+
+            update += f_j_over_n / (pr_j + machine_eps) * pi_j
+
+    return update / len(results)
 
 
-def _LL(state, effects, observed_frequencies) -> float:
+def state_log_likelihood(state, results, qubits) -> float:
     """
     The log Likelihood function used in the diluted MLE tomography routine.
 
+    Equation 2 of [DIMLE1]
+
     :param state: The state (given as a density matrix) that we think we have.
-    :param effects: The measurements we've performed.
-    :param observed_frequencies: The frequencies (normalized histograms of results) we have observed
-     associated with effects.
+    :param results: Measured results from a state tomography experiment
+    :param qubits: Qubits that were tomographized.
     :return: The log likelihood that our state is the one we believe it is.
     """
-    observed_frequencies = np.array(observed_frequencies)
-    predicted_probs = np.array([np.real(np.trace(state.dot(effect))) for effect in effects])
-    return sum(np.log10(predicted_probs) * observed_frequencies)
+    ll = 0
+    for res in results:
+        n = res.total_counts
+        op_matrix = pauli2matrix(res.setting.out_operator, qubits)
+        meas_exp = res.expectation
+        pred_exp = np.real(np.trace(op_matrix @ state))
 
+        for sign in [1, -1]:
+            f_j = n * (1 + sign * meas_exp) / 2
+            pr_j = (1 + sign * pred_exp) / 2
+            if pr_j <= 0:
+                continue
+            ll += f_j * np.log10(pr_j)
 
-def _extract_from_results(results: List[ExperimentResult], qubits: List[int]):
-    """
-    Construct the matrix A such that the probabilities p_ij of outcomes n_ij given an estimate E
-    can be cast in a vectorized form.
-
-    Specifically::
-
-        p = vec(p_ij) = A x vec(E)
-
-    This yields convenient vectorized calculations of the cost and its gradient, in terms of A, n,
-    and E.
-    """
-    A = []
-    n = []
-    grand_total_shots = 0
-
-    for result in results:
-        in_state_matrix = lifted_state_operator(result.setting.in_state, qubits=qubits)
-        operator = lifted_pauli(result.setting.out_operator, qubits=qubits)
-        proj_plus = (np.eye(2 ** len(qubits)) + operator) / 2
-        proj_minus = (np.eye(2 ** len(qubits)) - operator) / 2
-
-        # Constructing A per eq. (22)
-        # TODO: figure out if we can avoid re-splitting into Pi+ and Pi- counts
-        A += [
-            # vec() turns into a column vector; transpose to a row vector; index into the
-            # 1 row to avoid an extra tensor dimension when we call np.asarray(A).
-            vec(np.kron(in_state_matrix, proj_plus.T)).T[0],
-            vec(np.kron(in_state_matrix, proj_minus.T)).T[0],
-        ]
-
-        expected_plus_ones = (1 + result.expectation) / 2
-        n += [
-            result.total_counts * expected_plus_ones,
-            result.total_counts * (1 - expected_plus_ones)
-        ]
-        grand_total_shots += result.total_counts
-
-    n_qubits = len(qubits)
-    dimension = 2 ** n_qubits
-    A = np.asarray(A) / dimension ** 2
-    n = np.asarray(n)[:, np.newaxis] / grand_total_shots
-    return A, n
-
-
-def pgdb_process_estimate(results: List[ExperimentResult], qubits: List[int],
-                          trace_preserving=True) -> np.ndarray:
-    """
-    Provide an estimate of the process via Projected Gradient Descent with Backtracking.
-
-    [PGD] Maximum-likelihood quantum process tomography via projected gradient descent
-          Knee et al.,
-          Phys. Rev. A 98, 062336 (2018)
-          https://dx.doi.org/10.1103/PhysRevA.98.062336
-          https://arxiv.org/abs/1803.10062
-
-    :param results: A tomographically complete list of ExperimentResults
-    :param qubits: A list of qubits giving the tensor order of the resulting Choi matrix.
-    :param trace_preserving: Whether to project the estimate to a trace-preserving process. If
-        set to False, we ensure trace non-increasing.
-    :return: an estimate of the process in the Choi matrix representation.
-    """
-    # construct the matrix A and vector n from the data for vectorized calculations of
-    # the cost function and its gradient
-    A, n = _extract_from_results(results, qubits[::-1])
-
-    dim = 2 ** len(qubits)
-    est = np.eye(dim ** 2, dim ** 2, dtype=complex) / dim  # initial estimate
-    old_cost = _cost(A, n, est)  # initial cost, which we want to decrease
-    mu = 3 / (2 * dim ** 2)  # inverse learning rate
-    gamma = .3  # tolerance of letting the constrained update deviate from true gradient; larger is more demanding
-    while True:
-        gradient = _grad_cost(A, n, est)
-        update = proj_choi_to_physical(est - gradient / mu, trace_preserving) - est
-
-        # determine step size factor, alpha
-        alpha = 1
-        new_cost = _cost(A, n, est + alpha * update)
-        change = gamma * alpha * np.dot(vec(update).conj().T, vec(gradient))
-        while new_cost > old_cost + change:
-            alpha = .5 * alpha
-            change = .5 * change  # directly update change, corresponding to update of alpha
-            new_cost = _cost(A, n, est + alpha * update)
-
-            # small alpha stopgap
-            if alpha < 1e-15:
-                break
-
-        # update estimate
-        est += alpha * update
-        if old_cost - new_cost < 1e-10:
-            break
-        # store current cost
-        old_cost = new_cost
-
-
-    return est
-
-
-def _cost(A, n, estimate, eps=1e-6):
-    """
-    Computes the cost (negative log likelihood) of the estimated process using the vectorized
-    version of equation 4 of [PGD].
-
-    See the appendix of [PGD].
-
-    :param A: a matrix constructed from the input states and POVM elements (eq. 22) that aids
-        in calculating the model probabilities p.
-    :param n: vectorized form of the observed counts n_ij
-    :param estimate: the current model Choi representation of an estimated process for which we
-        report the cost.
-    :return: Cost of the estimate given the data, n
-    """
-    p = A @ vec(estimate)  # vectorized form of the probabilities of outcomes, p_ij
-    # see appendix on "stalling"
-    p = np.clip(p, a_min=eps, a_max=None)
-    return - n.T @ np.log(p)
-
-
-def _grad_cost(A, n, estimate, eps=1e-6):
-    """
-    Computes the gradient of the cost, leveraging the vectorized calculation given in the
-    appendix of [PGD]
-
-    :param A: a matrix constructed from the input states and POVM elements (eq. 22) that aids
-        in calculating the model probabilities p.
-    :param n: vectorized form of the observed counts n_ij
-    :param estimate: the current model Choi representation of an estimated process for which we
-        compute the gradient.
-    :return: Gradient of the cost of the estimate given the data, n
-    """
-    p = A @ vec(estimate)
-    # see appendix on "stalling"
-    p = np.clip(p, a_min=eps, a_max=None)
-    eta = n / p
-    return unvec(-A.conj().T @ eta)
+    return ll
 
 
 def project_density_matrix(rho) -> np.ndarray:
@@ -781,13 +454,7 @@ def estimate_variance(results: List[ExperimentResult],
     sample_estimate = []
     for _ in range(n_resamples):
         resampled_results = _resample_expectations_with_beta(results)
-        estimate = tomo_estimator(resampled_results, qubits)
-
-        # TODO: Shim! over different return values between linear inv. and mle
-        if isinstance(estimate, np.ndarray):
-            rho = estimate
-        else:
-            rho = estimate.estimate.state_point_est
+        rho = tomo_estimator(resampled_results, qubits)
 
         if project_to_physical:
             rho = project_density_matrix(rho)
@@ -799,3 +466,148 @@ def estimate_variance(results: List[ExperimentResult],
             sample_estimate.append(np.real(functional(target_state, rho)))
 
     return np.mean(sample_estimate), np.var(sample_estimate)
+
+
+# ==================================================================================================
+# PROCESS tomography: estimation methods and helper functions
+# ==================================================================================================
+
+def _extract_from_results(results: List[ExperimentResult], qubits: List[int]):
+    """
+    Construct the matrix A such that the probabilities p_ij of outcomes n_ij given an estimate E
+    can be cast in a vectorized form.
+
+    Specifically::
+
+        p = vec(p_ij) = A x vec(E)
+
+    This yields convenient vectorized calculations of the cost and its gradient, in terms of A, n,
+    and E.
+    """
+    A = []
+    n = []
+    grand_total_shots = 0
+
+    for result in results:
+        # 'lift' the result's ExperimentSetting input TensorProductState to the corresponding
+        # matrix. This is simply the density matrix of the state that was prepared.
+        in_state_matrix = state2matrix(result.setting.in_state, qubits=qubits)
+        # 'lift' the result's ExperimentSetting output PauliTerm to the corresponding matrix.
+        operator = pauli2matrix(result.setting.out_operator, qubits=qubits)
+        proj_plus = (np.eye(2 ** len(qubits)) + operator) / 2
+        proj_minus = (np.eye(2 ** len(qubits)) - operator) / 2
+
+        # Constructing A per eq. (A1) of [PGD]
+        # TODO: figure out if we can avoid re-splitting into Pi+ and Pi- counts
+        A += [
+            # vec() turns into a column vector; transpose to a row vector; index into the
+            # 1 row to avoid an extra tensor dimension when we call np.asarray(A).
+            vec(np.kron(in_state_matrix, proj_plus.T)).T[0],
+            vec(np.kron(in_state_matrix, proj_minus.T)).T[0],
+        ]
+
+        expected_plus_ones = (1 + result.expectation) / 2
+        n += [
+            result.total_counts * expected_plus_ones,
+            result.total_counts * (1 - expected_plus_ones)
+        ]
+        grand_total_shots += result.total_counts
+
+    n_qubits = len(qubits)
+    dimension = 2 ** n_qubits
+    A = np.asarray(A) / dimension ** 2
+    n = np.asarray(n)[:, np.newaxis] / grand_total_shots
+    return A, n
+
+
+def pgdb_process_estimate(results: List[ExperimentResult], qubits: List[int],
+                          trace_preserving=True) -> np.ndarray:
+    """
+    Provide an estimate of the process via Projected Gradient Descent with Backtracking.
+
+    [PGD] Maximum-likelihood quantum process tomography via projected gradient descent
+          Knee et al.,
+          Phys. Rev. A 98, 062336 (2018)
+          https://dx.doi.org/10.1103/PhysRevA.98.062336
+          https://arxiv.org/abs/1803.10062
+
+    :param results: A tomographically complete list of ExperimentResults
+    :param qubits: A list of qubits giving the tensor order of the resulting Choi matrix.
+    :param trace_preserving: Whether to project the estimate to a trace-preserving process. If
+        set to False, we ensure trace non-increasing.
+    :return: an estimate of the process in the Choi matrix representation.
+    """
+    # construct the matrix A and vector n from the data for vectorized calculations of
+    # the cost function and its gradient
+    A, n = _extract_from_results(results, qubits[::-1])
+
+    dim = 2 ** len(qubits)
+    est = np.eye(dim ** 2, dim ** 2, dtype=complex) / dim  # initial estimate
+    old_cost = _cost(A, n, est)  # initial cost, which we want to decrease
+    mu = 3 / (2 * dim ** 2)  # inverse learning rate
+    gamma = .3  # tolerance of letting the constrained update deviate from true gradient; larger is more demanding
+    while True:
+        gradient = _grad_cost(A, n, est)
+        update = proj_choi_to_physical(est - gradient / mu, trace_preserving) - est
+
+        # determine step size factor, alpha
+        alpha = 1
+        new_cost = _cost(A, n, est + alpha * update)
+        change = gamma * alpha * np.dot(vec(update).conj().T, vec(gradient))
+        while new_cost > old_cost + change:
+            alpha = .5 * alpha
+            change = .5 * change  # directly update change, corresponding to update of alpha
+            new_cost = _cost(A, n, est + alpha * update)
+
+            # small alpha stopgap
+            if alpha < 1e-15:
+                break
+
+        # update estimate
+        est += alpha * update
+        if old_cost - new_cost < 1e-10:
+            break
+        # store current cost
+        old_cost = new_cost
+
+
+    return est
+
+
+def _cost(A, n, estimate, eps=1e-6):
+    """
+    Computes the cost (negative log likelihood) of the estimated process using the vectorized
+    version of equation 3 of [PGD].
+
+    See the appendix of [PGD].
+
+    :param A: a matrix constructed from the input states and POVM elements (eq. A1) that aids
+        in calculating the model probabilities p.
+    :param n: vectorized form of the observed counts n_ij
+    :param estimate: the current model Choi representation of an estimated process for which we
+        report the cost.
+    :return: Cost of the estimate given the data, n
+    """
+    p = A @ vec(estimate)  # vectorized form of the probabilities of outcomes, p_ij
+    # see appendix on "stalling"
+    p = np.clip(p, a_min=eps, a_max=None)
+    return - n.T @ np.log(p)
+
+
+def _grad_cost(A, n, estimate, eps=1e-6):
+    """
+    Computes the gradient of the cost, leveraging the vectorized equation 6 of [PGD] given in the
+    appendix.
+
+    :param A: a matrix constructed from the input states and POVM elements (eq. A1) that aids
+        in calculating the model probabilities p.
+    :param n: vectorized form of the observed counts n_ij
+    :param estimate: the current model Choi representation of an estimated process for which we
+        compute the gradient.
+    :return: Gradient of the cost of the estimate given the data, n
+    """
+    p = A @ vec(estimate)
+    # see appendix on "stalling"
+    p = np.clip(p, a_min=eps, a_max=None)
+    eta = n / p
+    return unvec(-A.conj().T @ eta)

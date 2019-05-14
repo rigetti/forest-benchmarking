@@ -545,7 +545,9 @@ def choi_is_unitary(choi: np.ndarray, limit: float = 1e-09) -> bool:
     kraus_ops = choi2kraus(choi, tol=limit)
     return len(kraus_ops) == 1
 
-
+# ==================================================================================================
+# Project Channels to CP, TNI, TP, and physical
+# ==================================================================================================
 def proj_choi_to_completely_positive(choi: np.ndarray) -> np.ndarray:
     """
     Projects the Choi representation of a process into the nearest Choi matrix in the space of
