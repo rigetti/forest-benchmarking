@@ -1,557 +1,1104 @@
-"""
-Utilities for estimating expected values of Pauli terms given pyquil programs
-"""
-from collections import namedtuple
-from functools import reduce
+import functools
+from functools import partial
+import itertools
+import json
+import logging
+import re
+import sys
+import warnings
+from json import JSONEncoder
+from operator import mul
+from typing import List, Union, Iterable, Tuple, Dict, Callable
 
 import numpy as np
-from pyquil.paulis import (PauliSum, PauliTerm, commuting_sets, sI,
-                           term_with_coeff, is_identity)
-from pyquil.quil import Program
-from pyquil.gates import RX, RY, RZ, MEASURE
-from forest.benchmarking.readout import estimate_confusion_matrix
+from math import pi
+import networkx as nx
+from networkx.algorithms.approximation.clique import clique_removal
+from pyquil import Program
+from pyquil.api import QuantumComputer
+from pyquil.gates import *
+from pyquil.paulis import PauliTerm, sI, is_identity
+
 from forest.benchmarking.compilation import basic_compile
 
-STANDARD_NUMSHOTS = 10000
+if sys.version_info < (3, 7):
+    from pyquil.external.dataclasses import dataclass
+else:
+    from dataclasses import dataclass
 
-class CommutationError(ValueError):
-    """
-    Raised error when two items do not commute as promised
-    """
-    pass
+log = logging.getLogger(__name__)
 
 
-def remove_identity(psum):
+@dataclass(frozen=True)
+class _OneQState:
     """
-    Remove the identity term from a Pauli sum
+    A description of a named one-qubit quantum state.
+    This can be used to generate pre-rotations for quantum process tomography. For example,
+    X0_14 will generate the +1 eigenstate of the X operator on qubit 14. X1_14 will generate the
+    -1 eigenstate. SIC0_14 will generate the 0th SIC-basis state on qubit 14.
+    """
+    label: str
+    index: int
+    qubit: int
 
-    :param PauliSum psum: PauliSum object to remove identity
-    :return: The new pauli sum and the identity term.
+    def __str__(self):
+        return f'{self.label}{self.index}_{self.qubit}'
+
+    @classmethod
+    def from_str(cls, s):
+        ma = re.match(r'\s*(\w+)(\d+)_(\d+)\s*', s)
+        if ma is None:
+            raise ValueError(f"Couldn't parse '{s}'")
+        return _OneQState(
+            label=ma.group(1),
+            index=int(ma.group(2)),
+            qubit=int(ma.group(3)),
+        )
+
+
+@dataclass(frozen=True)
+class TensorProductState:
     """
-    new_psum = []
-    identity_terms = []
-    for term in psum:
-        if not is_identity(term):
-            new_psum.append(term)
+    A description of a multi-qubit quantum state that is a tensor product of many _OneQStates
+    states.
+    """
+    states: Tuple[_OneQState]
+
+    def __init__(self, states=None):
+        if states is None:
+            states = tuple()
+        object.__setattr__(self, 'states', tuple(states))
+
+    def __mul__(self, other):
+        return TensorProductState(self.states + other.states)
+
+    def __str__(self):
+        return ' * '.join(str(s) for s in self.states)
+
+    def __repr__(self):
+        return f'TensorProductState[{self}]'
+
+    def __getitem__(self, qubit):
+        """Return the _OneQState at the given qubit."""
+        for oneq_state in self.states:
+            if oneq_state.qubit == qubit:
+                return oneq_state
+        raise IndexError()
+
+    def __iter__(self):
+        yield from self.states
+
+    def __len__(self):
+        return len(self.states)
+
+    def states_as_set(self):
+        return frozenset(self.states)
+
+    def __eq__(self, other):
+        if not isinstance(other, TensorProductState):
+            return False
+
+        return self.states_as_set() == other.states_as_set()
+
+    def __hash__(self):
+        return hash(self.states_as_set())
+
+    @classmethod
+    def from_str(cls, s):
+        if s == '':
+            return TensorProductState()
+        return TensorProductState(tuple(_OneQState.from_str(x) for x in s.split('*')))
+
+
+def SIC0(q):
+    return TensorProductState((_OneQState('SIC', 0, q),))
+
+
+def SIC1(q):
+    return TensorProductState((_OneQState('SIC', 1, q),))
+
+
+def SIC2(q):
+    return TensorProductState((_OneQState('SIC', 2, q),))
+
+
+def SIC3(q):
+    return TensorProductState((_OneQState('SIC', 3, q),))
+
+
+def plusX(q):
+    return TensorProductState((_OneQState('X', 0, q),))
+
+
+def minusX(q):
+    return TensorProductState((_OneQState('X', 1, q),))
+
+
+def plusY(q):
+    return TensorProductState((_OneQState('Y', 0, q),))
+
+
+def minusY(q):
+    return TensorProductState((_OneQState('Y', 1, q),))
+
+
+def plusZ(q):
+    return TensorProductState((_OneQState('Z', 0, q),))
+
+
+def minusZ(q):
+    return TensorProductState((_OneQState('Z', 1, q),))
+
+
+def zeros_state(qubits: Iterable[int]):
+    return TensorProductState(_OneQState('Z', 0, q) for q in qubits)
+
+
+@dataclass(frozen=True, init=False)
+class ExperimentSetting:
+    """
+    Input and output settings for a tomography-like experiment.
+    Many near-term quantum algorithms take the following form:
+     - Start in a pauli state
+     - Prepare some ansatz
+     - Measure it w.r.t. pauli operators
+    Where we typically use a large number of (start, measure) pairs but keep the ansatz preparation
+    program consistent. This class represents the (start, measure) pairs. Typically a large
+    number of these :py:class:`ExperimentSetting` objects will be created and grouped into
+    a :py:class:`ObservablesExperiment`.
+    """
+    in_state: TensorProductState
+    observable: PauliTerm
+
+    def __init__(self, in_state: TensorProductState, observable: PauliTerm):
+        # For backwards compatibility, handle in_state specified by PauliTerm.
+        if isinstance(in_state, PauliTerm):
+            warnings.warn("Please specify in_state as a TensorProductState",
+                          DeprecationWarning, stacklevel=2)
+
+            if is_identity(in_state):
+                in_state = TensorProductState()
+            else:
+                in_state = TensorProductState([
+                    _OneQState(label=pauli_label, index=0, qubit=qubit)
+                    for qubit, pauli_label in in_state._ops.items()
+                ])
+
+        object.__setattr__(self, 'in_state', in_state)
+        object.__setattr__(self, 'observable', observable)
+
+    @property
+    def in_operator(self):
+        warnings.warn("ExperimentSetting.in_operator is deprecated in favor of in_state",
+                      stacklevel=2)
+
+        # Backwards compat
+        pt = sI()
+        for oneq_state in self.in_state.states:
+            if oneq_state.label not in ['X', 'Y', 'Z']:
+                raise ValueError(f"Can't shim {oneq_state.label} into a pauli term. Use in_state.")
+            if oneq_state.index != 0:
+                raise ValueError(f"Can't shim {oneq_state} into a pauli term. Use in_state.")
+
+            pt *= PauliTerm(op=oneq_state.label, index=oneq_state.qubit)
+
+        return pt
+
+    def __str__(self):
+        return f'{self.in_state}→{self.observable.compact_str()}'
+
+    def __repr__(self):
+        return f'ExperimentSetting[{self}]'
+
+    def serializable(self):
+        return str(self)
+
+    @classmethod
+    def from_str(cls, s: str):
+        """The opposite of str(expt)"""
+        instr, outstr = s.split('→')
+        return ExperimentSetting(in_state=TensorProductState.from_str(instr),
+                                 observable=PauliTerm.from_compact_str(outstr))
+
+
+def _abbrev_program(program: Program, max_len=10):
+    """Create an abbreviated string representation of a Program.
+    This will join all instructions onto a single line joined by '; '. If the number of
+    instructions exceeds ``max_len``, some will be excluded from the string representation.
+    """
+    program_lines = program.out().splitlines()
+    if max_len is not None and len(program_lines) > max_len:
+        first_n = max_len // 2
+        last_n = max_len - first_n
+        excluded = len(program_lines) - max_len
+        program_lines = (program_lines[:first_n] + [f'... {excluded} instrs not shown ...']
+                         + program_lines[-last_n:])
+
+    return '; '.join(program_lines)
+
+
+class ObservablesExperiment:
+    """
+    A tomography-like experiment.
+    Many near-term quantum algorithms involve:
+     - some limited state preparation
+     - enacting a quantum process (like in tomography) or preparing a variational ansatz state
+       (like in VQE)
+     - measuring observables of the state.
+    Where we typically use a large number of (state_prep, measure) pairs but keep the ansatz
+    program consistent. This class stores the ansatz program as a :py:class:`~pyquil.Program`
+    and maintains a list of :py:class:`ExperimentSetting` objects which each represent a
+    (state_prep, measure) pair.
+    Settings diagonalized by a shared tensor product basis (TPB) can (optionally) be estimated
+    simultaneously. Therefore, this class is backed by a list of list of ExperimentSettings.
+    Settings sharing an inner list will be estimated simultaneously. If you don't want this,
+    provide a list of length-1-lists. As a convenience, if you pass a 1D list to the constructor
+    will expand it to a list of length-1-lists.
+    This class will not group settings for you. Please see :py:func:`group_experiments` for
+    a function that will automatically process a ObservablesExperiment to group Experiments sharing
+    a TPB.
+    """
+
+    def __init__(self,
+                 settings: Union[List[ExperimentSetting], List[List[ExperimentSetting]]],
+                 program: Program,
+                 qubits: List[int] = None):
+        if len(settings) == 0:
+            settings = []
         else:
-            identity_terms.append(term)
-    return sum(new_psum), sum(identity_terms)
+            if isinstance(settings[0], ExperimentSetting):
+                # convenience wrapping in lists of length 1
+                settings = [[expt] for expt in settings]
+
+        self._settings = settings  # type: List[List[ExperimentSetting]]
+        self.program = program
+        if qubits is not None:
+            warnings.warn("The 'qubits' parameter has been deprecated and will be removed"
+                          "in a future release of pyquil")
+        self.qubits = qubits
+
+    def __len__(self):
+        return len(self._settings)
+
+    def __getitem__(self, item):
+        return self._settings[item]
+
+    def __setitem__(self, key, value):
+        self._settings[key] = value
+
+    def __delitem__(self, key):
+        self._settings.__delitem__(key)
+
+    def __iter__(self):
+        yield from self._settings
+
+    def __reversed__(self):
+        yield from reversed(self._settings)
+
+    def __contains__(self, item):
+        return item in self._settings
+
+    def append(self, expts):
+        if not isinstance(expts, list):
+            expts = [expts]
+        return self._settings.append(expts)
+
+    def count(self, expt):
+        return self._settings.count(expt)
+
+    def index(self, expt, start=None, stop=None):
+        return self._settings.index(expt, start, stop)
+
+    def extend(self, expts):
+        return self._settings.extend(expts)
+
+    def insert(self, index, expt):
+        return self._settings.insert(index, expt)
+
+    def pop(self, index=None):
+        return self._settings.pop(index)
+
+    def remove(self, expt):
+        return self._settings.remove(expt)
+
+    def reverse(self):
+        return self._settings.reverse()
+
+    def sort(self, key=None, reverse=False):
+        return self._settings.sort(key, reverse)
+
+    def setting_strings(self):
+        yield from ('{i}: {st_str}'.format(i=i, st_str=', '.join(str(setting)
+                                                                 for setting in settings))
+                    for i, settings in enumerate(self._settings))
+
+    def settings_string(self, abbrev_after=None):
+        setting_strs = list(self.setting_strings())
+        if abbrev_after is not None and len(setting_strs) > abbrev_after:
+            first_n = abbrev_after // 2
+            last_n = abbrev_after - first_n
+            excluded = len(setting_strs) - abbrev_after
+            setting_strs = (setting_strs[:first_n] + [f'... {excluded} not shown ...',
+                                                      '... use e.settings_string() for all ...']
+                            + setting_strs[-last_n:])
+        return '\n'.join(setting_strs)
+
+    def __str__(self):
+        return _abbrev_program(self.program) + '\n' + self.settings_string(abbrev_after=20)
+
+    def serializable(self):
+        return {
+            'type': 'ObservablesExperiment',
+            'settings': self._settings,
+            'program': self.program.out(),
+        }
+
+    def __eq__(self, other):
+        if not isinstance(other, ObservablesExperiment):
+            return False
+        return self.serializable() == other.serializable()
 
 
-def remove_imaginary(pauli_sums):
+class OperatorEncoder(JSONEncoder):
+    def default(self, o):
+        if isinstance(o, ExperimentSetting):
+            return o.serializable()
+        if isinstance(o, ObservablesExperiment):
+            return o.serializable()
+        if isinstance(o, ExperimentResult):
+            return o.serializable()
+        return o
+
+
+def to_json(fn, obj):
+    """Convenience method to save pyquil.operator_estimation objects as a JSON file.
+    See :py:func:`read_json`.
     """
-    Remove the imaginary component of each term in a Pauli sum
+    with open(fn, 'w') as f:
+        json.dump(obj, f, cls=OperatorEncoder, indent=2, ensure_ascii=False)
+    return fn
 
-    :param PauliSum pauli_sums: The Pauli sum to process.
-    :return: a purely hermitian Pauli sum.
-    :rtype: PauliSum
+
+def _operator_object_hook(obj):
+    if 'type' in obj and obj['type'] == 'ObservablesExperiment':
+        return ObservablesExperiment([[ExperimentSetting.from_str(s) for s in settings]
+                                     for settings in obj['settings']],
+                                    program=Program(obj['program']))
+    return obj
+
+
+def read_json(fn):
+    """Convenience method to read pyquil.operator_estimation objects from a JSON file.
+    See :py:func:`to_json`.
     """
-    if not isinstance(pauli_sums, PauliSum):
-        raise TypeError("not a pauli sum. please give me one")
-    new_term = sI(0) * 0.0
-    for term in pauli_sums:
-        new_term += term_with_coeff(term, term.coefficient.real)
-
-    return new_term
+    with open(fn) as f:
+        return json.load(f, object_hook=_operator_object_hook)
 
 
-def get_confusion_matrices(quantum_resource, qubits, num_sample_ubound):
-    """
-    Get the confusion matrices from the quantum resource given number of samples
+def _one_q_sic_prep(index, qubit):
+    """Prepare the index-th SIC basis state."""
+    if index == 0:
+        return Program()
 
-    This allows the user to change the accuracy at which they estimate the
-    confusion matrix
+    theta = 2 * np.arccos(1 / np.sqrt(3))
+    zx_plane_rotation = Program([
+        RX(-pi / 2, qubit),
+        RZ(theta - pi, qubit),
+        RX(-pi / 2, qubit),
+    ])
 
-    :param quantum_resource: Quantum Abstract Machine connection object
-    :param qubits: qubits to measure 1-qubit readout confusion matrices
-    :return: dictionary of confusion matrices indexed by the qubit label
-    :rtype: dict
-    """
-    confusion_mat_dict = {q: estimate_confusion_matrix(quantum_resource, q, num_sample_ubound) for q in qubits}
-    return confusion_mat_dict
+    if index == 1:
+        return zx_plane_rotation
+
+    elif index == 2:
+        return zx_plane_rotation + RZ(-2 * pi / 3, qubit)
+
+    elif index == 3:
+        return zx_plane_rotation + RZ(2 * pi / 3, qubit)
+
+    raise ValueError(f'Bad SIC index: {index}')
 
 
-def get_rotation_program(pauli_term):
-    """
-    Generate a rotation program so that the pauli term is diagonal
+def _one_q_pauli_prep(label, index, qubit):
+    """Prepare the index-th eigenstate of the pauli operator given by label."""
+    if index not in [0, 1]:
+        raise ValueError(f'Bad Pauli index: {index}')
 
-    :param PauliTerm pauli_term: The Pauli term used to generate diagonalizing
-                                 one-qubit rotations.
-    :return: The rotation program.
-    :rtype: Program
-    """
-    meas_basis_change = Program()
-    for index, gate in pauli_term:
-        if gate == 'X':
-            meas_basis_change.inst(RY(-np.pi / 2, index))
-        elif gate == 'Y':
-            meas_basis_change.inst(RX(np.pi / 2, index))
-        elif gate == 'Z':
-            pass
+    if label == 'X':
+        if index == 0:
+            return Program(RY(pi / 2, qubit))
         else:
-            raise ValueError()
+            return Program(RY(-pi / 2, qubit))
 
-    return meas_basis_change
+    elif label == 'Y':
+        if index == 0:
+            return Program(RX(-pi / 2, qubit))
+        else:
+            return Program(RX(pi / 2, qubit))
+
+    elif label == 'Z':
+        if index == 0:
+            return Program()
+        else:
+            return Program(RX(pi, qubit))
+
+    raise ValueError(f'Bad Pauli label: {label}')
 
 
-def get_parity(pauli_terms, bitstring_results):
+def _one_q_state_prep(oneq_state: _OneQState):
+    """Prepare a one qubit state.
+    Either SIC[0-3], X[0-1], Y[0-1], or Z[0-1].
     """
-    Calculate the eigenvalues of Pauli operators given results of projective measurements
+    label = oneq_state.label
+    if label == 'SIC':
+        return _one_q_sic_prep(oneq_state.index, oneq_state.qubit)
+    elif label in ['X', 'Y', 'Z']:
+        return _one_q_pauli_prep(label, oneq_state.index, oneq_state.qubit)
+    else:
+        raise ValueError(f"Bad state label: {label}")
 
-    The single-qubit projective measurement results (elements of
-    `bitstring_results`) are listed in physical-qubit-label numerical order.
 
-    An example:
-
-    Consider a Pauli term Z1 Z5 Z6 I7 and a collection of single-qubit
-    measurement results corresponding to measurements in the z-basis on qubits
-    {1, 5, 6, 7}. Each element of bitstring_results is an element of
-    :math:`\{0, 1\}^{\otimes 4}`.  If [0, 0, 1, 0] and [1, 0, 1, 1]
-    are the two projective measurement results in `bitstring_results` then
-    this method returns a 1 x 2 numpy array with values [[-1, 1]]
-
-    :param List pauli_terms: A list of Pauli terms operators to use
-    :param bitstring_results: A list of projective measurement results.  Each
-                              element is a list of single-qubit measurements.
-    :return: Array (m x n) of {+1, -1} eigenvalues for the m-operators in
-             `pauli_terms` associated with the n measurement results.
-    :rtype: np.ndarray
+def _local_pauli_eig_meas(op, idx):
     """
-    qubit_set = []
-    for term in pauli_terms:
-        qubit_set.extend(list(term.get_qubits()))
-    active_qubit_indices = sorted(list(set(qubit_set)))
-    index_mapper = dict(zip(active_qubit_indices,
-                            range(len(active_qubit_indices))))
+    Generate gate sequence to measure in the eigenbasis of a Pauli operator, assuming
+    we are only able to measure in the Z eigenbasis. (Note: The unitary operations of this
+    Program are essentially the Hermitian conjugates of those in :py:func:`_one_q_pauli_prep`)
+    """
+    if op == 'X':
+        return Program(RY(-pi / 2, idx))
+    elif op == 'Y':
+        return Program(RX(pi / 2, idx))
+    elif op == 'Z':
+        return Program()
+    raise ValueError(f'Unknown operation {op}')
 
-    results = np.zeros((len(pauli_terms), len(bitstring_results)))
 
-    # convert to array so we can fancy index into it later.
-    # list() is needed to cast because we don't really want a map object
-    bitstring_results = list(map(np.array, bitstring_results))
-    for row_idx, term in enumerate(pauli_terms):
-        memory_index = np.array(list(map(lambda x: index_mapper[x],
-                                         sorted(term.get_qubits()))))
+def construct_tpb_graph(experiments: ObservablesExperiment):
+    """
+    Construct a graph where an edge signifies two experiments are diagonal in a TPB.
+    """
+    g = nx.Graph()
+    for expt in experiments:
+        assert len(expt) == 1, 'already grouped?'
+        expt = expt[0]
 
-        results[row_idx, :] = [-2 * (sum(x[memory_index]) % 2) +
-                               1 for x in bitstring_results]
+        if expt not in g:
+            g.add_node(expt, count=1)
+        else:
+            g.nodes[expt]['count'] += 1
+
+    for expt1, expt2 in itertools.combinations(experiments, r=2):
+        expt1 = expt1[0]
+        expt2 = expt2[0]
+
+        if expt1 == expt2:
+            continue
+
+        max_weight_in = _max_weight_state([expt1.in_state, expt2.in_state])
+        max_weight_out = _max_weight_operator([expt1.observable, expt2.observable])
+        if max_weight_in is not None and max_weight_out is not None:
+            g.add_edge(expt1, expt2)
+
+    return g
+
+
+def group_experiments_clique_removal(experiments: ObservablesExperiment) -> ObservablesExperiment:
+    """
+    Group experiments that are diagonal in a shared tensor product basis (TPB) to minimize number
+    of QPU runs, using a graph clique removal algorithm.
+    :param experiments: a tomography experiment
+    :return: a tomography experiment with all the same settings, just grouped according to shared
+        TPBs.
+    """
+    g = construct_tpb_graph(experiments)
+    _, cliqs = clique_removal(g)
+    new_cliqs = []
+    for cliq in cliqs:
+        new_cliq = []
+        for expt in cliq:
+            # duplicate `count` times
+            new_cliq += [expt] * g.nodes[expt]['count']
+
+        new_cliqs += [new_cliq]
+
+    return ObservablesExperiment(new_cliqs, program=experiments.program)
+
+
+def _max_weight_operator(ops: Iterable[PauliTerm]) -> Union[None, PauliTerm]:
+    """Construct a PauliTerm operator by taking the non-identity single-qubit operator at each
+    qubit position.
+    This function will return ``None`` if the input operators do not share a natural tensor
+    product basis.
+    For example, the max_weight_operator of ["XI", "IZ"] is "XZ". Asking for the max weight
+    operator of something like ["XI", "ZI"] will return None.
+    """
+    mapping = dict()  # type: Dict[int, str]
+    for op in ops:
+        for idx, op_str in op:
+            if idx in mapping:
+                if mapping[idx] != op_str:
+                    return None
+            else:
+                mapping[idx] = op_str
+    op = functools.reduce(mul, (PauliTerm(op, q) for q, op in mapping.items()), sI())
+    return op
+
+
+def _max_weight_state(states: Iterable[TensorProductState]) -> Union[None, TensorProductState]:
+    """Construct a TensorProductState by taking the single-qubit state at each
+    qubit position.
+    This function will return ``None`` if the input states are not compatible
+    For example, the max_weight_state of ["(+X, q0)", "(-Z, q1)"] is "(+X, q0; -Z q1)". Asking for
+    the max weight state of something like ["(+X, q0)", "(+Z, q0)"] will return None.
+    """
+    mapping = dict()  # type: Dict[int, _OneQState]
+    for state in states:
+        for oneq_state in state.states:
+            if oneq_state.qubit in mapping:
+                if mapping[oneq_state.qubit] != oneq_state:
+                    return None
+            else:
+                mapping[oneq_state.qubit] = oneq_state
+    return TensorProductState(list(mapping.values()))
+
+
+def _max_tpb_overlap(tomo_expt: ObservablesExperiment):
+    """
+    Given an input ObservablesExperiment, provide a dictionary indicating which ExperimentSettings
+    share a tensor product basis
+    :param tomo_expt: ObservablesExperiment, from which to group ExperimentSettings that share a tpb
+        and can be run together
+    :return: dictionary keyed with ExperimentSetting (specifying a tpb), and with each value being a
+            list of ExperimentSettings (diagonal in that tpb)
+    """
+    # initialize empty dictionary
+    diagonal_sets = {}
+    # loop through ExperimentSettings of the ObservablesExperiment
+    for expt_setting in tomo_expt:
+        # no need to group already grouped ObservablesExperiment
+        assert len(expt_setting) == 1, 'already grouped?'
+        expt_setting = expt_setting[0]
+        # calculate max overlap of expt_setting with keys of diagonal_sets
+        # keep track of whether a shared tpb was found
+        found_tpb = False
+        # loop through dict items
+        for es, es_list in diagonal_sets.items():
+            trial_es_list = es_list + [expt_setting]
+            diag_in_term = _max_weight_state(expst.in_state for expst in trial_es_list)
+            diag_out_term = _max_weight_operator(expst.observable for expst in trial_es_list)
+            # max_weight_xxx returns None if the set of xxx's don't share a TPB, so the following
+            # conditional is True if expt_setting can be inserted into the current es_list.
+            if diag_in_term is not None and diag_out_term is not None:
+                found_tpb = True
+                assert len(diag_in_term) >= len(es.in_state), \
+                    "Highest weight in-state can't be smaller than the given in-state"
+                assert len(diag_out_term) >= len(es.observable), \
+                    "Highest weight out-PauliTerm can't be smaller than the given out-PauliTerm"
+
+                # update the diagonalizing basis (key of dict) if necessary
+                if len(diag_in_term) > len(es.in_state) or len(diag_out_term) > len(es.observable):
+                    del diagonal_sets[es]
+                    new_es = ExperimentSetting(diag_in_term, diag_out_term)
+                    diagonal_sets[new_es] = trial_es_list
+                else:
+                    diagonal_sets[es] = trial_es_list
+                break
+
+        if not found_tpb:
+            # made it through entire dict without finding any ExperimentSetting with shared tpb,
+            # so need to make a new item
+            diagonal_sets[expt_setting] = [expt_setting]
+
+    return diagonal_sets
+
+
+def group_experiments_greedy(tomo_expt: ObservablesExperiment):
+    """
+    Greedy method to group ExperimentSettings in a given ObservablesExperiment
+    :param tomo_expt: ObservablesExperiment to group ExperimentSettings within
+    :return: ObservablesExperiment, with grouped ExperimentSettings according to whether
+        it consists of PauliTerms diagonal in the same tensor product basis
+    """
+    diag_sets = _max_tpb_overlap(tomo_expt)
+    grouped_expt_settings_list = list(diag_sets.values())
+    grouped_tomo_expt = ObservablesExperiment(grouped_expt_settings_list, program=tomo_expt.program)
+    return grouped_tomo_expt
+
+
+def group_experiments(experiments: ObservablesExperiment,
+                      method: str = 'greedy') -> ObservablesExperiment:
+    """
+    Group experiments that are diagonal in a shared tensor product basis (TPB) to minimize number
+    of QPU runs.
+    Background
+    ----------
+    Given some PauliTerm operator, the 'natural' tensor product basis to
+    diagonalize this term is the one which diagonalizes each Pauli operator in the
+    product term-by-term.
+    For example, X(1) * Z(0) would be diagonal in the 'natural' tensor product basis
+    {(|0> +/- |1>)/Sqrt[2]} * {|0>, |1>}, whereas Z(1) * X(0) would be diagonal
+    in the 'natural' tpb {|0>, |1>} * {(|0> +/- |1>)/Sqrt[2]}. The two operators
+    commute but are not diagonal in each others 'natural' tpb (in fact, they are
+    anti-diagonal in each others 'natural' tpb). This function tests whether two
+    operators given as PauliTerms are both diagonal in each others 'natural' tpb.
+    Note that for the given example of X(1) * Z(0) and Z(1) * X(0), we can construct
+    the following basis which simultaneously diagonalizes both operators:
+      -- |0>' = |0> (|+>) + |1> (|->)
+      -- |1>' = |0> (|+>) - |1> (|->)
+      -- |2>' = |0> (|->) + |1> (|+>)
+      -- |3>' = |0> (-|->) + |1> (|+>)
+    In this basis, X Z looks like diag(1, -1, 1, -1), and Z X looks like diag(1, 1, -1, -1).
+    Notice however that this basis cannot be constructed with single-qubit operations, as each
+    of the basis vectors are entangled states.
+    Methods
+    -------
+    The "greedy" method will keep a running set of 'buckets' into which grouped ExperimentSettings
+    will be placed. Each new ExperimentSetting considered is assigned to the first applicable
+    bucket and a new bucket is created if there are no applicable buckets.
+    The "clique-removal" method maps the term grouping problem onto Max Clique graph problem.
+    This method constructs a NetworkX graph where an edge exists between two settings that
+    share an nTPB and then uses networkx's algorithm for clique removal. This method can give
+    you marginally better groupings in certain circumstances, but constructing the
+    graph is pretty slow so "greedy" is the default.
+    :param experiments: a tomography experiment
+    :param method: method used for grouping; the allowed methods are one of
+        ['greedy', 'clique-removal']
+    :return: a tomography experiment with all the same settings, just grouped according to shared
+        TPBs.
+    """
+    allowed_methods = ['greedy', 'clique-removal']
+    assert method in allowed_methods, f"'method' should be one of {allowed_methods}."
+    if method == 'greedy':
+        return group_experiments_greedy(experiments)
+    elif method == 'clique-removal':
+        return group_experiments_clique_removal(experiments)
+
+
+@dataclass(frozen=True)
+class ExperimentResult:
+    """An expectation and standard deviation for the measurement of one experiment setting
+    in a tomographic experiment.
+    In the case of readout error calibration, we also include
+    expectation, standard deviation and count for the calibration results, as well as the
+    expectation and standard deviation for the corrected results.
+    """
+
+    setting: ExperimentSetting
+    expectation: Union[float, complex]
+    total_counts: int
+    std_err: Union[float, complex] = None
+    raw_expectation: Union[float, complex] = None
+    raw_std_err: float = None
+    calibration_expectation: Union[float, complex] = None
+    calibration_std_err: Union[float, complex] = None
+    calibration_counts: int = None
+
+    def __init__(self, setting: ExperimentSetting,
+                 expectation: Union[float, complex],
+                 total_counts: int,
+                 stddev: Union[float, complex] = None,
+                 std_err: Union[float, complex] = None,
+                 raw_expectation: Union[float, complex] = None,
+                 raw_stddev: float = None,
+                 raw_std_err: float = None,
+                 calibration_expectation: Union[float, complex] = None,
+                 calibration_stddev: Union[float, complex] = None,
+                 calibration_std_err: Union[float, complex] = None,
+                 calibration_counts: int = None):
+
+        object.__setattr__(self, 'setting', setting)
+        object.__setattr__(self, 'expectation', expectation)
+        object.__setattr__(self, 'total_counts', total_counts)
+        object.__setattr__(self, 'raw_expectation', raw_expectation)
+        object.__setattr__(self, 'calibration_expectation', calibration_expectation)
+        object.__setattr__(self, 'calibration_counts', calibration_counts)
+
+        if stddev is not None:
+            warnings.warn("'stddev' has been renamed to 'std_err'")
+            std_err = stddev
+        object.__setattr__(self, 'std_err', std_err)
+
+        if raw_stddev is not None:
+            warnings.warn("'raw_stddev' has been renamed to 'raw_std_err'")
+            raw_std_err = raw_stddev
+        object.__setattr__(self, 'raw_std_err', raw_std_err)
+
+        if calibration_stddev is not None:
+            warnings.warn("'calibration_stddev' has been renamed to 'calibration_std_err'")
+            calibration_std_err = calibration_stddev
+        object.__setattr__(self, 'calibration_std_err', calibration_std_err)
+
+    def get_stddev(self) -> Union[float, complex]:
+        warnings.warn("'stddev' has been renamed to 'std_err'")
+        return self.std_err
+
+    def set_stddev(self, value: Union[float, complex]):
+        warnings.warn("'stddev' has been renamed to 'std_err'")
+        object.__setattr__(self, 'std_err', value)
+
+    stddev = property(get_stddev, set_stddev)
+
+    def get_raw_stddev(self) -> float:
+        warnings.warn("'raw_stddev' has been renamed to 'raw_std_err'")
+        return self.raw_std_err
+
+    def set_raw_stddev(self, value: float):
+        warnings.warn("'raw_stddev' has been renamed to 'raw_std_err'")
+        object.__setattr__(self, 'raw_std_err', value)
+
+    raw_stddev = property(get_raw_stddev, set_raw_stddev)
+
+    def get_calibration_stddev(self) -> Union[float, complex]:
+        warnings.warn("'calibration_stddev' has been renamed to 'calibration_std_err'")
+        return self.calibration_std_err
+
+    def set_calibration_stddev(self, value: Union[float, complex]):
+        warnings.warn("'calibration_stddev' has been renamed to 'calibration_std_err'")
+        object.__setattr__(self, 'calibration_std_err', value)
+
+    calibration_stddev = property(get_calibration_stddev, set_calibration_stddev)
+
+    def __str__(self):
+        return f'{self.setting}: {self.expectation} +- {self.std_err}'
+
+    def __repr__(self):
+        return f'ExperimentResult[{self}]'
+
+    def serializable(self):
+        return {
+            'type': 'ExperimentResult',
+            'setting': self.setting,
+            'expectation': self.expectation,
+            'std_err': self.std_err,
+            'total_counts': self.total_counts,
+            'raw_expectation': self.raw_expectation,
+            'raw_std_err': self.raw_std_err,
+            'calibration_expectation': self.calibration_expectation,
+            'calibration_std_err': self.calibration_std_err,
+            'calibration_counts': self.calibration_counts,
+        }
+
+
+def generate_experiment_programs(obs_expt: ObservablesExperiment, active_reset: bool) \
+        -> Tuple[List[Program], List[List[int]]]:
+    """
+    Generate the programs necessary to estimate the observables in an ObservablesExperiment.
+
+    :param obs_expt:
+    :param active_reset:
+    :return:
+    """
+    # Outer loop over a collection of grouped settings for which we can simultaneously estimate.
+    programs = []
+    meas_qubits = []
+    for i, settings in enumerate(obs_expt):
+
+        # Prepare a state according to the amalgam of all setting.in_state
+        total_prog = Program()
+        if active_reset:
+            total_prog += RESET()
+        max_weight_in_state = _max_weight_state(setting.in_state for setting in settings)
+        for oneq_state in max_weight_in_state.states:
+            total_prog += _one_q_state_prep(oneq_state)
+
+        # Add in the program
+        total_prog += obs_expt.program
+
+        # Prepare for measurement state according to setting.observable
+        max_weight_out_op = _max_weight_operator(setting.observable for setting in settings)
+        for qubit, op_str in max_weight_out_op:
+            total_prog += _local_pauli_eig_meas(op_str, qubit)
+
+        programs.append(total_prog)
+        meas_qubits.append(max_weight_out_op.get_qubits())
+    return programs, meas_qubits
+
+
+def consolidate_exhaustive_outputs(outputs: List[np.ndarray], groups: List[int],
+                                   flip_arrays: List[Tuple[bool]]) -> List[np.ndarray]:
+    """
+    Given outputs from exhaustive_symmetrization programs, appropriately flip output bits and
+    consolidate results into groups determined by the programs passed into
+    exhaustive_symmetrization.
+
+    :param outputs:
+    :param groups:
+    :param flip_arrays:
+    :return:
+    """
+    output = []
+    for bitarray, group, flip_array in zip(outputs, groups, flip_arrays):
+        if len(output) <= group:
+            output[group] = bitarray ^ flip_array
+            continue
+        output[group] = np.vstack(output[group], bitarray ^ flip_array)
+    return output
+
+
+def _flip_array_to_prog(flip_array: Tuple[bool], qubits: List[int]) -> Program:
+    """
+    Generate a pre-measurement program that flips the qubit state according to the flip_array of
+    bools.
+
+    :param ops_bool: tuple of booleans specifying the operation to be carried out on `qubits`
+    :param qubits: list specifying the qubits to be carried operations on
+    :return: Program with the operations specified in `ops_bool` on the qubits specified in
+        `qubits`
+    """
+    assert len(flip_array) == len(qubits), "Mismatch of qubits and operations"
+    prog = Program()
+    for i, flip_output in enumerate(flip_array):
+        if flip_output == 0:
+            continue
+        elif flip_output == 1:
+            prog += Program(X(qubits[i]))
+        else:
+            raise ValueError("flip_bools should only consist of 0s and/or 1s")
+    return prog
+
+
+def exhaustive_symmetrization(programs: List[Program], meas_qubits: List[List[int]]) \
+        -> Tuple[List[Program], Callable]:
+    """
+    For each program in the input programs generate new programs which flip the measured qubits
+    in every possible combination in order to symmetrize readout.
+
+    :param programs:
+    :param meas_qubits:
+    :return:
+    """
+    symm_programs = []
+    prog_groups = []
+    flip_arrays = []
+
+    for idx, (prog, meas_qs) in enumerate(zip(programs, meas_qubits)):
+        for flip_array in itertools.product([0, 1], repeat=len(meas_qs)):
+            total_prog_symm = prog.copy()
+            prog_symm = _flip_array_to_prog(flip_array, meas_qs)
+            total_prog_symm += prog_symm
+            symm_programs.append(total_prog_symm)
+            prog_groups.append(idx)
+            flip_arrays.append(flip_array)
+
+    return symm_programs, partial(consolidate_exhaustive_outputs, groups=prog_groups,
+                                  flip_arrays=flip_arrays)
+
+
+def _measure_bitstrings(qc: QuantumComputer, programs: List[Program], prog_qubits: List[List[int]],
+                        num_shots = 500) -> List[np.ndarray]:
+    """
+    Wrapper for appending measure instructions onto each program, running the program,
+    and accumulating the resulting bitarrays.
+
+    Each program is assumed to be composed of gates that can be compiled into native quil by
+    basic_compile.
+
+    :param qc:
+    :param programs:
+    :param prog_qubits:
+    :param num_shots:
+    :return:
+    """
+    results = []
+    for program, qubits in zip(programs, prog_qubits):
+
+        ro = program.declare('ro', 'BIT', len(qubits))
+        for idx, q in enumerate(qubits):
+            program += MEASURE(q, ro[idx])
+
+        program.wrap_in_numshots_loop(num_shots)
+        native_quil = basic_compile(program)
+        exe = qc.compiler.native_quil_to_executable(native_quil)
+        shots = qc.run(exe)
+        results.append(shots)
     return results
 
 
-EstimationResult = namedtuple('EstimationResult',
-                              ('expected_value', 'pauli_expectations',
-                               'covariance', 'variance', 'n_shots'))
-EstimationResult.__doc__ = '''\
-A namedtuple describing Monte-Carlo averaging results
-
-:param expected_value: expected value of the PauliSum
-:param pauli_expectations:  individual expected values of elements in the
-                            PauliSum.  These values are scaled by the
-                            coefficients associated with each PauliSum.
-:param covariance: The covariance matrix computed from the shot data.
-:param variance: Sample variance computed from the covariance matrix and
-                 number of shots taken to obtain the data.
-:param n_shots: Number of readouts collected.
-'''
-
-
-def estimate_pauli_sum(pauli_terms,
-                       basis_transform_dict,
-                       program,
-                       variance_bound,
-                       quantum_resource,
-                       commutation_check=True,
-                       symmetrize=True,
-                       rand_samples=16):
+def shots_to_obs_moments(bitarray: np.ndarray, qubits: List[int], observable: PauliTerm) \
+        -> Tuple[float, float]:
     """
-    Estimate the mean of a sum of pauli terms to set variance
+    Calculate the mean and variance of the given observable based on the bitarray of results.
 
-    The sample variance is calculated by
-
-    .. math::
-        \begin{align}
-        \mathrm{Var}[\hat{\langle H \rangle}] = \sum_{i, j}h_{i}h_{j}
-        \mathrm{Cov}(\hat{\langle P_{i} \rangle}, \hat{\langle P_{j} \rangle})
-        \end{align}
-
-    The expectation value of each Pauli operator (term and coefficient) is
-    also returned.  It can be accessed through the named-tuple field
-    `pauli_expectations'.
-
-    :param pauli_terms: list of pauli terms to measure simultaneously or a
-                        PauliSum object
-    :param basis_transform_dict: basis transform dictionary where the key is
-                                 the qubit index and the value is the basis to
-                                 rotate into. Valid basis is [I, X, Y, Z].
-    :param program: program generating a state to sample from.  The program
-                    is deep copied to ensure no mutation of gates or program
-                    is perceived by the user.
-    :param variance_bound:  Bound on the variance of the estimator for the
-                            PauliSum. Remember this is the SQUARE of the
-                            standard error!
-    :param quantum_resource: quantum abstract machine object
-    :param Bool commutation_check: Optional flag toggling a safety check
-                                   ensuring all terms in `pauli_terms`
-                                   commute with each other
-    :param Bool symmetrize: Optional flag toggling symmetrization of readout
-    :param Int rand_samples: number of random realizations for readout symmetrization
-    :return: estimated expected value, expected value of each Pauli term in
-             the sum, covariance matrix, variance of the estimator, and the
-             number of shots taken.  The objected returned is a named tuple with
-             field names as follows: expected_value, pauli_expectations,
-             covariance, variance, n_shots.
-             `expected_value' == coef_vec.dot(pauli_expectations)
-    :rtype: EstimationResult
+    :param bitarray: results from running `qc.run`
+    :param qubits: list of qubits in order corresponding to the bitarray results.
+    :param observable: the observable whose moments are calculated from the shot data
+    :return: tuple specifying (mean, variance)
     """
-    if not isinstance(pauli_terms, (list, PauliSum)):
-        raise TypeError("pauli_terms needs to be a list or a PauliSum")
+    coeff = complex(observable.coefficient)
+    if not np.isclose(coeff.imag, 0):
+        raise ValueError(f"The coefficient of an observable should not be complex.")
+    coeff = coeff.real
 
-    if isinstance(pauli_terms, PauliSum):
-        pauli_terms = pauli_terms.terms
+    obs_qubits = [q for q, _ in observable]
+    # Identify classical register indices to select
+    idxs = [idx for idx, q in enumerate(qubits) if q in obs_qubits]
+    # Pick columns corresponding to qubits with a non-identity out_operation
+    obs_strings = bitarray[:, idxs]
+    # Transform bits to eigenvalues; ie (+1, -1)
+    my_obs_strings = 1 - 2 * obs_strings
+    # Multiply row-wise to get operator values. Do statistics. Return result.
+    obs_vals = coeff * np.prod(my_obs_strings, axis=1)
+    obs_mean = np.mean(obs_vals).item()
+    obs_var = np.var(obs_vals).item() / len(bitarray)
 
-    # check if each term commutes with everything
-    if commutation_check:
-        if len(commuting_sets(sum(pauli_terms))) != 1:
-            raise CommutationError("Not all terms commute in the expected way")
-
-    program = program.copy()
-    pauli_for_rotations = PauliTerm.from_list(
-        [(value, key) for key, value in basis_transform_dict.items()])
-
-    program += get_rotation_program(pauli_for_rotations)
-
-    qubits = sorted(list(basis_transform_dict.keys()))
-    if symmetrize:
-        theta = program.declare("ro_symmetrize", "REAL", len(qubits))
-        for (idx, q) in enumerate(qubits):
-            program += [RZ(np.pi/2, q), RY(theta[idx], q), RZ(-np.pi/2, q)]
-
-    ro = program.declare("ro", "BIT", memory_size=len(qubits))
-    for num, qubit in enumerate(qubits):
-        program.inst(MEASURE(qubit, ro[num]))
-
-    coeff_vec = np.array(
-        list(map(lambda x: x.coefficient, pauli_terms))).reshape((-1, 1))
-
-    # upper bound on samples given by IV of arXiv:1801.03524
-    num_sample_ubound = 10 * int(np.ceil(np.sum(np.abs(coeff_vec))**2 / variance_bound))
-    if num_sample_ubound <= 2:
-        raise ValueError("Something happened with our calculation of the max sample")
-
-    if symmetrize:
-        if min(STANDARD_NUMSHOTS, num_sample_ubound)//rand_samples == 0:
-            raise ValueError(f"The number of shots must be larger than {rand_samples}.")
-
-        program = program.wrap_in_numshots_loop(min(STANDARD_NUMSHOTS, num_sample_ubound)//rand_samples)
-    else:
-        program = program.wrap_in_numshots_loop(min(STANDARD_NUMSHOTS, num_sample_ubound))
-
-    binary = quantum_resource.compiler.native_quil_to_executable(basic_compile(program))
-
-    results = None
-    sample_variance = np.infty
-    number_of_samples = 0
-    tresults = np.zeros((0, len(qubits)))
-    while (sample_variance > variance_bound and number_of_samples < num_sample_ubound):
-        if symmetrize:
-            # for some number of times sample random bit string
-            for r in range(rand_samples):
-                rand_flips = np.random.randint(low=0, high=2, size=len(qubits))
-                temp_results = quantum_resource.run(binary, memory_map={'ro_symmetrize': np.pi * rand_flips})
-                tresults = np.vstack((tresults, rand_flips ^ temp_results))
-        else:
-            tresults = quantum_resource.run(binary)
-
-        number_of_samples += len(tresults)
-        parity_results = get_parity(pauli_terms, tresults)
-
-        # Note: easy improvement would be to update mean and variance on the fly
-        # instead of storing all these results.
-        if results is None:
-            results = parity_results
-        else:
-            results = np.hstack((results, parity_results))
-
-        # calculate the expected values....
-        covariance_mat = np.cov(results, ddof=1)
-        sample_variance = coeff_vec.T.dot(covariance_mat).dot(coeff_vec) / (results.shape[1] - 1)
-
-    return EstimationResult(expected_value=coeff_vec.T.dot(np.mean(results, axis=1)),
-                            pauli_expectations=np.multiply(coeff_vec.flatten(), np.mean(results, axis=1).flatten()),
-                            covariance=covariance_mat,
-                            variance=sample_variance,
-                            n_shots=results.shape[1])
+    return obs_mean, obs_var
 
 
-#########
-#
-# API
-#
-#########
-def estimate_locally_commuting_operator(program,
-                                        pauli_sum,
-                                        variance_bound,
-                                        quantum_resource,
-                                        symmetrize=True):
+def estimate_observables(qc: QuantumComputer, obs_expt: ObservablesExperiment,
+                         num_shots: int = 500, symmetrization_method: Callable = None,
+                         active_reset: bool = False) -> Iterable[ExperimentResult]:
     """
-    Estimate the expected value of a Pauli sum to fixed precision.
+    Standard wrapper for estimating the observables in an ObservableExperiment.
 
-    :param program: state preparation program
-    :param pauli_sum: pauli sum of operators to estimate expected value
-    :param variance_bound: variance bound on the estimator
-    :param quantum_resource: quantum abstract machine object
-    :param symmetrize: flag that determines whether readout is symmetrized or not
-    :return: expected value, estimator variance, total number of experiments
+    Because of the use of standard _measure_bitstrings, this method assumes the program in
+    obs_expt can be compiled to native_quil using only basic_compile.
+
+    A symmetrization_method can be specified which will be used to generate the necessary
+    symmetrization results. This method should return a callable 'output_transform' which takes
+    in the full list of bitarrays from the symmetrization programs and consolidates the outputs
+    into the appropriate results for the initial un-symmetrized programs. For example,
+    in exhaustive_symmetrization the results of the symmetrization programs have appropriate bits
+    flipped and are re-grouped into bitarrays so that the final list of bitarrays corresponds to
+    the initial programs output by generate_experiment_programs.
+
+    :param qc:
+    :param obs_expt:
+    :param num_shots:
+    :param symmetrization_method:
+    :param active_reset:
+    :return:
     """
-    pauli_sum, identity_term = remove_identity(pauli_sum)
+    programs, meas_qubits = generate_experiment_programs(obs_expt, active_reset)
 
-    expected_value = 0
-    if isinstance(identity_term, int):
-        if np.isclose(identity_term, 0):
-            expected_value = 0
-        else:
-            expected_value = identity_term
+    if symmetrization_method is not None:
+        programs, output_transform = symmetrization_method(programs, meas_qubits)
 
-    elif isinstance(identity_term, (PauliTerm, PauliSum)):
-        if isinstance(identity_term, PauliTerm):
-            expected_value = identity_term.coefficient
-        else:
-            expected_value = identity_term[0].coefficient
-    else:
-        raise TypeError("identity_term must be a PauliTerm or integer. We got {}".format(type(identity_term)))
+    results = _measure_bitstrings(qc, programs, meas_qubits, num_shots)
 
-    # check if pauli_sum didn't get killed...or we gave an identity term
-    if isinstance(pauli_sum, int):
-        # we have no estimation work to do...just return the identity value
-        return expected_value, 0, 0
+    if symmetrization_method is not None and output_transform is not None:
+        results = output_transform(results)
 
-    psets = commuting_sets_by_zbasis(pauli_sum)
-    variance_bound_per_set = variance_bound / len(psets)
+    for bitarray, meas_qs, settings in zip(results, meas_qubits, obs_expt):
 
-    total_shots = 0
-    estimator_variance = 0
-    for qubit_op_key, pset in psets.items():
-        results = estimate_pauli_sum(pset,
-                                     dict(qubit_op_key),
-                                     program,
-                                     variance_bound_per_set,
-                                     quantum_resource,
-                                     commutation_check=False,
-                                     symmetrize=symmetrize)
-        assert results.variance < variance_bound_per_set
+        for setting in settings:
+            observable = setting.observable
 
-        expected_value += results.expected_value
-        total_shots += results.n_shots
-        estimator_variance += results.variance
+            # Obtain statistics from result of experiment
+            obs_mean, obs_var = shots_to_obs_moments(bitarray, meas_qs, observable)
 
-    return expected_value, estimator_variance, total_shots
+            yield ExperimentResult(
+                setting=setting,
+                expectation=obs_mean,
+                std_err=np.sqrt(obs_var),
+                total_counts=len(bitarray),
+            )
 
 
-def estimate_general_psum(program, pauli_sum, variance_bound, quantum_resource,
-                          sequential=False):
+def get_calibration_program(observable: PauliTerm, noisy_program: Program = None) -> Program:
     """
-    Estimate the expected value of a Pauli sum to fixed precision.
+    Program required for calibrating the given observable.
 
-    :param program: state preparation program
-    :param pauli_sum: pauli sum of operators to estimate expected value
-    :param variance_bound: variance bound on the estimator
-    :param quantum_resource: quantum abstract machine object
-    :return: expected value, estimator variance, total number of experiments
+    :param observable: observable to calibrate
+    :param noisy_program: a program with readout and gate noise defined; only useful for QVM
+    :return: Program performing the calibration
     """
-    if sequential:
-        expected_value = 0
-        estimator_variance = 0
-        total_shots = 0
-        variance_bound_per_term = variance_bound / len(pauli_sum)
-        for term in pauli_sum:
-            exp_v, exp_var, exp_shots = estimate_locally_commuting_operator(
-                program, PauliSum([term]), variance_bound_per_term, quantum_resource)
-            expected_value += exp_v
-            estimator_variance += exp_var
-            total_shots += exp_shots
-        return expected_value, estimator_variance, total_shots
-    else:
-        return estimate_locally_commuting_operator(program, pauli_sum,
-                                                   variance_bound,
-                                                   quantum_resource)
+    calibr_prog = Program()
+
+    # Inherit any noisy attributes from noisy_program, including gate definitions
+    # and applications which can be handy in simulating noisy channels
+    if noisy_program is not None:
+        # Inherit readout error instructions from main Program
+        readout_povm_instruction = [i for i in noisy_program.out().split('\n')
+                                    if 'PRAGMA READOUT-POVM' in i]
+        calibr_prog += readout_povm_instruction
+        # Inherit any definitions of noisy gates from main Program
+        kraus_instructions = [i for i in noisy_program.out().split('\n') if 'PRAGMA ADD-KRAUS' in i]
+        calibr_prog += kraus_instructions
+
+    # Prepare the +1 eigenstate for the out operator
+    for q, op in observable.operations_as_set():
+        calibr_prog += _one_q_pauli_prep(label=op, index=0, qubit=q)
+    # Measure the out operator in this state
+    for q, op in observable.observable.operations_as_set():
+        calibr_prog += _local_pauli_eig_meas(op, q)
+
+    return calibr_prog
 
 
-def estimate_general_psum_symmeterized(program, pauli_sum, variance_bound,
-                                       quantum_resource, confusion_mat_dict=None,
-                                       sequential=False):
+def calibrate_observable_estimates(qc: QuantumComputer, expt_results: List[ExperimentResult],
+                                   symmetrization_method: Callable = exhaustive_symmetrization,
+                                   num_shots: int = 500, noisy_program: Program = None) \
+        -> Iterable[ExperimentResult]:
     """
-    Estimate the expected value of a Pauli sum to fixed precision.
+    Calibrates the expectation and std_err of the input expt_results.
 
-    :param program: state preparation program
-    :param pauli_sum: pauli sum of operators to estimate expected value
-    :param variance_bound: variance bound on the estimator
-    :param quantum_resource: quantum abstract machine object
-    :return: expected value, estimator variance, total number of experiments
+    :param qc:
+    :param expt_results:
+    :param symmetrization_method:
+    :param num_shots:
+    :param noisy_program:
+    :return:
     """
-    if sequential:
-        expected_value = 0
-        estimator_variance = 0
-        total_shots = 0
-        variance_bound_per_term = variance_bound / len(pauli_sum)
-        for term in pauli_sum:
-            exp_v, exp_var, exp_shots = \
-                estimate_locally_commuting_operator_symmeterized(
-                program, PauliSum([term]), variance_bound_per_term,
-                quantum_resource, confusion_mat_dict=confusion_mat_dict)
-            expected_value += exp_v
-            estimator_variance += exp_var
-            total_shots += exp_shots
+    programs = [get_calibration_program(expt_result.setting.observable, noisy_program) for
+                    expt_result in expt_results]
 
-        return expected_value, estimator_variance, total_shots
+    meas_qubits = [expt_result.setting.observable.get_qubits() for expt_result in expt_results]
 
-    else:
-        return estimate_locally_commuting_operator_symmeterized(
-            program, pauli_sum, variance_bound, quantum_resource,
-            confusion_mat_dict=confusion_mat_dict)
+    programs, output_transform = symmetrization_method(programs, meas_qubits)
+
+    results = _measure_bitstrings(qc, programs, meas_qubits, num_shots)
+    results = output_transform(results)
+
+    for bitarray, meas_qs, expt_result in zip(results, meas_qubits, expt_results):
+
+        observable = expt_result.setting.observable
+
+        # Obtain statistics from result of experiment
+        obs_mean, obs_var = shots_to_obs_moments(bitarray, meas_qs, observable)
+
+        # Use the calibration to correct the mean and var
+        result_mean = expt_result.expectation
+        result_var = expt_result.std_err**2
+        corrected_mean = result_mean / obs_mean
+        corrected_var = ratio_variance(result_mean, result_var, obs_mean, obs_var)
+
+        yield ExperimentResult(
+            setting=expt_result.setting,
+            expectation=corrected_mean,
+            std_err=np.sqrt(corrected_var),
+            total_counts=expt_result.total_counts,
+            raw_expectation=result_mean,
+            raw_std_err=expt_result.std_err,
+            calibration_expectation=obs_mean,
+            calibration_std_err=np.sqrt(obs_var),
+            calibration_counts=len(bitarray)
+        )
 
 
-def estimate_locally_commuting_operator_symmeterized(program, pauli_sum,
-                                                     variance_bound,
-                                                     quantum_resource,
-                                                     confusion_mat_dict=None):
+def ratio_variance(a: Union[float, np.ndarray],
+                   var_a: Union[float, np.ndarray],
+                   b: Union[float, np.ndarray],
+                   var_b: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+    r"""
+    Given random variables 'A' and 'B', compute the variance on the ratio Y = A/B. Denote the
+    mean of the random variables as a = E[A] and b = E[B] while the variances are var_a = Var[A]
+    and var_b = Var[B] and the covariance as Cov[A,B]. The following expression approximates the
+    variance of Y
+    Var[Y] \approx (a/b) ^2 * ( var_a /a^2 + var_b / b^2 - 2 * Cov[A,B]/(a*b) )
+    We assume the covariance of A and B is negligible, resting on the assumption that A and B
+    are independently measured. The expression above rests on the assumption that B is non-zero,
+    an assumption which we expect to hold true in most cases, but makes no such assumptions
+    about A. If we allow E[A] = 0, then calculating the expression above via numpy would complain
+    about dividing by zero. Instead, we can re-write the above expression as
+    Var[Y] \approx var_a /b^2 + (a^2 * var_b) / b^4
+    where we have dropped the covariance term as noted above.
+    See the following for more details:
+      - https://doi.org/10.1002/(SICI)1097-0320(20000401)39:4<300::AID-CYTO8>3.0.CO;2-O
+      - http://www.stat.cmu.edu/~hseltman/files/ratio.pdf
+      - https://en.wikipedia.org/wiki/Taylor_expansions_for_the_moments_of_functions_of_random_variables
+    :param a: Mean of 'A', to be used as the numerator in a ratio.
+    :param var_a: Variance in 'A'
+    :param b: Mean of 'B', to be used as the numerator in a ratio.
+    :param var_b: Variance in 'B'
     """
-    Estimate the expected value of a Pauli sum to fixed precision.
-
-    Pauli sum can be a sum of non-commuting terms.  This routine groups the
-    terms into sets of locally commuting operators.  This routine uses
-    symmeterized readout.
-
-    :param program: state preparation program
-    :param pauli_sum: pauli sum of operators to estimate expected value
-    :param variance_bound: variance bound on the estimator
-    :param quantum_resource: quantum abstract machine object
-    :return: expected value, estimator variance, total number of experiments
-    """
-    pauli_sum, identity_term = remove_identity(pauli_sum)
-
-    if isinstance(identity_term, int):
-        if np.isclose(identity_term, 0):
-            expected_value = 0
-        else:
-            expected_value = identity_term
-
-    elif isinstance(identity_term, (PauliTerm, PauliSum)):
-        if isinstance(identity_term, PauliTerm):
-            expected_value = identity_term.coefficient
-        else:
-            expected_value = identity_term[0].coefficient
-    else:
-        raise TypeError("identity_term must be a PauliTerm or integer. We got type {}".format(type(identity_term)))
-
-    # check if pauli_sum didn't get killed...or we gave an identity term
-    if isinstance(pauli_sum, int):
-        # we have no estimation work to do...just return the identity value
-        return expected_value, 0, 0
-
-    psets = commuting_sets_by_zbasis(pauli_sum)
-    variance_bound_per_set = variance_bound / len(psets)
-    total_shots = 0
-    estimator_variance = 0
-
-    for qubit_op_key, pset in psets.items():
-        results = estimate_general_psum_symmeterized(pset, dict(qubit_op_key), program,
-                                                     variance_bound_per_set,
-                                                     quantum_resource,
-                                                     commutation_check=False,
-                                                     confusion_mat_dict=confusion_mat_dict)
-
-        assert results.variance < variance_bound_per_set
-        expected_value += results.expected_value
-        total_shots += results.n_shots
-        estimator_variance += results.variance
-
-    return expected_value, estimator_variance, total_shots
-
-
-def diagonal_basis_commutes(pauli_a, pauli_b):
-    """
-    Test if `pauli_a` and `pauli_b` share a diagonal basis
-    Example:
-        Check if [A, B] with the constraint that A & B must share a one-qubit
-        diagonalizing basis. If the inputs were [sZ(0), sZ(0) * sZ(1)] then this
-        function would return True.  If the inputs were [sX(5), sZ(4)] this
-        function would return True.  If the inputs were [sX(0), sY(0) * sZ(2)]
-        this function would return False.
-    :param pauli_a: Pauli term to check commutation against `pauli_b`
-    :param pauli_b: Pauli term to check commutation against `pauli_a`
-    :return: Boolean of commutation result
-    :rtype: Bool
-    """
-    overlapping_active_qubits = set(pauli_a.get_qubits()) & set(pauli_b.get_qubits())
-    for qubit_index in overlapping_active_qubits:
-        if (pauli_a[qubit_index] != 'I' and pauli_b[qubit_index] != 'I' and
-           pauli_a[qubit_index] != pauli_b[qubit_index]):
-            return False
-
-    return True
-
-
-def get_diagonalizing_basis(list_of_pauli_terms):
-    """
-    Find the Pauli Term with the most non-identity terms
-    :param list_of_pauli_terms: List of Pauli terms to check
-    :return: The highest weight Pauli Term
-    :rtype: PauliTerm
-    """
-    qubit_ops = set(reduce(lambda x, y: x + y,
-                       [list(term._ops.items()) for term in list_of_pauli_terms]))
-    qubit_ops = sorted(list(qubit_ops), key=lambda x: x[0])
-
-    return PauliTerm.from_list(list(map(lambda x: tuple(reversed(x)), qubit_ops)))
-
-
-def _max_key_overlap(pauli_term, diagonal_sets):
-    """
-    Calculate the max overlap of a pauli term ID with keys of diagonal_sets
-    Returns a different key if we find any collisions.  If no collisions is
-    found then the pauli term is added and the key is updated so it has the
-    largest weight.
-    :param pauli_term:
-    :param diagonal_sets:
-    :return: dictionary where key value pair is tuple indicating diagonal basis
-             and list of PauliTerms that share that basis
-    :rtype: dict
-    """
-    # a lot of the ugliness comes from the fact that
-    # list(PauliTerm._ops.items()) is not the appropriate input for
-    # Pauliterm.from_list()
-    for key in list(diagonal_sets.keys()):
-        pauli_from_key = PauliTerm.from_list(
-            list(map(lambda x: tuple(reversed(x)), key)))
-        if diagonal_basis_commutes(pauli_term, pauli_from_key):
-            updated_pauli_set = diagonal_sets[key] + [pauli_term]
-            diagonalizing_term = get_diagonalizing_basis(updated_pauli_set)
-            if len(diagonalizing_term) > len(key):
-                del diagonal_sets[key]
-                new_key = tuple(sorted(diagonalizing_term._ops.items(),
-                                       key=lambda x: x[0]))
-                diagonal_sets[new_key] = updated_pauli_set
-            else:
-                diagonal_sets[key] = updated_pauli_set
-            return diagonal_sets
-    # made it through all keys and sets so need to make a new set
-    else:
-        # always need to sort because new pauli term functionality
-        new_key = tuple(sorted(pauli_term._ops.items(), key=lambda x: x[0]))
-        diagonal_sets[new_key] = [pauli_term]
-        return diagonal_sets
-
-
-def commuting_sets_by_zbasis(pauli_sums):
-    """
-    Computes commuting sets based on terms having the same diagonal basis
-    Following the technique outlined in the appendix of arXiv:1704.05018.
-    :param pauli_sums: PauliSum object to group
-    :return: dictionary where key value pair is a tuple corresponding to the
-             basis and a list of PauliTerms associated with that basis.
-    """
-    diagonal_sets = {}
-    for term in pauli_sums:
-        diagonal_sets = _max_key_overlap(term, diagonal_sets)
-
-    return diagonal_sets
+    return var_a / b**2 + (a**2 * var_b) / b**4
