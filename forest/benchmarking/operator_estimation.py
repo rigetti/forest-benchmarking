@@ -95,7 +95,7 @@ def get_rotation_program(pauli_term):
 
 
 def get_parity(pauli_terms, bitstring_results):
-    """
+    r"""
     Calculate the eigenvalues of Pauli operators given results of projective measurements
 
     The single-qubit projective measurement results (elements of
@@ -163,7 +163,7 @@ def estimate_pauli_sum(pauli_terms,
                        commutation_check=True,
                        symmetrize=True,
                        rand_samples=16):
-    """
+    r"""
     Estimate the mean of a sum of pauli terms to set variance
 
     The sample variance is calculated by
