@@ -225,7 +225,7 @@ def test_max_key_overlap():
     # adds a new key
     x0_term = sX(0)
     diag_sets = {((0, 'Z'), (1, 'Z')): [sZ(0) * sZ(1), sZ(1)], ((0, 'Y'), (1, 'Z')): [sY(0), sZ(1), sY(0) * sZ(1)]}
-    d_expected = d_expected = {((0, 'Z'), (1, 'Z')): [sZ(0) * sZ(1), sZ(1)], ((0, 'Y'), (1, 'Z')): [sY(0), sZ(1), sY(0) * sZ(1)],
+    d_expected = {((0, 'Z'), (1, 'Z')): [sZ(0) * sZ(1), sZ(1)], ((0, 'Y'), (1, 'Z')): [sY(0), sZ(1), sY(0) * sZ(1)],
              ((0, 'X'),): [sX(0)]}
     assert _max_key_overlap(x0_term, diag_sets) == d_expected
 
@@ -251,13 +251,14 @@ def test_commuting_sets_by_zbasis():
     z1_term = sZ(1)
     z2_term = sZ(0)
     zz_term = sZ(0) * sZ(1)
-    h2_hamiltonian = zz_term + z2_term + z1_term + x_term
+    z_terms = [z1_term, z2_term, zz_term]
+    h2_hamiltonian = sum(z_terms) + x_term
     clumped_terms = commuting_sets_by_zbasis(h2_hamiltonian)
-    true_set = {((0, 'X'), (1, 'X')): set([x_term.id()]),
-                ((0, 'Z'), (1, 'Z')): set([z1_term.id(), z2_term.id(), zz_term.id()])}
+    true_set = {((0, 'X'), (1, 'X')): {x_term},
+                ((0, 'Z'), (1, 'Z')): set(z_terms)}
 
     for key, value in clumped_terms.items():
-        assert set(map(lambda x: x.id(), clumped_terms[key])) == true_set[key]
+        assert set(value) == true_set[key]
 
     # clumping 4-qubit terms into same diagonal bases
     zzzz_terms = sZ(1) * sZ(2) + sZ(3) * sZ(4) + \
@@ -271,9 +272,9 @@ def test_commuting_sets_by_zbasis():
     pauli_sum = zzzz_terms + xzxz_terms + xxxx_terms + yyyy_terms
     clumped_terms = commuting_sets_by_zbasis(pauli_sum)
 
-    true_set = {((1, 'Z'), (2, 'Z'), (3, 'Z'), (4, 'Z')): set(map(lambda x: x.id(), zzzz_terms)),
-                ((1, 'X'), (2, 'Z'), (3, 'X'), (4, 'Z')): set(map(lambda x: x.id(), xzxz_terms)),
-                ((1, 'X'), (2, 'X'), (3, 'X'), (4, 'X')): set(map(lambda x: x.id(), xxxx_terms)),
-                ((1, 'Y'), (2, 'Y'), (3, 'Y'), (4, 'Y')): set(map(lambda x: x.id(), yyyy_terms))}
+    true_set = {((1, 'Z'), (2, 'Z'), (3, 'Z'), (4, 'Z')): set(zzzz_terms),
+                ((1, 'X'), (2, 'Z'), (3, 'X'), (4, 'Z')): set(xzxz_terms),
+                ((1, 'X'), (2, 'X'), (3, 'X'), (4, 'X')): set(xxxx_terms),
+                ((1, 'Y'), (2, 'Y'), (3, 'Y'), (4, 'Y')): set(yyyy_terms)}
     for key, value in clumped_terms.items():
-        assert set(map(lambda x: x.id(), clumped_terms[key])) == true_set[key]
+        assert set(value) == true_set[key]
