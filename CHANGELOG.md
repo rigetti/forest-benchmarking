@@ -11,7 +11,7 @@ Improvements and Changes:
 - Combined `graph_state` and `bell_state` modules into `entangled_state` module, added deprecation warnings for the old modules (gh-122)
 - Made Ipython Notebooks a part of testing (gh-123) 
 - Resolve test warnings and doc string formatting issues (gh-124)
-- **Breaking change.** bump version and delete `graph_state` and `bell_state` modules
+- **Breaking change.** Bump version and delete `graph_state` and `bell_state` modules (gh-125)
 
 
 
