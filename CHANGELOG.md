@@ -1,6 +1,20 @@
 Changelog
 =========
 
+v0.5 (May 17, 2018)
+------------------
+Improvements and Changes:
+
+- Moved bitstring prep/measure program creation helpers to utils (gh-118)
+- Added functoinality to `plotting` module: two ways to visualize a quantum state in the Pauli basis, plotting of a Pauli Transfer Matrix, plotting a real matrix using a Hinton diagram, the addition of the computational basis as a predefined basis object (gh-119)
+- Refactor iterative MLE to use ExperimentResults directly (gh-120)
+- Combined `graph_state` and `bell_state` modules into `entangled_state` module, added deprecation warnings for the old modules (gh-122)
+- Made Ipython Notebooks a part of testing (gh-123) 
+- Resolve test warnings and doc string formatting issues (gh-124)
+- **Breaking change.** bump version and delete `graph_state` and `bell_state` modules
+
+
+
 v0.4 (May 6, 2018)
 ------------------
 
