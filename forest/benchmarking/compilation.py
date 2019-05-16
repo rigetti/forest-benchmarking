@@ -57,6 +57,17 @@ def _RY(angle, q):
     return p
 
 
+def _RX(angle, q):
+    """
+    A RX in terms of RX(+-pi/2) and RZ(theta)
+    """
+    p = Program()
+    p += RZ(pi / 2, q)
+    p += _RY(angle, q)
+    p += RZ(-pi / 2, q)
+    return p
+
+
 def _X(q1):
     """
     An RX in terms of RX(pi/2)
@@ -168,8 +179,11 @@ def basic_compile(program):
         if isinstance(inst, Gate):
             if inst.name in ['RZ', 'CZ', 'I']:
                 new_prog += inst
-            elif inst.name == 'RX' and is_magic_angle(inst.params[0]):
-                new_prog += inst
+            elif inst.name == 'RX':
+                if is_magic_angle(inst.params[0]):
+                    new_prog += inst
+                else:
+                    new_prog += _RX(inst.params[0], inst.qubits[0])
             elif inst.name == 'RY':
                 new_prog += _RY(inst.params[0], inst.qubits[0])
             elif inst.name == 'CNOT':

@@ -3,7 +3,6 @@ from typing import Sequence, List, Dict
 import numpy as np
 from numpy import pi
 from lmfit.model import ModelResult
-from matplotlib import pyplot as plt
 
 from pyquil.api import QuantumComputer
 from pyquil.gates import RX, RZ, CZ, MEASURE
@@ -15,13 +14,9 @@ from forest.benchmarking.utils import transform_pauli_moments_to_bit
 from forest.benchmarking.analysis.fitting import fit_decay_constant_param_decay, \
     fit_decaying_sinusoid, fit_shifted_cosine
 from forest.benchmarking.operator_estimation import ObservablesExperiment, ExperimentResult, \
-    ExperimentSetting, estimate_observables, zeros_state, minusZ, plusX, minusY
+    ExperimentSetting, estimate_observables, zeros_state, minusZ, plusZ, minusY
 
-
-MILLISECOND = 1e-6  # A millisecond (ms) is an SI unit of time
 MICROSECOND = 1e-6  # A microsecond (us) is an SI unit of time
-NANOSECOND = 1e-9  # A nanosecond (ns) is an SI unit of time
-USEC_PER_DEPTH = .1
 
 # A Hertz (Hz) is a derived unit of frequency in SI Units; 1 Hz is defined as one cycle per second.
 KHZ = 1e3  # kHz
@@ -31,7 +26,7 @@ GHZ = 1e9  # GHz
 
 def acquire_qubit_spectroscopy_data(qc: QuantumComputer,
                                     experiments: Sequence[ObservablesExperiment],
-                     num_shots: int = 500) -> List[List[ExperimentResult]]:
+                                    num_shots: int = 500) -> List[List[ExperimentResult]]:
     """
 
     :param qc:
@@ -45,7 +40,8 @@ def acquire_qubit_spectroscopy_data(qc: QuantumComputer,
     return results
 
 
-def get_stats_by_qubit(expt_results: List[List[ExperimentResult]]):
+def get_stats_by_qubit(expt_results: List[List[ExperimentResult]]) \
+        -> Dict[int, Dict[str, List[float]]]:
     """
     Organize the mean and std_err of an experiment by qubit.
 
@@ -74,8 +70,8 @@ def get_stats_by_qubit(expt_results: List[List[ExperimentResult]]):
 # ==================================================================================================
 
 
-def generate_t1_experiment(qubits: Sequence[int], times: Sequence[float],
-                           make_simultaneous = False) -> List[ObservablesExperiment]:
+def generate_t1_experiments(qubits: Sequence[int], times: Sequence[float],
+                            make_simultaneous = False) -> List[ObservablesExperiment]:
     """
     Return a ObservablesExperiment containing programs which constitute a t1 experiment to
     measure the decay time from the excited state to ground state.
@@ -105,7 +101,7 @@ def generate_t1_experiment(qubits: Sequence[int], times: Sequence[float],
 
 
 def acquire_t1_data(qc: QuantumComputer, experiments: Sequence[ObservablesExperiment],
-                     num_shots: int = 500) -> List[List[ExperimentResult]]:
+                    num_shots: int = 500) -> List[List[ExperimentResult]]:
     """
     Acquire data to measure the T1 decay time for each of the input experiments.
 
@@ -157,8 +153,8 @@ def fit_t1_results(times: Sequence[float], z_expectations: Sequence[float],
 # ==================================================================================================
 #   T2 star and T2 echo functions
 # ==================================================================================================
-def generate_t2_star_experiment(qubits: Sequence[int], times: Sequence[float],
-                                detuning: float = 5e6, make_simultaneous = False) \
+def generate_t2_star_experiments(qubits: Sequence[int], times: Sequence[float],
+                                 detuning: float = 5e6, make_simultaneous = False) \
         -> List[ObservablesExperiment]:
     """
     Return ObservablesExperiments containing programs which constitute a T2 star experiment to
@@ -189,8 +185,8 @@ def generate_t2_star_experiment(qubits: Sequence[int], times: Sequence[float],
     return expts
 
 
-def generate_t2_echo_experiment(qubits: Sequence[int], times: Sequence[float],
-                                detuning: float = 5e6, make_simultaneous = False) \
+def generate_t2_echo_experiments(qubits: Sequence[int], times: Sequence[float],
+                                 detuning: float = 5e6, make_simultaneous = False) \
         -> List[ObservablesExperiment]:
     """
     Return ObservablesExperiments containing programs which constitute a T2 echo experiment to
@@ -225,7 +221,7 @@ def generate_t2_echo_experiment(qubits: Sequence[int], times: Sequence[float],
 
 
 def acquire_t2_data(qc: QuantumComputer, experiments: Sequence[ObservablesExperiment],
-                     num_shots: int = 500) -> List[List[ExperimentResult]]:
+                    num_shots: int = 500) -> List[List[ExperimentResult]]:
     """
     Execute experiments to measure the T2 time of one or more qubits.
 
@@ -286,31 +282,33 @@ def fit_t2_results(times: Sequence[float], y_expectations: Sequence[float],
 # ==================================================================================================
 #   Rabi
 # ==================================================================================================
-def generate_rabi_experiment(qubit: int, angles: Sequence[float]) -> ObservablesExperiment:
+def generate_rabi_experiments(qubits: Sequence[int], angles: Sequence[float]) \
+        -> List[ObservablesExperiment]:
     """
-    Return a DataFrame containing programs which, when run in sequence, constitute a Rabi
-    experiment.
+    Return ObservablesExperiments containing programs which constitute a Rabi experiment.
 
     Rabi oscillations are observed by applying successively larger rotations to the same initial
     state.
 
-    :param qubit: Which qubit to measure.
+    :param qubits: list of qubits to measure.
     :param angles: A list of angles at which to make a measurement
     :return:
     """
-    layers = []
+    expts = []
     for angle in angles:
-        sequence = ([Program(RX(angle, qubit))])
-        settings = (ExperimentSetting(zeros_state([qubit]), PauliTerm('Z', qubit)), )
+        program = Program()
+        settings = []
+        for q in qubits:
+            program += RX(angle, q)
+            settings.append(ExperimentSetting(plusZ(q), PauliTerm('Z', q)))
 
-        layers.append(Layer(1, sequence, settings, (qubit,), f"{round(angle,2)}rad",
-                            continuous_param=angle))
-    # TODO: avoid warnings from basic_compile about RX(not +/-pi)
-    return ObservablesExperiment(tuple(layers), (qubit,), "Rabi")
+        expts.append(ObservablesExperiment([settings], program))
+
+    return expts
 
 
 def acquire_rabi_data(qc: QuantumComputer, experiments: Sequence[ObservablesExperiment],
-                     num_shots: int = 500) -> List[List[ExperimentResult]]:
+                      num_shots: int = 500) -> List[List[ExperimentResult]]:
     """
     Execute Rabi experiments.
 
@@ -322,17 +320,18 @@ def acquire_rabi_data(qc: QuantumComputer, experiments: Sequence[ObservablesExpe
     return acquire_qubit_spectroscopy_data(qc, experiments, num_shots)
 
 
-def fit_rabi_results(experiment: ObservablesExperiment, param_guesses: tuple = None) \
+def fit_rabi_results(angles: Sequence[float], z_expectations: Sequence[float],
+                     z_std_errs: Sequence[float] = None, param_guesses: tuple = (-.5, 0, .5, 1.)) \
         -> ModelResult:
     """
-    Wrapper for fitting the results of a ObservablesExperiment; simply extracts key parameters
+    Wrapper for fitting the results of a rabi experiment on a qubit; simply extracts key parameters
     and passes on to the standard fit.
 
     Note the following interpretation of the model fit parameters:
     x: the independent variable is the angle that we specify when writing a gate instruction. If
         our gates are incorrectly calibrated then a given control angle will result in a different
         angle than intended by the multiplicative 'frequency' of the model
-    amplitude: this is equivalently (p1_given_1 - p1_given_0) / 2 where
+    amplitude: this will have magnitude (p1_given_1 - p1_given_0) / 2 where
         p1_given_1 is the probability of measuring 1 when the qubit is in the |1> state.
         p1_given_0 is the probability of measuring 1 when the qubit is in the |0> state.
     offset: This is the offset phase, in radians, with respect to the true rotation frequency.
@@ -344,98 +343,56 @@ def fit_rabi_results(experiment: ObservablesExperiment, param_guesses: tuple = N
         frequency will be greater than 1; the intended control angle will be smaller than the
         true angle rotated.
 
-    :param experiment: the Rabi ObservablesExperiment with results on which to fit a Rabi flop
+    :param angles: the angles at which the z_expectations were measured.
+    :param z_expectations: expectation of Z at each angle for a qubit initialized to 0
+    :param z_std_errs: std_err of the Z expectation, optionally used to weight the fit.
     :param param_guesses: guesses for the (amplitude, offset, baseline, frequency) parameters
     :return: a ModelResult fit with estimates of the Model parameters, including the frequency
         which gives the ratio of actual angle over intended control angle
     """
-    x_data = []
-    y_data = []
-    weights = []
-    for layer in experiment.layers:
-        x_data.append(layer.continuous_param) # control angles in radians
-        y_data.append(layer.estimates["Fraction One"][0])
-        err = layer.estimates["Fraction One"][1]
-        # TODO: improve handling of inf weights
-        if err == 0:
-            weight = 100
-        else:
-           weight = 1/layer.estimates["Fraction One"][1]
-        weights.append(weight)
+    z_expectations = np.asarray(z_expectations)
+    if z_std_errs is not None:
+        probability_one, var = transform_pauli_moments_to_bit(np.asarray(-1 * z_expectations),
+                                                              np.asarray(z_std_errs)**2)
+        err = np.sqrt(var)
+        min_non_zero = min([v for v in err if v > 0])
+        # TODO: does this handle 0 var appropriately? Incorporate unbiased prior into std_err estimate?
+        non_zero_err = np.asarray([v if v > 0 else min_non_zero for v in err])
 
-    if param_guesses is None:  # make some standard reasonable guess
-        param_guesses = (.5, 0, .5, 1.)
+        weights = 1 / non_zero_err
+    else:
+        probability_one, _ = transform_pauli_moments_to_bit(np.asarray(-1 * z_expectations), 0)
+        weights = None
 
-    return fit_shifted_cosine(np.asarray(x_data), np.asarray(y_data), param_guesses,
-                              np.asarray(weights))
-
-# TODO: remove
-# def plot_rabi_estimate_over_data(experiments: Union[ObservablesExperiment,
-#                                                   Sequence[ObservablesExperiment]],
-#                                  expts_fit_params,
-#                                  expts_fit_params_errs, # TODO: plot err bars, make like rb
-#                                  filename: str = None) -> None:
-#     """
-#     Plot Rabi oscillation experimental data and estimated curve.
-#
-#     :param experiments: A list of experiments with rabi data.
-#     :param filename: if provided, the file where the plot is saved
-#     :return: None
-#     """
-#     if isinstance(experiments, ObservablesExperiment):
-#         experiments = [experiments]
-#     if isinstance(expts_fit_params[0], float):
-#         expts_fit_params = [expts_fit_params]
-#         expts_fit_params_errs = [expts_fit_params_errs]
-#
-#     for expt, fit_params, fit_params_errs in zip(experiments, expts_fit_params,
-#                                                  expts_fit_params_errs):
-#         q = expt.qubits[0]
-#
-#         angles = [layer.continuous_param for layer in expt.layers]
-#         one_survival = [layer.estimates["Fraction One"][0] for layer in expt.layers]
-#
-#         plt.plot(angles, one_survival, 'o-', label=f"qubit {q} Rabi data")
-#         plt.plot(angles, shifted_cosine(np.array(angles), *fit_params),
-#                  label=f"qubit {q} fitted line")
-#
-#     plt.xlabel("RX angle [rad]")
-#     plt.ylabel(r"Pr($|1\rangle$)")
-#     plt.title("Rabi flop")
-#     plt.legend(loc='best')
-#     plt.tight_layout()
-#     if filename is not None:
-#         plt.savefig(filename)
-#     plt.show()
+    return fit_shifted_cosine(np.asarray(angles), probability_one, weights, param_guesses)
 
 
 # ==================================================================================================
 #   CZ phase Ramsey
 # ==================================================================================================
 def generate_cz_phase_ramsey_experiment(cz_qubits: Sequence[int], measure_qubit: int,
-                                        angles: Sequence[float]) -> ObservablesExperiment:
+                                        angles: Sequence[float]) -> List[ObservablesExperiment]:
     """
-    Return a ObservablesExperiment containing programs programs that constitute a CZ phase ramsey
-    experiment.
+    Return ObservablesExperiments containing programs that constitute a CZ phase ramsey experiment.
 
     :param cz_qubits: the qubits participating in the cz gate
     :param measure_qubit: Which qubit to measure.
     :param angles: A list of angles at which to make a measurement
     :return:
     """
-    qubits = tuple(set(cz_qubits).union([measure_qubit]))
-    layers = []
+    expts = []
     for angle in angles:
-        # TODO: replace Z expectation with X expectation, remove prep and pre-measure?
-        send_to_equator = Program(RX(pi/2, measure_qubit))
-        apply_phase = Program(RZ(angle, measure_qubit))
-        sequence = ([send_to_equator + CZ(*cz_qubits) + apply_phase + send_to_equator.dagger()])
-        settings = (ExperimentSetting(zeros_state([measure_qubit]), PauliTerm('Z', measure_qubit)),)
+        settings = []
+        program = Program()
+        # apply CZ, possibly inducing an effective RZ on measure qubit by some angle
+        program += CZ(*cz_qubits)
+        # apply phase to measure_qubit akin to T2 experiment
+        program += RZ(angle, measure_qubit)
+        settings = [ExperimentSetting(minusY(measure_qubit), PauliTerm('Y', measure_qubit))]
 
-        layers.append(Layer(1, sequence, settings, qubits, f"{round(angle,2)}rad",
-                            continuous_param=angle))
+        expts.append(ObservablesExperiment([settings], program))
 
-    return ObservablesExperiment(tuple(layers), qubits, "CZ Ramsey")
+    return expts
 
 
 def acquire_cz_phase_ramsey_data(qc: QuantumComputer, experiments: Sequence[ObservablesExperiment],
@@ -451,111 +408,51 @@ def acquire_cz_phase_ramsey_data(qc: QuantumComputer, experiments: Sequence[Obse
     return acquire_qubit_spectroscopy_data(qc, experiments, num_shots)
 
 
-def fit_cz_phase_ramsey_results(experiment: ObservablesExperiment, param_guesses: tuple = None) \
-        -> ModelResult:
+def fit_cz_phase_ramsey_results(angles: Sequence[float], y_expectations: Sequence[float],
+                                y_std_errs: Sequence[float] = None,
+                                param_guesses: tuple = (.5, 0, .5, 1.)) -> ModelResult:
     """
     Wrapper for fitting the results of a ObservablesExperiment; simply extracts key parameters
     and passes on to the standard fit.
 
     Note the following interpretation of the model fit:
-    x: the independent variable is the angle that we specify when writing a gate instruction. If
-        our gates are incorrectly calibrated then a given control angle will result in a different
-        angle than intended by the multiplicative 'frequency' of the model
-    amplitude: this is equivalently (p1_given_1 - p1_given_0) / 2 where
+    x: the independent variable is the control angle that we specify when writing a gate
+        instruction. If our gates are incorrectly calibrated then a given control angle will
+        result in a different angle than intended by the multiplicative 'frequency' of the model
+    amplitude: this will have magnitude (p1_given_1 - p1_given_0) / 2 where
         p1_given_1 is the probability of measuring 1 when the qubit is in the |1> state.
         p1_given_0 is the probability of measuring 1 when the qubit is in the |0> state.
     offset: This is the offset phase, in radians, with respect to the true rotation frequency.
-        e.g. say that our RZ gate is perfectly calibrated and the cz gate imparts an effective
-        RZ(pi/5) rotation to the qubit; in this case f_ideal_phase is pi/5, offset is 0,
-        and this phase could be corrected by applying the gate RZ(-pi/5, qubit) after cz. If our RZ
-        gate was instead found to be mis-calibrated, a correction using our mis-calibrated RZ gate
-        would require a control angle of RZ(-frequency * pi/5, qubit)
+        e.g. say that our RZ gate is perfectly calibrated and the CZ gate imparts an effective
+        RZ(pi/5) rotation to the measure qubit; in this case offset is pi/5, and frequency is one,
+        so the offset phase could be corrected by applying the gate RZ(-pi/5, qubit) after CZ. If
+        our RZ gate was instead found to be mis-calibrated, a correction using our mis-calibrated
+        RZ gate would require a control angle of RZ(-pi/5 / frequency, qubit)
     baseline: this is the amplitude + p1_given_0
-    frequency: The ratio of the actual qubit frequency over the potentially mis-calibrated control
-        frequency e.g. If our gates are incorrectly calibrated to apply an over-rotation then
-        frequency will be greater than 1; the control frequency will be smaller than the true
-        frequency so we interpret a given desired angle to require more time, and that control
-        time (multiplied by the larger true frequency) results in a larger angle than the
-        intended control angle.
+    frequency: The ratio of the actual angle rotated over the intended control angle
+        e.g. If our gates are incorrectly calibrated to apply an over-rotation then
+        frequency will be greater than 1; the intended control angle will be smaller than the
+        true angle rotated.
 
-    :param experiment: the CZ Ramsey ObservablesExperiment with results on which to fit a shifted
-        cosine.
+    :param angles: the angles at which the z_expectations were measured.
+    :param y_expectations: expectation of Y measured at each time for a qubit
+    :param y_std_errs: std_err of the Y expectation, optionally used to weight the fit.
     :param param_guesses: guesses for the (amplitude, offset, baseline, frequency) parameters
-    :return: a ModelResult fit with estimates of the Model parameters, including the frequency
-        which gives the ratio of actual qubit frequency over calibrated control frequency
+    :return: a ModelResult fit with estimates of the Model parameters, including the offset which
+        is an estimate of the phase imparted on the measure qubit by the CZ gate.
     """
-    x_data = []
-    y_data = []
-    weights = []
-    for layer in experiment.layers:
-        x_data.append(layer.continuous_param) # control angles in radians
-        y_data.append(layer.estimates["Fraction One"][0])
-        err = layer.estimates["Fraction One"][1]
-        # TODO: improve handling of inf weights
-        if err == 0:
-            weight = 100
-        else:
-           weight = 1/layer.estimates["Fraction One"][1]
-        weights.append(weight)
+    y_expectations = np.asarray(y_expectations)
+    if y_std_errs is not None:
+        probability_one, var = transform_pauli_moments_to_bit(np.asarray(-1 * y_expectations),
+                                                              np.asarray(y_std_errs)**2)
+        err = np.sqrt(var)
+        min_non_zero = min([v for v in err if v > 0])
+        # TODO: does this handle 0 var appropriately? Incorporate unbiased prior into std_err estimate?
+        non_zero_err = np.asarray([v if v > 0 else min_non_zero for v in err])
 
-    if param_guesses is None:  # make some standard reasonable guess
-        param_guesses = (.5, 0, .5, 1.)
+        weights = 1 / non_zero_err
+    else:
+        probability_one, _ = transform_pauli_moments_to_bit(np.asarray(-1 * y_expectations), 0)
+        weights = None
 
-    return fit_shifted_cosine(np.asarray(x_data), np.asarray(y_data), param_guesses,
-                              np.asarray(weights))
-
-# TODO: remove
-# def plot_cz_ramsey_estimate_over_data(experiment: ObservablesExperiment, fit_params,
-#                                       fit_params_errs, # TODO: plot err bars, make like rb
-#                                       filename: str = None) -> None:
-#     """
-#     Plot CZ phase ramsey oscillation experimental data and estimated curve.
-#
-#     :param experiment: A list of experiments with cz phase ramsey data.
-#     :param filename: if provided, the file where the plot is saved
-#     :return: None
-#     """
-#     # TODO: store measure qubits in layer?
-#     q = experiment.layers[0].settings[0].in_state[0].qubit
-#     cz_qubits = [qubit for qubit in experiment.qubits if qubit != q]
-#     if len(cz_qubits) < 2:
-#         cz_qubits.append(q)
-#
-#     angles = [layer.continuous_param for layer in experiment.layers]
-#     one_survival = [layer.estimates["Fraction One"][0] for layer in experiment.layers]
-#
-#     plt.plot(angles, one_survival, 'o-', label=f"qubit{q} CZ Ramsey data")
-#     plt.plot(angles, shifted_cosine(np.array(angles), *fit_params),
-#              label=f"qubit {q} fitted line")
-#
-#     estimated_phase, phase_err = experiment.estimates["Phase"]
-#     # TODO: is it important to plot the line at the peak?
-#     plt.axvline(pi - estimated_phase,
-#                 label=f"pi - q{q} imparted phase={pi - estimated_phase:.3f}+/-{phase_err:.3f} rad")
-#
-#     # TODO: support plotting of multiple experiments
-#     # if len(edges) == 1:
-#     #     # this deals with the one edge case, then plot will have an empty row
-#     #     # if you don't do this you get `axes.shape = (2,)`
-#     #     fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(24, 30))
-#     # else:
-#     #     fig, axes = plt.subplots(nrows=len(edges), ncols=2, figsize=(24, 10 * len(edges)))
-#     #
-#     # for id_row, edge in enumerate(edges):
-#     #     for id_col, qubit in enumerate(edge):
-#     #
-#     #         if row['Fit_params'].values[0] is None:
-#     #             print(f"Rabi estimate did not succeed for qubit {q}")
-#     #         else:
-#     #             fit_params = row['Fit_params'].values[0]
-#     #             max_ESV = row['max_ESV'].values[0]
-#     #             max_ESV_err = row['max_ESV_err'].values[0]
-#
-#     plt.xlabel("RZ phase [rad]")
-#     plt.ylabel(r"Pr($|1\rangle$)")
-#     plt.title(f"CZ Phase Ramsey fringes on q{q} from CZ({cz_qubits[0]},{cz_qubits[1]})")
-#     plt.legend(loc='best')
-#     plt.tight_layout()
-#     if filename is not None:
-#         plt.savefig(filename)
-#     plt.show()
+    return fit_shifted_cosine(np.asarray(angles), probability_one, weights, param_guesses)

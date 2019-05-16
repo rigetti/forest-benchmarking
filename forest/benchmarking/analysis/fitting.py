@@ -123,7 +123,7 @@ def shifted_cosine(x: np.ndarray, amplitude: float, offset: float, baseline: flo
     :param frequency: The frequency of the sinusoid, e.g. f for sin(f x)
     :return: The sinusoidal response at the given phases(s).
     """
-    return -1 * amplitude * np.cos(frequency * x + offset) + baseline
+    return amplitude * np.cos(frequency * x + offset) + baseline
 
 
 def fit_shifted_cosine(x: np.ndarray, y: np.ndarray, weights: np.ndarray = None,
