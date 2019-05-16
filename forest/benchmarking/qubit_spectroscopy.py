@@ -15,7 +15,7 @@ from forest.benchmarking.utils import transform_pauli_moments_to_bit
 from forest.benchmarking.analysis.fitting import fit_decay_constant_param_decay, \
     fit_decaying_sinusoid, fit_shifted_cosine
 from forest.benchmarking.operator_estimation import ObservablesExperiment, ExperimentResult, \
-    ExperimentSetting, estimate_observables, zeros_state, minusZ, plusX
+    ExperimentSetting, estimate_observables, zeros_state, minusZ, plusX, minusY
 
 
 MILLISECOND = 1e-6  # A millisecond (ms) is an SI unit of time
@@ -27,6 +27,22 @@ USEC_PER_DEPTH = .1
 KHZ = 1e3  # kHz
 MHZ = 1e6  # MHz
 GHZ = 1e9  # GHz
+
+
+def acquire_qubit_spectroscopy_data(qc: QuantumComputer,
+                                    experiments: Sequence[ObservablesExperiment],
+                     num_shots: int = 500) -> List[List[ExperimentResult]]:
+    """
+
+    :param qc:
+    :param experiments:
+    :param num_shots:
+    :return:
+    """
+    results = []
+    for expt in experiments:
+        results.append(list(estimate_observables(qc, expt, num_shots)))
+    return results
 
 
 def get_stats_by_qubit(expt_results: List[List[ExperimentResult]]):
@@ -88,8 +104,8 @@ def generate_t1_experiment(qubits: Sequence[int], times: Sequence[float],
     return expts
 
 
-def acquire_t1_data(qc: QuantumComputer, experiments: Sequence[ObservablesExperiment], num_shots) \
-        -> List[List[ExperimentResult]]:
+def acquire_t1_data(qc: QuantumComputer, experiments: Sequence[ObservablesExperiment],
+                     num_shots: int = 500) -> List[List[ExperimentResult]]:
     """
     Acquire data to measure the T1 decay time for each of the input experiments.
 
@@ -98,10 +114,7 @@ def acquire_t1_data(qc: QuantumComputer, experiments: Sequence[ObservablesExperi
     :param num_shots
     :return:
     """
-    results = []
-    for expt in experiments:
-        results.append(list(estimate_observables(qc, expt, num_shots)))
-    return results
+    return acquire_qubit_spectroscopy_data(qc, experiments, num_shots)
 
 
 def fit_t1_results(times: Sequence[float], z_expectations: Sequence[float],
@@ -123,8 +136,9 @@ def fit_t1_results(times: Sequence[float], z_expectations: Sequence[float],
     :return: a ModelResult fit with estimates of the Model parameters, including the T1
         'decay_constant'
     """
+    z_expectations = np.asarray(z_expectations)
     if z_std_errs is not None:
-        probability_one, var = transform_pauli_moments_to_bit(np.asarray(z_expectations),
+        probability_one, var = transform_pauli_moments_to_bit(np.asarray(-1 * z_expectations),
                                                               np.asarray(z_std_errs)**2)
         err = np.sqrt(var)
         min_non_zero = min([v for v in err if v > 0])
@@ -133,118 +147,85 @@ def fit_t1_results(times: Sequence[float], z_expectations: Sequence[float],
 
         weights = 1 / non_zero_err
     else:
-        probability_one = (np.asarray(z_expectations) + 1) / 2
+        probability_one, _ = transform_pauli_moments_to_bit(np.asarray(-1 * z_expectations), 0)
         weights = None
 
     return fit_decay_constant_param_decay(np.asarray(times), probability_one, weights,
                                           param_guesses)
 
-# TODO: remove this
-# def plot_t1_estimate_over_data(experiments: Union[ObservablesExperiment,
-#                                                   Sequence[ObservablesExperiment]],
-#                                expts_fit_params,
-#                                expts_fit_params_errs, # TODO: plot err bars, make like rb
-#                                filename: str = None) -> None:
-#     """
-#     Plot T1 experimental data and estimated value of T1 as an exponential decay curve.
-#
-#     :param experiments: A list of experiments with T1 data.
-#     :param filename: if provided, the file where the plot is saved
-#     :return: None
-#     """
-#     if isinstance(experiments, ObservablesExperiment):
-#         experiments = [experiments]
-#     if isinstance(expts_fit_params[0], float):
-#         expts_fit_params = [expts_fit_params]
-#         expts_fit_params_errs = [expts_fit_params_errs]
-#
-#     for expt, fit_params, fit_params_errs in zip(experiments, expts_fit_params,
-#                                                  expts_fit_params_errs):
-#         q = expt.qubits[0]
-#
-#         times = [layer.depth * USEC_PER_DEPTH for layer in expt.layers]  # times in u-seconds
-#         one_survival = [layer.estimates["Fraction One"][0] for layer in expt.layers]
-#
-#         plt.plot(times, one_survival, 'o-', label=f"q{q} T1 data")
-#         plt.plot(times, exponential_decay_curve(np.array(times), *fit_params),
-#                  label=f"q{q} fit: T1={fit_params[1]:.2f}us")
-#
-#     plt.xlabel("Time [us]")
-#     plt.ylabel(r"Pr($|1\rangle$)")
-#     plt.title("$T_1$ decay")
-#
-#     plt.legend(loc='best')
-#     plt.tight_layout()
-#     if filename is not None:
-#         plt.savefig(filename)
-#     plt.show()
-
 
 # ==================================================================================================
 #   T2 star and T2 echo functions
 # ==================================================================================================
-def generate_t2_star_experiment(qubit: int, times: Sequence[float], detuning: float = 5e6) \
-        -> ObservablesExperiment:
+def generate_t2_star_experiment(qubits: Sequence[int], times: Sequence[float],
+                                detuning: float = 5e6, make_simultaneous = False) \
+        -> List[ObservablesExperiment]:
     """
-    Return a ObservablesExperiment containing programs which ran in sequence constitute a T2 star
-    experiment to measure the T2 star coherence decay time.
+    Return ObservablesExperiments containing programs which constitute a T2 star experiment to
+    measure the T2 star coherence decay time.
 
-    :param qubit: Which qubit to measure.
-    :param times: The times at which to measure.
+    :param qubits: list of qubits to measure.
+    :param times: the times at which to measure, given in seconds.
+    :param detuning: The additional detuning frequency about the z axis in Hz.
+    :param make_simultaneous: generate len(times) simultaneous experiments, each consisting of a
+        program which measures all qubits.
+    :return:
+    """
+    expts = []
+    for t in times:
+        t = round(t, 7)  # enforce 100ns boundaries
+        program = Program()
+        settings = []
+        for q in qubits:
+            program += Pragma('DELAY', [q], str(t))
+            program += RZ(2 * pi * t * detuning, q)
+            settings.append(ExperimentSetting(minusY(q), PauliTerm('Y', q)))
+
+        if make_simultaneous:
+            settings = [settings]
+
+        expts.append(ObservablesExperiment(settings, program))
+
+    return expts
+
+
+def generate_t2_echo_experiment(qubits: Sequence[int], times: Sequence[float],
+                                detuning: float = 5e6, make_simultaneous = False) \
+        -> List[ObservablesExperiment]:
+    """
+    Return ObservablesExperiments containing programs which constitute a T2 echo experiment to
+    measure the T2 echo coherence decay time.
+
+    :param qubits: list of qubits to measure.
+    :param times: the times at which to measure, given in seconds.
     :param detuning: The additional detuning frequency about the z axis.
+    :param make_simultaneous: generate len(times) simultaneous experiments, each consisting of a
+        program which measures all qubits.
     :return:
     """
-    layers = []
+    expts = []
     for t in times:
-        # TODO: avoid aliasing while being mindful of the 20ns resolution in the QCS stack
-        t = round(t, 7)  # enforce 100ns boundaries
-        # delay and measure
-        sequence = (Program(Pragma('DELAY', [qubit], str(t)))
-                            + RZ(2 * pi * t * detuning, qubit) + RX(pi / 2, qubit), )
-        settings = (ExperimentSetting(plusX(qubit), PauliTerm('Z', qubit)),)
-        t_in_us = round(t / MICROSECOND, 1)
+        half_time = round(t/2, 7) # enforce 100ns boundaries
+        program = Program()
+        settings = []
+        for q in qubits:
+            half_delay = Pragma('DELAY', [q], str(half_time))
+            # echo
+            program += Program([half_delay, RX(pi / 2, q), RX(pi / 2, q), half_delay])
+            # apply detuning
+            program += RZ(2 * pi * t * detuning, q)
+            settings.append(ExperimentSetting(minusY(q), PauliTerm('Y', q)))
 
-        # the depth is time in units of [100ns]
-        layers.append(Layer(int(round(t_in_us / USEC_PER_DEPTH)), sequence, settings, (qubit,),
-                            "T" + str(t_in_us) + "us", continuous_param=t))
+        if make_simultaneous:
+            settings = [settings]
 
-    return ObservablesExperiment(tuple(layers), (qubit,), "T2star", metadata={'Detuning': detuning})
+        expts.append(ObservablesExperiment(settings, program))
 
-
-def generate_t2_echo_experiment(qubit: int, times: Sequence[float], detuning: float = 5e6) \
-        -> ObservablesExperiment:
-    """
-    Return a ObservablesExperiment containing programs which ran in sequence constitute a T2 star
-    experiment to measure the T2 star coherence decay time.
-
-    :param qubit: Which qubit to measure.
-    :param times: The times at which to measure.
-    :param detuning: The additional detuning frequency about the z axis, specified in Hz
-    :return:
-    """
-    layers = []
-    for t in times:
-        # TODO: avoid aliasing while being mindful of the 20ns resolution in the QCS stack
-        t = round(t, 7)  # enforce 100ns boundaries
-
-        half_delay = Pragma('DELAY', [qubit], str(t/2))
-        echo_prog = Program([half_delay, RX(pi / 2, qubit), RX(pi / 2, qubit), half_delay])
-        sequence = ([Program(RX(pi / 2, qubit)), # prep
-                     # delay/echo/delay and measure
-                     echo_prog + RZ(2 * pi * t * detuning, qubit) + RX(pi / 2, qubit)])
-
-        settings = (ExperimentSetting(zeros_state([qubit]), PauliTerm('Z', qubit)),)
-        t_in_us = round(t / MICROSECOND, 1)
-
-        # the depth is time in units of [100ns]
-        layers.append(Layer(int(round(t_in_us / USEC_PER_DEPTH)), sequence, settings, (qubit,),
-                            "T" + str(t_in_us) + "us", continuous_param=t_in_us))
-
-    return ObservablesExperiment(tuple(layers), (qubit,), "T2echo", metadata={'Detuning': detuning})
+    return expts
 
 
-def acquire_t2_data(qc: QuantumComputer, experiments: Sequence[ObservablesExperiment], num_shots) \
-        -> Sequence[ObservablesExperiment]:
+def acquire_t2_data(qc: QuantumComputer, experiments: Sequence[ObservablesExperiment],
+                     num_shots: int = 500) -> List[List[ExperimentResult]]:
     """
     Execute experiments to measure the T2 time of one or more qubits.
 
@@ -256,92 +237,45 @@ def acquire_t2_data(qc: QuantumComputer, experiments: Sequence[ObservablesExperi
     return acquire_qubit_spectroscopy_data(qc, experiments, num_shots)
 
 
-def fit_t2_results(experiment: ObservablesExperiment, param_guesses: tuple = None) \
-        -> ModelResult:
+def fit_t2_results(times: Sequence[float], y_expectations: Sequence[float],
+                   y_std_errs: Sequence[float] = None, detuning: float = 5e6,
+                   param_guesses: tuple = None) -> ModelResult:
     """
     Wrapper for fitting the results of a ObservablesExperiment; simply extracts key parameters
     and passes on to the standard fit.
 
     The estimate for T2 can be found in the returned fit.params['decay_constant']
 
-    :param experiment: the T2star or T2echo ObservablesExperiment with results on which to fit a
-        T2 decay.
+    :param times: the times at which the y_expectations were measured. The units of the time
+        determine the units of the T2 estimate, decay_constant. Here we set the default guess to
+        O(10) which corresponds to the times being given in units of microseconds.
+    :param y_expectations: expectation of Y measured at each time for a qubit
+    :param y_std_errs: std_err of the Y expectation, optionally used to weight the fit.
+    :param detuning: the detuning specified in creation of the experiment
     :param param_guesses: guesses for the (amplitude, decay_constant, offset, baseline,
-        frequency) parameters where decay_constant is in microseconds and frequency is in MHZ
+        frequency) parameters. The default values assume time is provided in microseconds and
+        detuning is provided in HZ, whereas the frequency is reported in MHZ.
     :return: a ModelResult fit with estimates of the Model parameters, including the T2
         'decay_constant'
     """
-    x_data = []
-    y_data = []
-    weights = []
-    for layer in experiment.layers:
-        x_data.append(layer.depth * USEC_PER_DEPTH) # times in u-seconds
-        y_data.append(layer.estimates["Fraction One"][0])
-        err = layer.estimates["Fraction One"][1]
-        # TODO: improve handling of inf weights
-        if err == 0:
-            weight = 100
-        else:
-           weight = 1/layer.estimates["Fraction One"][1]
-        weights.append(weight)
-
-    detuning = experiment.metadata['Detuning']
-
     if param_guesses is None:  # make some standard reasonable guess
         param_guesses = (.5, 10, 0.5, 0., detuning / MHZ)
 
-    return fit_decaying_sinusoid(np.asarray(x_data), np.asarray(y_data), param_guesses,
-                                 np.asarray(weights))
+    y_expectations = np.asarray(y_expectations)
+    if y_std_errs is not None:
+        probability_one, var = transform_pauli_moments_to_bit(np.asarray(-1 * y_expectations),
+                                                              np.asarray(y_std_errs)**2)
+        err = np.sqrt(var)
+        min_non_zero = min([v for v in err if v > 0])
+        # TODO: does this handle 0 var appropriately? Incorporate unbiased prior into std_err estimate?
+        non_zero_err = np.asarray([v if v > 0 else min_non_zero for v in err])
 
+        weights = 1 / non_zero_err
+    else:
+        probability_one, _ = transform_pauli_moments_to_bit(np.asarray(-1 * y_expectations), 0)
+        weights = None
 
-# TODO: remove
-# def plot_t2_estimate_over_data(experiments: Union[ObservablesExperiment,
-#                                                   Sequence[ObservablesExperiment]],
-#                                expts_fit_params,
-#                                expts_fit_params_errs, # TODO: plot err bars, make like rb
-#                                filename: str = None) -> None:
-#     """
-#     Plot T1 experimental data and estimated value of T1 as an exponential decay curve.
-#
-#     :param experiments: A list of experiments with T1 data.
-#     :param filename: if provided, the file where the plot is saved
-#     :return: None
-#     """
-#     if isinstance(experiments, ObservablesExperiment):
-#         experiments = [experiments]
-#     if isinstance(expts_fit_params[0], float):
-#         expts_fit_params = [expts_fit_params]
-#         expts_fit_params_errs = [expts_fit_params_errs]
-#
-#     for expt, fit_params, fit_params_errs in zip(experiments, expts_fit_params,
-#                                                  expts_fit_params_errs):
-#         q = expt.qubits[0]
-#
-#         times = [layer.depth * USEC_PER_DEPTH for layer in expt.layers]  # times in u-seconds
-#         one_survival = [layer.estimates["Fraction One"][0] for layer in expt.layers]
-#
-#         plt.plot(times, one_survival, 'o-', label=f"q{q} T2 data")
-#         plt.plot(times, exponentially_decaying_sinusoidal_curve(np.array(times), *fit_params),
-#                  label=f"q{q} fit: freq={fit_params[2] / MHZ:.2f}MHz, "
-#                        f""f"T2={fit_params[1] / MICROSECOND:.2f}us")
-#
-#     plt.xlabel("Time [us]")
-#     plt.ylabel(r"Pr($|1\rangle$)")
-#     expt_types = [expt.expt_type for expt in experiments]
-#     if 'T2star' in expt_types and 'T2echo' in expt_types:
-#         plt.title("$T_2$ (mixed type) decay")
-#     elif 'T2star' in expt_types:
-#         plt.title("$T_2^*$ (Ramsey) decay")
-#     elif 'T2echo' in expt_types:
-#         plt.title("$T_2$ (Echo) decay")
-#     else:
-#         plt.title("Unknown Type decay")
-#
-#     plt.legend(loc='best')
-#     plt.tight_layout()
-#     if filename is not None:
-#         plt.savefig(filename)
-#     plt.show()
+    return fit_decaying_sinusoid(np.asarray(times), probability_one, weights, param_guesses)
 
 
 # ==================================================================================================
@@ -375,8 +309,8 @@ def generate_rabi_experiment(qubit: int, angles: Sequence[float]) -> Observables
     return ObservablesExperiment(tuple(layers), (qubit,), "Rabi")
 
 
-def acquire_rabi_data(qc: QuantumComputer, experiments: Sequence[ObservablesExperiment], num_shots) \
-        -> Sequence[ObservablesExperiment]:
+def acquire_rabi_data(qc: QuantumComputer, experiments: Sequence[ObservablesExperiment],
+                     num_shots: int = 500) -> List[List[ExperimentResult]]:
     """
     Execute Rabi experiments.
 
@@ -505,7 +439,7 @@ def generate_cz_phase_ramsey_experiment(cz_qubits: Sequence[int], measure_qubit:
 
 
 def acquire_cz_phase_ramsey_data(qc: QuantumComputer, experiments: Sequence[ObservablesExperiment],
-                                 num_shots: int):
+                                 num_shots: int = 500) -> List[List[ExperimentResult]]:
     """
     Execute experiments to measure the RZ incurred as a result of a CZ gate.
 
