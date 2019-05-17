@@ -12,6 +12,7 @@ from typing import List, Union, Iterable, Tuple, Dict, Callable
 
 import numpy as np
 from math import pi
+from scipy.stats import beta
 import networkx as nx
 from networkx.algorithms.approximation.clique import clique_removal
 from pyquil import Program
@@ -20,6 +21,7 @@ from pyquil.gates import *
 from pyquil.paulis import PauliTerm, sI, is_identity
 
 from forest.benchmarking.compilation import basic_compile
+from forest.benchmarking.utils import transform_bit_moments_to_pauli
 
 if sys.version_info < (3, 7):
     from pyquil.external.dataclasses import dataclass
@@ -814,27 +816,6 @@ def generate_experiment_programs(obs_expt: ObservablesExperiment, active_reset: 
     return programs, meas_qubits
 
 
-def consolidate_exhaustive_outputs(outputs: List[np.ndarray], groups: List[int],
-                                   flip_arrays: List[Tuple[bool]]) -> List[np.ndarray]:
-    """
-    Given outputs from exhaustive_symmetrization programs, appropriately flip output bits and
-    consolidate results into groups determined by the programs passed into
-    exhaustive_symmetrization.
-
-    :param outputs:
-    :param groups:
-    :param flip_arrays:
-    :return:
-    """
-    output = []
-    for bitarray, group, flip_array in zip(outputs, groups, flip_arrays):
-        if len(output) <= group:
-            output[group] = bitarray ^ flip_array
-            continue
-        output[group] = np.vstack(output[group], bitarray ^ flip_array)
-    return output
-
-
 def _flip_array_to_prog(flip_array: Tuple[bool], qubits: List[int]) -> Program:
     """
     Generate a pre-measurement program that flips the qubit state according to the flip_array of
@@ -858,7 +839,7 @@ def _flip_array_to_prog(flip_array: Tuple[bool], qubits: List[int]) -> Program:
 
 
 def exhaustive_symmetrization(programs: List[Program], meas_qubits: List[List[int]]) \
-        -> Tuple[List[Program], Callable]:
+        -> Tuple[List[Program], List[Tuple[bool]], List[int]]:
     """
     For each program in the input programs generate new programs which flip the measured qubits
     in every possible combination in order to symmetrize readout.
@@ -880,8 +861,7 @@ def exhaustive_symmetrization(programs: List[Program], meas_qubits: List[List[in
             prog_groups.append(idx)
             flip_arrays.append(flip_array)
 
-    return symm_programs, partial(consolidate_exhaustive_outputs, groups=prog_groups,
-                                  flip_arrays=flip_arrays)
+    return symm_programs, flip_arrays, prog_groups
 
 
 def _measure_bitstrings(qc: QuantumComputer, programs: List[Program], prog_qubits: List[List[int]],
@@ -914,14 +894,16 @@ def _measure_bitstrings(qc: QuantumComputer, programs: List[Program], prog_qubit
     return results
 
 
-def shots_to_obs_moments(bitarray: np.ndarray, qubits: List[int], observable: PauliTerm) \
-        -> Tuple[float, float]:
+def shots_to_obs_moments(bitarray: np.ndarray, qubits: List[int], observable: PauliTerm,
+                         use_beta_dist_unbiased_prior: bool = False) -> Tuple[float, float]:
     """
     Calculate the mean and variance of the given observable based on the bitarray of results.
 
-    :param bitarray: results from running `qc.run`
+    :param bitarray: results from running `qc.run`, a 2D num_shots by num_qubits array.
     :param qubits: list of qubits in order corresponding to the bitarray results.
     :param observable: the observable whose moments are calculated from the shot data
+    :param use_beta_dist_unbiased_prior: if true then the mean and variance are estimated from a
+        beta distribution that incorporates an unbiased Bayes prior. This precludes var = 0.
     :return: tuple specifying (mean, variance)
     """
     coeff = complex(observable.coefficient)
@@ -936,12 +918,46 @@ def shots_to_obs_moments(bitarray: np.ndarray, qubits: List[int], observable: Pa
     obs_strings = bitarray[:, idxs]
     # Transform bits to eigenvalues; ie (+1, -1)
     my_obs_strings = 1 - 2 * obs_strings
-    # Multiply row-wise to get operator values. Do statistics. Return result.
-    obs_vals = coeff * np.prod(my_obs_strings, axis=1)
-    obs_mean = np.mean(obs_vals).item()
-    obs_var = np.var(obs_vals).item() / len(bitarray)
+    # Multiply row-wise to get operator values.
+    obs_vals = np.prod(my_obs_strings, axis=1)
+
+    if use_beta_dist_unbiased_prior:
+        # For binary classified data with N counts of + and M counts of -, these can be estimated
+        # using the mean and variance of the beta distribution beta(N+1, M+1) where the +1 is used
+        # to incorporate an unbiased Bayes prior.
+        plus_array = obs_vals == 1
+        n_minus, n_plus = np.bincount(plus_array,  minlength=2)
+        bernoulli_mean = beta.mean(n_plus + 1, n_minus + 1)
+        bernoulli_var = beta.var(n_plus + 1, n_minus + 1)
+        obs_mean, obs_var = transform_bit_moments_to_pauli(bernoulli_mean, bernoulli_var)
+        obs_mean *= coeff
+        obs_var *= coeff**2
+    else:
+        obs_vals = coeff * obs_vals
+        obs_mean = np.mean(obs_vals).item()
+        obs_var = np.var(obs_vals).item() / len(bitarray)
 
     return obs_mean, obs_var
+
+
+def consolidate_symmetrization_outputs(outputs: List[np.ndarray], flip_arrays: List[Tuple[bool]],
+                                       groups: List[int]) -> List[np.ndarray]:
+    """
+    Given outputs from a series of symmetrization programs, appropriately flip output bits and
+    consolidate results into groups.
+
+    :param outputs:
+    :param flip_arrays:
+    :param groups:
+    :return:
+    """
+    output = []
+    for bitarray, group, flip_array in zip(outputs, groups, flip_arrays):
+        if len(output) <= group:
+            output[group] = bitarray ^ flip_array
+            continue
+        output[group] = np.vstack(output[group], bitarray ^ flip_array)
+    return output
 
 
 def estimate_observables(qc: QuantumComputer, obs_expt: ObservablesExperiment,
@@ -971,12 +987,11 @@ def estimate_observables(qc: QuantumComputer, obs_expt: ObservablesExperiment,
     programs, meas_qubits = generate_experiment_programs(obs_expt, active_reset)
 
     if symmetrization_method is not None:
-        programs, output_transform = symmetrization_method(programs, meas_qubits)
-
-    results = _measure_bitstrings(qc, programs, meas_qubits, num_shots)
-
-    if symmetrization_method is not None and output_transform is not None:
-        results = output_transform(results)
+        programs, flip_array, prog_groups = symmetrization_method(programs, meas_qubits)
+        symm_outputs = _measure_bitstrings(qc, programs, meas_qubits, num_shots)
+        results = consolidate_symmetrization_outputs(symm_outputs, flip_array, prog_groups)
+    else:
+        results = _measure_bitstrings(qc, programs, meas_qubits, num_shots)
 
     for bitarray, meas_qs, settings in zip(results, meas_qubits, obs_expt):
 
@@ -1044,10 +1059,9 @@ def calibrate_observable_estimates(qc: QuantumComputer, expt_results: List[Exper
 
     meas_qubits = [expt_result.setting.observable.get_qubits() for expt_result in expt_results]
 
-    programs, output_transform = symmetrization_method(programs, meas_qubits)
-
-    results = _measure_bitstrings(qc, programs, meas_qubits, num_shots)
-    results = output_transform(results)
+    programs, flip_array, prog_groups = symmetrization_method(programs, meas_qubits)
+    symm_outputs = _measure_bitstrings(qc, programs, meas_qubits, num_shots)
+    results = consolidate_symmetrization_outputs(symm_outputs, flip_array, prog_groups)
 
     for bitarray, meas_qs, expt_result in zip(results, meas_qubits, expt_results):
 
