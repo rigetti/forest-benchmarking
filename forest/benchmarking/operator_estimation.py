@@ -504,7 +504,7 @@ def construct_tpb_graph(experiments: ObservablesExperiment):
     return g
 
 
-def group_experiments_clique_removal(experiments: ObservablesExperiment) -> ObservablesExperiment:
+def group_settings_clique_removal(experiment: ObservablesExperiment) -> ObservablesExperiment:
     """
     Group experiments that are diagonal in a shared tensor product basis (TPB) to minimize number
     of QPU runs, using a graph clique removal algorithm.
@@ -512,7 +512,7 @@ def group_experiments_clique_removal(experiments: ObservablesExperiment) -> Obse
     :return: a tomography experiment with all the same settings, just grouped according to shared
         TPBs.
     """
-    g = construct_tpb_graph(experiments)
+    g = construct_tpb_graph(experiment)
     _, cliqs = clique_removal(g)
     new_cliqs = []
     for cliq in cliqs:
@@ -523,7 +523,7 @@ def group_experiments_clique_removal(experiments: ObservablesExperiment) -> Obse
 
         new_cliqs += [new_cliq]
 
-    return ObservablesExperiment(new_cliqs, program=experiments.program)
+    return ObservablesExperiment(new_cliqs, program=experiment.program)
 
 
 def _max_weight_operator(ops: Iterable[PauliTerm]) -> Union[None, PauliTerm]:
@@ -614,21 +614,21 @@ def _max_tpb_overlap(tomo_expt: ObservablesExperiment):
     return diagonal_sets
 
 
-def group_experiments_greedy(tomo_expt: ObservablesExperiment):
+def group_settings_greedy(expt: ObservablesExperiment):
     """
     Greedy method to group ExperimentSettings in a given ObservablesExperiment
     :param tomo_expt: ObservablesExperiment to group ExperimentSettings within
     :return: ObservablesExperiment, with grouped ExperimentSettings according to whether
         it consists of PauliTerms diagonal in the same tensor product basis
     """
-    diag_sets = _max_tpb_overlap(tomo_expt)
+    diag_sets = _max_tpb_overlap(expt)
     grouped_expt_settings_list = list(diag_sets.values())
-    grouped_tomo_expt = ObservablesExperiment(grouped_expt_settings_list, program=tomo_expt.program)
+    grouped_tomo_expt = ObservablesExperiment(grouped_expt_settings_list, program=expt.program)
     return grouped_tomo_expt
 
 
-def group_experiments(experiments: ObservablesExperiment,
-                      method: str = 'greedy') -> ObservablesExperiment:
+def group_experiment_settings(experiment: ObservablesExperiment,
+                              method: str = 'greedy') -> ObservablesExperiment:
     """
     Group experiments that are diagonal in a shared tensor product basis (TPB) to minimize number
     of QPU runs.
@@ -671,9 +671,9 @@ def group_experiments(experiments: ObservablesExperiment,
     allowed_methods = ['greedy', 'clique-removal']
     assert method in allowed_methods, f"'method' should be one of {allowed_methods}."
     if method == 'greedy':
-        return group_experiments_greedy(experiments)
+        return group_settings_greedy(experiment)
     elif method == 'clique-removal':
-        return group_experiments_clique_removal(experiments)
+        return group_settings_clique_removal(experiment)
 
 
 @dataclass(frozen=True)

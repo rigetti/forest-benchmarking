@@ -1,15 +1,12 @@
 import itertools
 from collections import OrderedDict
 from random import random, seed
-from typing import Sequence, List, Set, Tuple
+from typing import Sequence, Tuple
 from datetime import date, datetime
 from git import Repo
 import numpy as np
 from numpy import pi
-import networkx as nx
-from networkx.algorithms.approximation.clique import clique_removal
 import pandas as pd
-from pandas import DataFrame
 
 from pyquil.gates import I, RX, RY, RZ, H, MEASURE
 from pyquil.gate_matrices import X, Y, Z
@@ -40,42 +37,6 @@ def int_to_bit_array(num: int, n_bits: int) -> Sequence[int]:
     :return:  an array of n_bits bits with right-most bit considered least significant.
     """
     return [num >> bit & 1 for bit in range(n_bits - 1, -1, -1)]
-
-
-def determine_simultaneous_grouping(experiments: Sequence[DataFrame],
-                                    equivalent_column_label: str = None) -> List[Set[int]]:
-    """
-    Determines a grouping of experiments acting on disjoint sets of qubits that can be run
-    simultaneously.
-
-    :param experiments:
-    :return: a list of the simultaneous groups, each specified by a set of indices of each grouped
-        experiment in experiments
-    """
-    g = nx.Graph()
-    nodes = np.arange(len(experiments))
-    g.add_nodes_from(nodes)
-    qubits = [expt["Qubits"].values[0] for expt in experiments]
-
-    need_equiv = None
-    if equivalent_column_label is not None:
-        need_equiv = [expt[equivalent_column_label].values for expt in experiments]
-
-    for node1 in nodes:
-        qbs1 = qubits[node1]
-        for node2 in nodes[node1+1:]:
-            if len(qbs1.intersection(qubits[node2])) == 0:
-                # check that the requested columns are equivalent
-                if equivalent_column_label is not None:
-                    if not np.array_equal(need_equiv[node1], need_equiv[node2]):
-                        continue
-                # no shared qubits, and requested columns are identical, so add edge
-                g.add_edge(node1, node2)
-
-    # get the largest groups of nodes with shared edges, as each can be run simultaneously
-    _, cliqs = clique_removal(g)
-
-    return cliqs
 
 
 def bloch_vector_to_standard_basis(theta: float, phi: float) -> Tuple[complex, complex]:
@@ -146,16 +107,16 @@ def str_to_pauli_term(pauli_str: str, qubit_labels=None):
     >>> str_to_pauli_term('XY', [])
 
     :param str pauli_str: The input string, made of of 'I', 'X', 'Y' or 'Z'
-    :param set qubit_labels: The integer labels for the qubits in the string, given in reverse
-    order. If None, default to the range of the length of pauli_str.
+    :param qubit_labels: The integer labels for the qubits in the string
+        If None, default to the range of the length of pauli_str.
     :return: the corresponding PauliTerm
     :rtype: pyquil.paulis.PauliTerm
     """
+    # TODO: why was this reversed?
     if qubit_labels is None:
-        labels_list = [qubit for qubit in reversed(range(len(pauli_str)))]
-    else:
-        labels_list = sorted(qubit_labels)[::-1]
-    pauli_term = PauliTerm.from_list(list(zip(pauli_str, labels_list)))
+        qubit_labels = [qubit for qubit in range(len(pauli_str))]
+
+    pauli_term = PauliTerm.from_list(list(zip(pauli_str, qubit_labels)))
     return pauli_term
 
 
@@ -198,33 +159,45 @@ def all_sic_terms(qubit_count: int, qubit_labels=None):
     return [tuple([op[q] + '_' + str(qubit) for q, qubit in enumerate(qubit_labels)]) for op in labels]
 
 
-def all_pauli_terms(qubit_count: int, qubit_labels=None):
+def all_pauli_terms(qubits: Sequence[int]):
     """
     Generate list of all Pauli terms (with weight > 0) on N qubits.
 
-    :param int qubit_count: The number of qubits
-    :param set qubit_labels: The integer labels for the qubits
+    :param qubits: The integer labels for the qubits
     :return: list of `PauliTerm`s
     :rtype: list
     """
-    # we exclude the all identity string since that maps to no preparation and no measurement
-    all_ixyz_strs = [''.join(x) for x in itertools.product('IXYZ', repeat=qubit_count)][1:]
-    list_of_terms = [str_to_pauli_term(s, qubit_labels) for s in all_ixyz_strs]
+    all_ixyz_strs = [''.join(x) for x in itertools.product('IXYZ', repeat=len(qubits))][1:]
+    list_of_terms = [str_to_pauli_term(s, qubits) for s in all_ixyz_strs]
     return list_of_terms
 
 
-def all_pauli_z_terms(qubit_count: int, qubit_labels=None):
+def all_pauli_choice_terms(qubits: Sequence[int], pauli_choice: str):
+    """
+    Generate list of all Pauli terms (with weight > 0) on N qubits with choice pauli.
+
+    If pauli_choice is 'Z' then this is identical to all_pauli_z_terms
+
+    :param qubits: The integer labels for the qubits
+    :param pauli_choice: choice of which pauli to form combinations.
+    :return: list of `PauliTerm`s made from combinations of I and the given choice pauli
+    """
+    all_ichoice_strs = [''.join(x) for x in itertools.product('I' + pauli_choice.upper(),
+                                                              repeat=len(qubits))][1:]
+    list_of_terms = [str_to_pauli_term(s, qubits) for s in all_ichoice_strs]
+    return list_of_terms
+
+
+def all_pauli_z_terms(qubits: Sequence[int]):
     """
     Generate list of all Pauli Z terms (with weight > 0) on N qubits
 
-    :param int n: The number of qubits
-    :param set qubit_labels: The integer labels for the qubits
+    :param qubits: The integer labels for the qubits
     :return: list of `PauliTerm`s
     :rtype: list
     """
-    # we exclude the all identity string since that maps to no preparation and no measurement
-    all_iz_strs = [''.join(x) for x in itertools.product('IZ', repeat=qubit_count)][1:]
-    list_of_terms = [str_to_pauli_term(s, qubit_labels) for s in all_iz_strs]
+    all_iz_strs = [''.join(x) for x in itertools.product('IZ', repeat=len(qubits))][1:]
+    list_of_terms = [str_to_pauli_term(s, qubits) for s in all_iz_strs]
     return list_of_terms
 
 
@@ -449,35 +422,6 @@ def n_qubit_pauli_basis(n):
         raise ValueError("n = {} should be at least 1.".format(n))
 
 
-computational_label_ops = [('0', np.array([[1], [0]])), ('1', np.array([[0], [1]]))]
-
-COMPUTATIONAL_BASIS = OperatorBasis(computational_label_ops)
-
-
-def n_qubit_computational_basis(n):
-    """
-    Construct the tensor product operator basis of `n` COMPUTATIONAL_BASIS's.
-
-    :param int n: The number of qubits.
-    :return: The product Pauli operator basis of `n` qubits
-    :rtype: OperatorBasis
-    """
-    if n >= 1:
-        return COMPUTATIONAL_BASIS ** n
-    else:
-        raise ValueError("n = {} should be at least 1.".format(n))
-        
-
-def pauli_basis_measurements(qubit):
-    """
-    Generates the Programs required to measure the expectation values of the pauli operators.
-
-    :param qubit: Required argument (so that the caller has a reference).
-    """
-    pauli_label_meas_progs = [Program(), Program(RY(-np.pi / 2, qubit)), Program(RX(-np.pi / 2, qubit)), Program()]
-    return pauli_label_meas_progs
-
-
 def transform_pauli_moments_to_bit(mean_p, var_p):
     """
     Changes the first of a Pauli operator to the moments of a bit (a Bernoulli process).
@@ -506,93 +450,6 @@ def transform_bit_moments_to_pauli(mean_c, var_c):
     mean_out = 2 * mean_c - 1
     var_out = 4 * var_c
     return mean_out, var_out
-
-
-def parameterized_bitstring_prep(qubits: Sequence[int], reg_name: str, append_measure: bool = False,
-                                 in_x_basis: bool = False) -> Program:
-    """
-    Produces a parameterized program for the given group of qubits, where each qubit is prepared
-    in the 0 or 1 state depending on the parameterization specified at run-time.
-
-    See also bitstring_prep which produces a non-parameterized program that prepares
-    and measures a single pre-specified bitstring on the given qubits. Parameterization allows
-    for a single program to measure each bitstring (specified at run-time) and speeds up
-    the collective measurements of all bitstring for a group of qubits. Note that the program
-    produced by bitstring_prep does not execute any gates when preparing 0 on a particular qubit
-    and executes only one gate to prepare 1; meanwhile, this method produces a program which
-    executes three gates for either preparation on each qubit.
-
-    :param qubits: labels of qubits on which some bitstring will be prepared and, perhaps, measured
-    :param reg_name: the name of the register that will hold the bitstring parameters.
-    :param append_measure: dictates whether to measure the qubits after preparing the bitstring
-    :param in_x_basis: if true, prepare the bitstring in the x basis, where plus <==> zero,
-        minus <==> one.
-    :return: a parameterized program capable of preparing, and optionally measuring, any runtime
-        specified bitstring on the given qubits. See estimate_joint_confusion_in_set in
-        readout.py for example use.
-    """
-    program = Program()
-
-    if append_measure:
-        ro = program.declare('ro', memory_type='BIT', memory_size=len(qubits))
-
-    bitstr_reg = program.declare(reg_name, memory_type='REAL', memory_size=len(qubits))
-    for idx, qubit in enumerate(qubits):
-        program += RX(pi / 2, qubit)
-        program += RZ(pi * bitstr_reg[idx], qubit)
-        program += RX(-pi / 2, qubit)
-
-        # if we are doing logic in X basis, follow each bit preparation with a Hadamard
-        # H |0> = |+> and H |1> = |-> where + and - label the X basis vectors.
-        if in_x_basis:
-            program += H(qubit)
-
-        if append_measure:
-            program += MEASURE(qubit, ro[idx])
-
-    return program
-
-
-def bitstring_prep(qubits: Sequence[int], bitstring: Sequence[int], append_measure: bool = False,
-                   in_x_basis: bool = False) -> Program:
-    """
-    Produces a program that prepares the given bitstring on the given qubits.
-
-    See also _readout_group_parameterized_bitstring which produces an analogous parameterized
-    program that measures any run-time specified bitstring on the given qubits. Parameterization
-    speeds up the collective measurement of all bitstrings on a group of qubits. Note that
-    the program generated by _readout_group_parameterized_bitstring executes three gates on each
-    qubit to prepare either a 0 or a 1 on that qubit; meanwhile, this method creates a program
-    which executes no gates to prepare the 0 state and only one gate to prepare the 1 state on a
-    particular qubit.
-
-    :param qubits: labels of qubits on which some bitstring will be prepared and, perhaps, measured
-    :param bitstring: a sequence of bits (0 or 1) to prepare on the given qubits. The
-        qubit qubits[idx] is prepare in the state bitstring[idx]
-    :param append_measure: dictates whether to measure the qubits after preparing the bitstring
-    :param in_x_basis: if true, prepare the bitstring in the x basis, where plus <==> zero,
-        minus <==> one.
-    :return: a program for preparing, optionally measuring, the given bitstring on the given qubits
-    """
-    assert len(qubits) == len(bitstring)
-
-    program = Program()
-
-    if append_measure:
-        ro = program.declare('ro', memory_type='BIT', memory_size=len(qubits))
-
-    for idx, (qubit, bit) in enumerate(zip(qubits, bitstring)):
-        program += RX(pi * bit, qubit)
-
-        # if we are doing logic in X basis, follow each bit preparation with a Hadamard
-        # H |0> = |+> and H |1> = |-> where + and - label the X basis vectors.
-        if in_x_basis:
-            program += H(qubit)
-
-        if append_measure:
-            program += MEASURE(qubit, ro[idx])
-
-    return program
 
 
 def partial_trace(rho, keep, dims, optimize=False):
@@ -626,7 +483,7 @@ def partial_trace(rho, keep, dims, optimize=False):
 def metadata_save(qc: QuantumComputer,
                   repo_path: str = None,
                   filename: str = None) -> pd.DataFrame:
-    '''
+    """
     This helper function saves metadata related to your run on a Quantum computer.
 
     Basic data saved includes the date and time. Additionally information related to the quantum
@@ -640,7 +497,7 @@ def metadata_save(qc: QuantumComputer,
     :param repo_path: path to repository e.g. '../'
     :param filename: The name of the file to write JSON-serialized results to.
     :return: pandas DataFrame
-    '''
+    """
 
     # Git related things
     if repo_path is not None:

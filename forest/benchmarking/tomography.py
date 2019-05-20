@@ -11,8 +11,8 @@ import forest.benchmarking.distance_measures as dm
 from forest.benchmarking.superoperator_tools import vec, unvec, proj_choi_to_physical
 from forest.benchmarking.utils import n_qubit_pauli_basis
 from pyquil import Program
-from pyquil.operator_estimation import ExperimentSetting, \
-    TomographyExperiment as PyQuilTomographyExperiment, ExperimentResult, SIC0, SIC1, SIC2, SIC3, \
+from forest.benchmarking.operator_estimation import ExperimentSetting, \
+    ObservablesExperiment as PyQuilTomographyExperiment, ExperimentResult, SIC0, SIC1, SIC2, SIC3, \
     plusX, minusX, plusY, minusY, plusZ, minusZ, TensorProductState, zeros_state
 from pyquil.paulis import sI, sX, sY, sZ, PauliSum, PauliTerm, is_identity
 from pyquil.unitary_tools import lifted_pauli as pauli2matrix, lifted_state_operator as state2matrix
@@ -36,9 +36,12 @@ def _state_tomo_settings(qubits: Sequence[int]):
     for o_ops in itertools.product([sI, sX, sY, sZ], repeat=n_qubits):
         o_op = functools.reduce(mul, (op(q) for op, q in zip(o_ops, qubits)), sI())
 
+        if is_identity(o_op):
+            continue
+
         yield ExperimentSetting(
             in_state=zeros_state(qubits),
-            out_operator=o_op,
+            observable=o_op,
         )
 
 
