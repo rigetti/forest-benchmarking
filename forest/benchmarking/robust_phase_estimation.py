@@ -269,7 +269,7 @@ def num_trials(depth, max_depth, multiplicative_factor: float = 1.0,
 def acquire_rpe_data(qc: QuantumComputer,
                      experiments: Sequence[ObservablesExperiment],
                      multiplicative_factor: float = 1.0, additive_error: float = None,
-                     min_shots: int = 500) -> List[ExperimentResult]:
+                     min_shots: int = 500) -> List[List[ExperimentResult]]:
     """
     Run each experiment in the sequence of experiments.
 
@@ -294,7 +294,7 @@ def acquire_rpe_data(qc: QuantumComputer,
     for depth, expt in zip(depths, experiments):
         theoretical_optimum = num_trials(depth, max_depth, multiplicative_factor, additive_error)
         num_shots = max(min_shots, theoretical_optimum)
-        results += list(estimate_observables(qc, expt, num_shots))
+        results.append(list(estimate_observables(qc, expt, num_shots)))
     return results
 
 
@@ -396,7 +396,8 @@ def estimate_phase_from_moments(xs: List, ys: List, x_stds: List, y_stds: List,
     return theta_est % (2 * pi)  # return value between 0 and 2pi
 
 
-def robust_phase_estimate(results: List[ExperimentResult]) -> Union[float, Sequence[float]]:
+def robust_phase_estimate(qubits: Sequence[int], results: List[List[ExperimentResult]]) \
+        -> Union[float, Sequence[float]]:
     """
     Provides the estimate of the phase for an RPE experiment with results.
 
@@ -414,13 +415,10 @@ def robust_phase_estimate(results: List[ExperimentResult]) -> Union[float, Seque
             2**(len(meas_qubits) - len(post_select_state) - 1)
         different relative phases estimated and returned.
     """
-
-    if len(experiment.qubits) == 1:
-        q = experiment.qubits[0]
-        x_results = [res for layer in experiment.layers for res in layer.results
-                     if res.setting.out_operator[q] == 'X']
-        y_results = [res for layer in experiment.layers for res in layer.results
-                     if res.setting.out_operator[q] == 'Y']
+    if len(qubits) == 1:
+        q = qubits[0]
+        x_results = [res for depth in results for res in depth if res.setting.observable[q] == 'X']
+        y_results = [res for depth in results for res in depth if res.setting.observable[q] == 'Y']
         x_exps = [res.expectation for res in x_results]
         y_exps = [res.expectation for res in y_results]
         x_errs = [res.stddev for res in x_results]
@@ -429,25 +427,25 @@ def robust_phase_estimate(results: List[ExperimentResult]) -> Union[float, Seque
 
     # estimating multiple phases, post-selecting, or ambiguous measurement qubit
     relative_phases = []
-    for xy_q in experiment.qubits:
+    for xy_q in qubits:
         expectations = []
         stddevs = []
-        z_qubits = [q for q in experiment.qubits if q != xy_q]
+        z_qubits = [q for q in qubits if q != xy_q]
         for label in ['X', 'Y']:
             # organize operator results by z_qubit; there are up to 2 phase estimates per z_qubit
             results_by_z_qubit = {q: [] for q in z_qubits}
             i_results = []  # collect measurements of only x/y on the xy_q qubit
-            for layer in experiment.layers:
-                results = [res for res in layer.results if res.setting.out_operator[xy_q] == label]
+            for depth in results:
+                ress = [res for res in depth if res.setting.observable[xy_q] == label]
 
-                if len(results) == 0:
+                if len(ress) == 0:
                     # no xy data, so no measurement of rotation of this qubit
                     break
 
                 # organize results into estimates of different phases based on which qubit has a Z
-                for res in results:
+                for res in ress:
                     for z_q in z_qubits:
-                        if res.setting.out_operator[z_q] == 'Z':
+                        if res.setting.observable[z_q] == 'Z':
                             results_by_z_qubit[z_q].append(res)
                             break
                     else:  # no Z on any qubit, so must only have the X/Y on the xy_q qubit
@@ -459,7 +457,7 @@ def robust_phase_estimate(results: List[ExperimentResult]) -> Union[float, Seque
             xy_expectations = []
             xy_stddevs = []
 
-            if max([len(results) for results in results_by_z_qubit.values()]) == 0:
+            if max([len(ress) for ress in results_by_z_qubit.values()]) == 0:
                 # there were no Z operators, so we are only interested in estimating the phase
                 # based on the `i_results' i.e. an X or Y on a single qubit.
                 # TODO: check if this miss-interprets a valid use-case. 1q, no post...?
@@ -477,7 +475,7 @@ def robust_phase_estimate(results: List[ExperimentResult]) -> Union[float, Seque
                 continue  # relevant expectations have been collected, so go to next label
 
             # we can get estimates for at most 2 possible phases; which depends on the in_state
-            for q, results in results_by_z_qubit.items():
+            for q, ress in results_by_z_qubit.items():
                 in_state = i_results[0].setting.in_state[q]
 
                 for post_select_state in [0, 1]:
@@ -487,7 +485,7 @@ def robust_phase_estimate(results: List[ExperimentResult]) -> Union[float, Seque
 
                     selected_expectations = []
                     selected_stddevs = []
-                    for res, i_res in zip(results, i_results):
+                    for res, i_res in zip(ress, i_results):
                         # we are essentially post-selecting by taking the sum or difference
                         if post_select_state == 0:
                             selected_expectations.append(i_res.expectation + res.expectation)
