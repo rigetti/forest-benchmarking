@@ -1,21 +1,31 @@
 import numpy as np
-import pytest
-
-from forest.benchmarking import qubit_spectroscopy as qs
-
-
-@pytest.fixture()
-def mock_rabi():
-    actual_rabi_period = 2.15 * np.pi  # not quite 2pi
-
-    return {'rabi_per': actual_rabi_period}
+from numpy import pi
+from forest.benchmarking.qubit_spectroscopy import generate_rabi_experiments, acquire_rabi_data, \
+    fit_rabi_results, get_stats_by_qubit
 
 
-def test_sinusoidal_waveform(mock_rabi):
-    thetas = np.linspace(0, 2 * np.pi, 30)
-    data = np.asarray([0.5 * np.sin(theta * 2 * np.pi / mock_rabi['rabi_per']) + 0.5
-                       for theta in thetas])
+def test_rabi_flop(qvm):
+    qubits = [0]
+    num_shots = 100
+    qvm.qam.random_seed = 1
+    angles = np.linspace(0, 2 * pi, 15)
+    rabi_expts = generate_rabi_experiments(qubits, angles)
+    results = acquire_rabi_data(qvm, rabi_expts, num_shots)
+    stats = get_stats_by_qubit(results)[qubits[0]]
 
-    params, params_errs = qs.fit_to_sinusoidal_waveform(thetas, data)
+    fit = fit_rabi_results(angles, stats['expectation'], stats['std_err'])
 
-    assert np.isclose(2 * np.pi / params[2], mock_rabi['rabi_per'])
+    freq = fit.params['frequency'].value
+    freq_err = fit.params['frequency'].stderr
+
+    assert np.isclose(freq, 1, atol=2 * freq_err)
+
+    amplitude = fit.params['amplitude'].value
+    amplitude_err = fit.params['amplitude'].stderr
+
+    assert np.isclose(amplitude, -.5, atol=2 * amplitude_err)
+
+    baseline = fit.params['baseline'].value
+    baseline_err = fit.params['baseline'].stderr
+
+    assert np.isclose(baseline, .5, atol=2 * baseline_err)
