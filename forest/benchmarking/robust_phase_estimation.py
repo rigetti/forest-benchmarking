@@ -342,8 +342,7 @@ def get_variance_upper_bound(num_depths: int, multiplicative_factor: float = 1.0
     K = np.log2(max_depth).astype(int) + 1
 
     # TODO: allow for non-default parameters
-    m_js = [num_trials(d, max_depth, 5./2, 1./2, multiplicative_factor, additive_error) for d in
-            depths]
+    m_js = [num_trials(d, max_depth, multiplicative_factor, additive_error) for d in depths]
 
     # note that m_js is 0 indexed but in [RPE] 1 <= j <= K, so M_j = m_js[j-1]
     return (1 - _p_max(m_js[K - 1])) * _xci(K + 1) ** 2 + sum(
@@ -421,15 +420,15 @@ def robust_phase_estimate(qubits: Sequence[int], results: List[List[ExperimentRe
         y_results = [res for depth in results for res in depth if res.setting.observable[q] == 'Y']
         x_exps = [res.expectation for res in x_results]
         y_exps = [res.expectation for res in y_results]
-        x_errs = [res.stddev for res in x_results]
-        y_errs = [res.stddev for res in y_results]
+        x_errs = [res.std_err for res in x_results]
+        y_errs = [res.std_err for res in y_results]
         return estimate_phase_from_moments(x_exps, y_exps, x_errs, y_errs)
 
     # estimating multiple phases, post-selecting, or ambiguous measurement qubit
     relative_phases = []
     for xy_q in qubits:
         expectations = []
-        stddevs = []
+        std_errs = []
         z_qubits = [q for q in qubits if q != xy_q]
         for label in ['X', 'Y']:
             # organize operator results by z_qubit; there are up to 2 phase estimates per z_qubit
@@ -455,23 +454,23 @@ def robust_phase_estimate(qubits: Sequence[int], results: List[List[ExperimentRe
                 break
 
             xy_expectations = []
-            xy_stddevs = []
+            xy_std_errs = []
 
             if max([len(ress) for ress in results_by_z_qubit.values()]) == 0:
                 # there were no Z operators, so we are only interested in estimating the phase
                 # based on the `i_results' i.e. an X or Y on a single qubit.
                 # TODO: check if this miss-interprets a valid use-case. 1q, no post...?
                 selected_expectations = []
-                selected_stddevs = []
+                selected_std_errs = []
                 for i_res in i_results:
                     selected_expectations.append(i_res.expectation)
-                    selected_stddevs.append(i_res.stddev)
+                    selected_std_errs.append(i_res.std_err)
 
                 xy_expectations.append(selected_expectations)
-                xy_stddevs.append(selected_stddevs)
+                xy_std_errs.append(selected_std_errs)
 
                 expectations.append(xy_expectations)
-                stddevs.append(xy_stddevs)
+                std_errs.append(xy_std_errs)
                 continue  # relevant expectations have been collected, so go to next label
 
             # we can get estimates for at most 2 possible phases; which depends on the in_state
@@ -484,7 +483,7 @@ def robust_phase_estimate(qubits: Sequence[int], results: List[List[ExperimentRe
                         continue
 
                     selected_expectations = []
-                    selected_stddevs = []
+                    selected_std_errs = []
                     for res, i_res in zip(ress, i_results):
                         # we are essentially post-selecting by taking the sum or difference
                         if post_select_state == 0:
@@ -493,21 +492,21 @@ def robust_phase_estimate(qubits: Sequence[int], results: List[List[ExperimentRe
                             selected_expectations.append(i_res.expectation - res.expectation)
 
                         # TODO: check error propogation
-                        selected_stddevs.append(np.sqrt(res.stddev**2 + i_res.stddev**2))
+                        selected_std_errs.append(np.sqrt(res.std_err**2 + i_res.std_err**2))
 
                     xy_expectations.append(selected_expectations)
-                    xy_stddevs.append(selected_stddevs)
+                    xy_std_errs.append(selected_std_errs)
 
             expectations.append(xy_expectations)
-            stddevs.append(xy_stddevs)
+            std_errs.append(xy_std_errs)
 
         if len(expectations) == 0:
             # no expectations, so no measurement of rotation of this qubit. Move on to next qubit.
             continue
 
         x_exps, y_exps = expectations
-        x_stddevs, y_stddevs = stddevs
-        for x_exp, y_exp, x_err, y_err in zip(x_exps, y_exps, x_stddevs,  y_stddevs):
+        x_std_errs, y_std_errs = std_errs
+        for x_exp, y_exp, x_err, y_err in zip(x_exps, y_exps, x_std_errs,  y_std_errs):
             relative_phases.append(estimate_phase_from_moments(x_exp, y_exp, x_err, y_err))
 
     return relative_phases
