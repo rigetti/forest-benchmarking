@@ -839,7 +839,7 @@ def _flip_array_to_prog(flip_array: Tuple[bool], qubits: List[int]) -> Program:
 
 
 def exhaustive_symmetrization(programs: List[Program], meas_qubits: List[List[int]]) \
-        -> Tuple[List[Program], List[Tuple[bool]], List[int]]:
+        -> Tuple[List[Program], List[List[int]], List[Tuple[bool]], List[int]]:
     """
     For each program in the input programs generate new programs which flip the measured qubits
     in every possible combination in order to symmetrize readout.
@@ -848,7 +848,10 @@ def exhaustive_symmetrization(programs: List[Program], meas_qubits: List[List[in
     :param meas_qubits:
     :return:
     """
+    assert len(programs) == len(meas_qubits)
+
     symm_programs = []
+    symm_prog_qs = []
     prog_groups = []
     flip_arrays = []
 
@@ -858,10 +861,11 @@ def exhaustive_symmetrization(programs: List[Program], meas_qubits: List[List[in
             prog_symm = _flip_array_to_prog(flip_array, meas_qs)
             total_prog_symm += prog_symm
             symm_programs.append(total_prog_symm)
+            symm_prog_qs.append(meas_qs)
             prog_groups.append(idx)
             flip_arrays.append(flip_array)
 
-    return symm_programs, flip_arrays, prog_groups
+    return symm_programs, symm_prog_qs, flip_arrays, prog_groups
 
 
 def _measure_bitstrings(qc: QuantumComputer, programs: List[Program], prog_qubits: List[List[int]],
@@ -879,6 +883,8 @@ def _measure_bitstrings(qc: QuantumComputer, programs: List[Program], prog_qubit
     :param num_shots:
     :return:
     """
+    assert len(programs) == len(prog_qubits)
+
     results = []
     for program, qubits in zip(programs, prog_qubits):
 
@@ -914,6 +920,10 @@ def shots_to_obs_moments(bitarray: np.ndarray, qubits: List[int], observable: Pa
     obs_qubits = [q for q, _ in observable]
     # Identify classical register indices to select
     idxs = [idx for idx, q in enumerate(qubits) if q in obs_qubits]
+
+    if len(idxs) == 0: # identity term TODO: handle specially?
+        return coeff, 0
+
     # Pick columns corresponding to qubits with a non-identity out_operation
     obs_strings = bitarray[:, idxs]
     # Transform bits to eigenvalues; ie (+1, -1)
@@ -951,13 +961,14 @@ def consolidate_symmetrization_outputs(outputs: List[np.ndarray], flip_arrays: L
     :param groups:
     :return:
     """
-    output = []
+    assert len(outputs) == len(groups) == len(flip_arrays)
+    assert len(outputs[0][0]) == len(flip_arrays[0])
+
+    output = {group: [] for group in set(groups)}
     for bitarray, group, flip_array in zip(outputs, groups, flip_arrays):
-        if len(output) <= group:
-            output[group] = bitarray ^ flip_array
-            continue
-        output[group] = np.vstack(output[group], bitarray ^ flip_array)
-    return output
+        output[group].append(bitarray ^ flip_array)
+
+    return [np.vstack(output[group]) for group in sorted(list(set(groups)))]
 
 
 def estimate_observables(qc: QuantumComputer, obs_expt: ObservablesExperiment,
@@ -987,7 +998,7 @@ def estimate_observables(qc: QuantumComputer, obs_expt: ObservablesExperiment,
     programs, meas_qubits = generate_experiment_programs(obs_expt, active_reset)
 
     if symmetrization_method is not None:
-        programs, flip_array, prog_groups = symmetrization_method(programs, meas_qubits)
+        programs, meas_qubits, flip_array, prog_groups = symmetrization_method(programs, meas_qubits)
         symm_outputs = _measure_bitstrings(qc, programs, meas_qubits, num_shots)
         results = consolidate_symmetrization_outputs(symm_outputs, flip_array, prog_groups)
     else:
@@ -1034,7 +1045,7 @@ def get_calibration_program(observable: PauliTerm, noisy_program: Program = None
     for q, op in observable.operations_as_set():
         calibr_prog += _one_q_pauli_prep(label=op, index=0, qubit=q)
     # Measure the out operator in this state
-    for q, op in observable.observable.operations_as_set():
+    for q, op in observable.operations_as_set():
         calibr_prog += _local_pauli_eig_meas(op, q)
 
     return calibr_prog
@@ -1059,7 +1070,7 @@ def calibrate_observable_estimates(qc: QuantumComputer, expt_results: List[Exper
 
     meas_qubits = [expt_result.setting.observable.get_qubits() for expt_result in expt_results]
 
-    programs, flip_array, prog_groups = symmetrization_method(programs, meas_qubits)
+    programs, meas_qubits, flip_array, prog_groups = symmetrization_method(programs, meas_qubits)
     symm_outputs = _measure_bitstrings(qc, programs, meas_qubits, num_shots)
     results = consolidate_symmetrization_outputs(symm_outputs, flip_array, prog_groups)
 
