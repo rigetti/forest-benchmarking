@@ -793,13 +793,16 @@ def generate_experiment_programs(obs_expt: ObservablesExperiment, active_reset: 
     # Outer loop over a collection of grouped settings for which we can simultaneously estimate.
     programs = []
     meas_qubits = []
-    for i, settings in enumerate(obs_expt):
+    for settings in obs_expt:
 
         # Prepare a state according to the amalgam of all setting.in_state
         total_prog = Program()
         if active_reset:
             total_prog += RESET()
         max_weight_in_state = _max_weight_state(setting.in_state for setting in settings)
+        if max_weight_in_state is None:
+            raise ValueError('Input states are not compatible. Re-group the experiment settings '
+                             'so that groups of parallel settings have compatible input states.')
         for oneq_state in max_weight_in_state.states:
             total_prog += _one_q_state_prep(oneq_state)
 
@@ -808,6 +811,9 @@ def generate_experiment_programs(obs_expt: ObservablesExperiment, active_reset: 
 
         # Prepare for measurement state according to setting.observable
         max_weight_out_op = _max_weight_operator(setting.observable for setting in settings)
+        if max_weight_out_op is None:
+            raise ValueError('Observables not compatible. Re-group the experiment settings '
+                             'so that groups of parallel settings have compatible observables.')
         for qubit, op_str in max_weight_out_op:
             total_prog += _local_pauli_eig_meas(op_str, qubit)
 
@@ -848,7 +854,8 @@ def exhaustive_symmetrization(programs: List[Program], meas_qubits: List[List[in
     :param meas_qubits:
     :return:
     """
-    assert len(programs) == len(meas_qubits)
+    assert len(programs) == len(meas_qubits), 'mismatch of programs and qubits; must know which ' \
+                                              'qubits are being measured to symmetrize them.'
 
     symm_programs = []
     symm_prog_qs = []
@@ -887,6 +894,10 @@ def _measure_bitstrings(qc: QuantumComputer, programs: List[Program], prog_qubit
 
     results = []
     for program, qubits in zip(programs, prog_qubits):
+        if len(qubits) == 0:
+            # corresponds to measuring identity; no program needs to be run.
+            results.append(np.array([[]]))
+            continue
 
         ro = program.declare('ro', 'BIT', len(qubits))
         for idx, q in enumerate(qubits):
@@ -921,8 +932,10 @@ def shots_to_obs_moments(bitarray: np.ndarray, qubits: List[int], observable: Pa
     # Identify classical register indices to select
     idxs = [idx for idx, q in enumerate(qubits) if q in obs_qubits]
 
-    if len(idxs) == 0: # identity term TODO: handle specially?
+    if len(idxs) == 0: # identity term
         return coeff, 0
+
+    assert bitarray.shape[1] == len(qubits), 'qubits should label each column of the bitarray'
 
     # Pick columns corresponding to qubits with a non-identity out_operation
     obs_strings = bitarray[:, idxs]
@@ -962,11 +975,15 @@ def consolidate_symmetrization_outputs(outputs: List[np.ndarray], flip_arrays: L
     :return:
     """
     assert len(outputs) == len(groups) == len(flip_arrays)
-    assert len(outputs[0][0]) == len(flip_arrays[0])
 
     output = {group: [] for group in set(groups)}
     for bitarray, group, flip_array in zip(outputs, groups, flip_arrays):
-        output[group].append(bitarray ^ flip_array)
+        if len(flip_array) == 0:
+            # happens when measuring identity.
+            # TODO: better way of handling identity measurement? (in _measure_bitstrings too)
+            output[group].append(bitarray)
+        else:
+            output[group].append(bitarray ^ flip_array)
 
     return [np.vstack(output[group]) for group in sorted(list(set(groups)))]
 
@@ -998,12 +1015,14 @@ def estimate_observables(qc: QuantumComputer, obs_expt: ObservablesExperiment,
     programs, meas_qubits = generate_experiment_programs(obs_expt, active_reset)
 
     if symmetrization_method is not None:
-        programs, meas_qubits, flip_array, prog_groups = symmetrization_method(programs, meas_qubits)
-        symm_outputs = _measure_bitstrings(qc, programs, meas_qubits, num_shots)
-        results = consolidate_symmetrization_outputs(symm_outputs, flip_array, prog_groups)
+        programs, symm_qubits, flip_arrays, prog_groups = symmetrization_method(programs,
+                                                                                meas_qubits)
+        symm_outputs = _measure_bitstrings(qc, programs, symm_qubits, num_shots)
+        results = consolidate_symmetrization_outputs(symm_outputs, flip_arrays, prog_groups)
     else:
         results = _measure_bitstrings(qc, programs, meas_qubits, num_shots)
 
+    assert len(results) == len(meas_qubits) == len(obs_expt)
     for bitarray, meas_qs, settings in zip(results, meas_qubits, obs_expt):
 
         for setting in settings:
@@ -1070,10 +1089,11 @@ def calibrate_observable_estimates(qc: QuantumComputer, expt_results: List[Exper
 
     meas_qubits = [expt_result.setting.observable.get_qubits() for expt_result in expt_results]
 
-    programs, meas_qubits, flip_array, prog_groups = symmetrization_method(programs, meas_qubits)
-    symm_outputs = _measure_bitstrings(qc, programs, meas_qubits, num_shots)
+    symm_progs, symm_qubits, flip_array, prog_groups = symmetrization_method(programs, meas_qubits)
+    symm_outputs = _measure_bitstrings(qc, symm_progs, symm_qubits, num_shots)
     results = consolidate_symmetrization_outputs(symm_outputs, flip_array, prog_groups)
 
+    assert len(results) == len(meas_qubits) == len(expt_results)
     for bitarray, meas_qs, expt_result in zip(results, meas_qubits, expt_results):
 
         observable = expt_result.setting.observable
