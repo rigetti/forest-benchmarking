@@ -1,5 +1,4 @@
 import functools
-from functools import partial
 import itertools
 import json
 import logging
@@ -17,10 +16,10 @@ import networkx as nx
 from networkx.algorithms.approximation.clique import clique_removal
 from pyquil import Program
 from pyquil.api import QuantumComputer
-from pyquil.gates import *
+from pyquil.gates import RX, RZ, MEASURE
 from pyquil.paulis import PauliTerm, sI, is_identity
 
-from forest.benchmarking.compilation import basic_compile
+from forest.benchmarking.compilation import basic_compile, _RY
 from forest.benchmarking.utils import transform_bit_moments_to_pauli
 
 if sys.version_info < (3, 7):
@@ -428,9 +427,9 @@ def _one_q_pauli_prep(label, index, qubit):
 
     if label == 'X':
         if index == 0:
-            return Program(RY(pi / 2, qubit))
+            return Program(_RY(pi / 2, qubit))
         else:
-            return Program(RY(-pi / 2, qubit))
+            return Program(_RY(-pi / 2, qubit))
 
     elif label == 'Y':
         if index == 0:
@@ -467,7 +466,7 @@ def _local_pauli_eig_meas(op, idx):
     Program are essentially the Hermitian conjugates of those in :py:func:`_one_q_pauli_prep`)
     """
     if op == 'X':
-        return Program(RY(-pi / 2, idx))
+        return Program(_RY(-pi / 2, idx))
     elif op == 'Y':
         return Program(RX(pi / 2, idx))
     elif op == 'Z':
@@ -781,7 +780,7 @@ class ExperimentResult:
         }
 
 
-def generate_experiment_programs(obs_expt: ObservablesExperiment, active_reset: bool) \
+def generate_experiment_programs(obs_expt: ObservablesExperiment, active_reset: bool = False) \
         -> Tuple[List[Program], List[List[int]]]:
     """
     Generate the programs necessary to estimate the observables in an ObservablesExperiment.
@@ -817,7 +816,7 @@ def generate_experiment_programs(obs_expt: ObservablesExperiment, active_reset: 
         for qubit, op_str in max_weight_out_op:
             total_prog += _local_pauli_eig_meas(op_str, qubit)
 
-        programs.append(total_prog)
+        programs.append(basic_compile(total_prog))
         meas_qubits.append(max_weight_out_op.get_qubits())
     return programs, meas_qubits
 
@@ -838,7 +837,7 @@ def _flip_array_to_prog(flip_array: Tuple[bool], qubits: List[int]) -> Program:
         if flip_output == 0:
             continue
         elif flip_output == 1:
-            prog += Program(X(qubits[i]))
+            prog += Program(RX(pi, qubits[i]))
         else:
             raise ValueError("flip_bools should only consist of 0s and/or 1s")
     return prog
@@ -876,7 +875,7 @@ def exhaustive_symmetrization(programs: List[Program], meas_qubits: List[List[in
 
 
 def _measure_bitstrings(qc: QuantumComputer, programs: List[Program], prog_qubits: List[List[int]],
-                        num_shots = 500) -> List[np.ndarray]:
+                        num_shots = 500, use_compiler = False) -> List[np.ndarray]:
     """
     Wrapper for appending measure instructions onto each program, running the program,
     and accumulating the resulting bitarrays.
@@ -898,14 +897,16 @@ def _measure_bitstrings(qc: QuantumComputer, programs: List[Program], prog_qubit
             # corresponds to measuring identity; no program needs to be run.
             results.append(np.array([[]]))
             continue
-
-        ro = program.declare('ro', 'BIT', len(qubits))
+        # copy the program so the original is not mutated
+        prog = program.copy()
+        ro = prog.declare('ro', 'BIT', len(qubits))
         for idx, q in enumerate(qubits):
-            program += MEASURE(q, ro[idx])
+            prog += MEASURE(q, ro[idx])
 
-        program.wrap_in_numshots_loop(num_shots)
-        native_quil = basic_compile(program)
-        exe = qc.compiler.native_quil_to_executable(native_quil)
+        prog.wrap_in_numshots_loop(num_shots)
+        if use_compiler:
+            prog = qc.quil_to_native_quil(prog)
+        exe = qc.compiler.native_quil_to_executable(prog)
         shots = qc.run(exe)
         results.append(shots)
     return results
