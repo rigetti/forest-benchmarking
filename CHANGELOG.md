@@ -1,7 +1,7 @@
 Changelog
 =========
 
-v0.5 (May 17, 2018)
+v0.5 (May XXX, 2018)
 ------------------
 Improvements and Changes:
 
@@ -12,6 +12,7 @@ Improvements and Changes:
 - Made Ipython Notebooks a part of testing (gh-123) 
 - Resolve test warnings and doc string formatting issues (gh-124)
 - **Breaking change.** Bump version and delete `graph_state` and `bell_state` modules (gh-125)
+- Added the ability to check if the Kraus operators are valid (PR 128)
 
 
 
