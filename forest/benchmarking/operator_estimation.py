@@ -780,14 +780,37 @@ class ExperimentResult:
         }
 
 
-def generate_experiment_programs(obs_expt: ObservablesExperiment, active_reset: bool = False) \
+def generate_experiment_programs(obs_expt: ObservablesExperiment, active_reset: bool = False,
+                                 use_basic_compile: bool = True) \
         -> Tuple[List[Program], List[List[int]]]:
     """
     Generate the programs necessary to estimate the observables in an ObservablesExperiment.
 
-    :param obs_expt:
-    :param active_reset:
-    :return:
+    Grouping of settings to be run in parallel, e.g. by a call to group_experiments, should be
+    done before this method is called.
+
+    By default the program field of the input obs_expt is assumed to hold a program composed of
+    gates which are either native quil gates or else can be compiled to native quil by the method
+    basic_compile. If this is not the case, then use_basic_compile should be set to False and
+    each returned program must be compiled before being executed on a QPU; NOTE however that
+    compiling a program may change the qubit indices so meas_qubits might need to be re-ordered
+    as well if the MEASURE instructions were not compiled with the program. For this reason it is
+    recommended that obs_expt.program be compiled before this method is called. If one is careful
+    then it is still possible to add the measurement instructions first and subsequently compile
+    the programs before running, e.g. by setting use_compilation = True in the call to
+    _measure_bitstrings (but compiling in this way could interfere with symmetrization).
+
+    :param obs_expt: a single ObservablesExperiment to be translated to a series of programs that
+        when run serially can be used to estimate each of obs_expt's observables.
+    :param active_reset: whether or not to begin the program by actively resetting. If true,
+        execution of each of the returned programs in a loop on the QPU will generally be faster.
+    :param use_basic_compile: whether or not to call basic_compile on the programs after they are
+        created. To run on a QPU it is necessary that programs use only native quil gates. See
+        the warning above about setting use_basic_compile to false.
+    :return: a list of programs along with a corresponding list of the groups of qubits that are
+        measured by that program. The returned programs may be run on a qc after measurement
+        instructions are added for the corresponding group of qubits in meas_qubits -- see
+        estimate_observables and _measure_bitstrings for possible usage.
     """
     # Outer loop over a collection of grouped settings for which we can simultaneously estimate.
     programs = []
@@ -816,7 +839,11 @@ def generate_experiment_programs(obs_expt: ObservablesExperiment, active_reset: 
         for qubit, op_str in max_weight_out_op:
             total_prog += _local_pauli_eig_meas(op_str, qubit)
 
-        programs.append(basic_compile(total_prog))
+        if use_basic_compile:
+            programs.append(basic_compile(total_prog))
+        else:
+            programs.append(total_prog)
+
         meas_qubits.append(max_weight_out_op.get_qubits())
     return programs, meas_qubits
 
@@ -826,18 +853,21 @@ def _flip_array_to_prog(flip_array: Tuple[bool], qubits: List[int]) -> Program:
     Generate a pre-measurement program that flips the qubit state according to the flip_array of
     bools.
 
-    :param ops_bool: tuple of booleans specifying the operation to be carried out on `qubits`
-    :param qubits: list specifying the qubits to be carried operations on
-    :return: Program with the operations specified in `ops_bool` on the qubits specified in
-        `qubits`
+    This is used, for example, in exhaustive_symmetrization to produce programs which flip a
+    select subset of qubits immediately before measurement.
+
+    :param flip_array: tuple of booleans specifying whether the qubit in the corresponding index
+        should be flipped or not.
+    :param qubits: list specifying the qubits in order corresponding to the flip_array
+    :return: Program which flips each qubit (i.e. instructs RX(pi, q)) according to the flip_array.
     """
     assert len(flip_array) == len(qubits), "Mismatch of qubits and operations"
     prog = Program()
-    for i, flip_output in enumerate(flip_array):
+    for qubit, flip_output in zip(qubits, flip_array):
         if flip_output == 0:
             continue
         elif flip_output == 1:
-            prog += Program(RX(pi, qubits[i]))
+            prog += Program(RX(pi, qubit))
         else:
             raise ValueError("flip_bools should only consist of 0s and/or 1s")
     return prog
@@ -849,15 +879,24 @@ def exhaustive_symmetrization(programs: List[Program], meas_qubits: List[List[in
     For each program in the input programs generate new programs which flip the measured qubits
     in every possible combination in order to symmetrize readout.
 
-    :param programs:
-    :param meas_qubits:
-    :return:
+    The expanded list of programs is returned along with a correspondingly expanded list of
+    meas_qubits, a list of bools which indicates which qubits are flipped in each program,
+    and a list of indices which records from which program in the input programs list each
+    symmetrized program originated.
+
+    :param programs: a list of programs each of which will be symmetrized.
+    :param meas_qubits: the corresponding groups of measurement qubits for the input list of
+        programs. Only these qubits will be symmetrized over, even if the program acts on other
+        qubits.
+    :return: a list of symmetrized programs, the corresponding measurement qubits,
+        the corresponding array of bools indicating which qubits were flipped,
+        and a corresponding list of indices specifying the generating `program'
     """
     assert len(programs) == len(meas_qubits), 'mismatch of programs and qubits; must know which ' \
                                               'qubits are being measured to symmetrize them.'
 
     symm_programs = []
-    symm_prog_qs = []
+    symm_meas_qs = []
     prog_groups = []
     flip_arrays = []
 
@@ -867,32 +906,33 @@ def exhaustive_symmetrization(programs: List[Program], meas_qubits: List[List[in
             prog_symm = _flip_array_to_prog(flip_array, meas_qs)
             total_prog_symm += prog_symm
             symm_programs.append(total_prog_symm)
-            symm_prog_qs.append(meas_qs)
+            symm_meas_qs.append(meas_qs)
             prog_groups.append(idx)
             flip_arrays.append(flip_array)
 
-    return symm_programs, symm_prog_qs, flip_arrays, prog_groups
+    return symm_programs, symm_meas_qs, flip_arrays, prog_groups
 
 
-def _measure_bitstrings(qc: QuantumComputer, programs: List[Program], prog_qubits: List[List[int]],
+def _measure_bitstrings(qc: QuantumComputer, programs: List[Program], meas_qubits: List[List[int]],
                         num_shots = 500, use_compiler = False) -> List[np.ndarray]:
     """
     Wrapper for appending measure instructions onto each program, running the program,
     and accumulating the resulting bitarrays.
 
-    Each program is assumed to be composed of gates that can be compiled into native quil by
-    basic_compile.
+    By default each program is assumed to be native quil.
 
-    :param qc:
-    :param programs:
-    :param prog_qubits:
-    :param num_shots:
-    :return:
+    :param qc: a quantum computer object on which to run each program
+    :param programs: a list of programs to run
+    :param meas_qubits: groups of qubits to measure for each program
+    :param num_shots: the number of shots to run for each program
+    :return: a len(programs) long list of num_shots by num_meas_qubits bit arrays of results for
+        each program.
     """
-    assert len(programs) == len(prog_qubits)
+    assert len(programs) == len(meas_qubits), 'The qubits to measure must be specified for each ' \
+                                              'program, one list of qubits per program.'
 
     results = []
-    for program, qubits in zip(programs, prog_qubits):
+    for program, qubits in zip(programs, meas_qubits):
         if len(qubits) == 0:
             # corresponds to measuring identity; no program needs to be run.
             results.append(np.array([[]]))
@@ -967,13 +1007,19 @@ def shots_to_obs_moments(bitarray: np.ndarray, qubits: List[int], observable: Pa
 def consolidate_symmetrization_outputs(outputs: List[np.ndarray], flip_arrays: List[Tuple[bool]],
                                        groups: List[int]) -> List[np.ndarray]:
     """
-    Given outputs from a series of symmetrization programs, appropriately flip output bits and
-    consolidate results into groups.
+    Given bitarray results from a series of symmetrization programs, appropriately flip output
+    bits and consolidate results into new bitarrays.
 
-    :param outputs:
-    :param flip_arrays:
-    :param groups:
-    :return:
+    :param outputs: a list of the raw bitarrays resulting from running a list of symmetrized
+        programs; for example, the results returned from _measure_bitstrings
+    :param flip_arrays: a list of boolean arrays in one-to-one correspondence with the list of
+        outputs indicating which qubits where flipped before each bitarray was measured.
+    :param groups: the group from which each symmetrized program was generated. E.g. if only one
+        program was symmetrized then groups is simply [0] * len(outputs). The length of the
+        returned consolidated outputs is exactly the number of distinct integers in groups.
+    :return: a list of the consolidated bitarray outputs which can be treated as the symmetrized
+        outputs of the original programs passed into a symmetrization method. See
+        estimate_observables for example usage.
     """
     assert len(outputs) == len(groups) == len(flip_arrays)
 
@@ -995,23 +1041,27 @@ def estimate_observables(qc: QuantumComputer, obs_expt: ObservablesExperiment,
     """
     Standard wrapper for estimating the observables in an ObservableExperiment.
 
-    Because of the use of standard _measure_bitstrings, this method assumes the program in
-    obs_expt can be compiled to native_quil using only basic_compile.
+    Because of the use of default parameters for _measure_bitstrings, this method assumes the
+    program in obs_expt can be compiled to native_quil using only basic_compile; the qc
+    object's compiler is only used to translate native quil to an executable.
 
     A symmetrization_method can be specified which will be used to generate the necessary
-    symmetrization results. This method should return a callable 'output_transform' which takes
-    in the full list of bitarrays from the symmetrization programs and consolidates the outputs
-    into the appropriate results for the initial un-symmetrized programs. For example,
-    in exhaustive_symmetrization the results of the symmetrization programs have appropriate bits
-    flipped and are re-grouped into bitarrays so that the final list of bitarrays corresponds to
-    the initial programs output by generate_experiment_programs.
+    symmetrization results. This method should match the api of exhaustive_symmetrization; there,
+    a list of symmetrized programs, the qubits to be measured for each program, the qubits that
+    were flipped for each program, and the original pre-symmetrized program index are returned
+    so that the bitarray results of the symmetrized programs and be processed via
+    consolidate_symmetrization_outputs which returns 'symmetrized' results for the original
+    pre-symmetrized programs.
 
-    :param qc:
-    :param obs_expt:
-    :param num_shots:
-    :param symmetrization_method:
-    :param active_reset:
-    :return:
+    :param qc: a quantum computer object on which to run the programs necessary to estimate each
+        observable of obs_expt.
+    :param obs_expt: a single ObservablesExperiment with settings pre-grouped as desired.
+    :param num_shots: the number of shots to run each program or each symmetrized program.
+    :param symmetrization_method: if not None, this can be used to symmetrize each program to
+        remove unwanted classical correlations in the qubit measurement readout.
+    :param active_reset: whether or not to begin the program by actively resetting. If true,
+        execution of each of the returned programs in a loop on the QPU will generally be faster.
+    :return: all of the ExperimentResults which hold an estimate of each observable of obs_expt
     """
     programs, meas_qubits = generate_experiment_programs(obs_expt, active_reset)
 
@@ -1076,15 +1126,25 @@ def calibrate_observable_estimates(qc: QuantumComputer, expt_results: List[Exper
                                    num_shots: int = 500, noisy_program: Program = None) \
         -> Iterable[ExperimentResult]:
     """
-    Calibrates the expectation and std_err of the input expt_results.
+    Calibrates the expectation and std_err of the input expt_results and updates those estimates.
 
-    :param qc:
-    :param expt_results:
-    :param symmetrization_method:
-    :param num_shots:
-    :param noisy_program:
-    :return:
+    The old estimates are moved to raw_* and the calibration results themselves for the given
+    observable are recorded as calibration_*
+
+    Calibration is done by measuring expectation values of eigenstates of the obervable which
+    ideally should yield either +/- 1 but in practice will have magnitude less than 1.
+
+    :param qc: a quantum computer object on which to run the programs necessary to calibrate each
+        result.
+    :param expt_results: a list of results, each of which will be separately calibrated.
+    :param symmetrization_method: by default every eigenvector of each observable is measured.
+    :param num_shots: the number of shots to run for each eigenvector
+    :param noisy_program: an optional program from which to inherit a noise model; only relevant
+        for running on a QVM
+    :return: a copy of the input results with updated estimates and calibration results.
     """
+    # TODO: consider speeding up calibration by first collecting only distinct observables
+
     programs = [get_calibration_program(expt_result.setting.observable, noisy_program) for
                     expt_result in expt_results]
 

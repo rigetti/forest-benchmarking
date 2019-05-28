@@ -61,7 +61,7 @@ def test_experiment_setting():
 def test_setting_no_in_back_compat():
     out_ops = _generate_random_paulis(n_qubits=4, n_terms=7)
     for oop in out_ops:
-        expt = ExperimentSetting(sI(), oop)
+        expt = ExperimentSetting(TensorProductState(), oop)
         expt2 = ExperimentSetting.from_str(str(expt))
         assert expt == expt2
         assert expt2.in_operator == sI()
@@ -81,7 +81,7 @@ def test_setting_no_in():
 
 def test_tomo_experiment():
     expts = [
-        ExperimentSetting(sI(), sX(0) * sY(1)),
+        ExperimentSetting(TensorProductState(), sX(0) * sY(1)),
         ExperimentSetting(sZ(0), sZ(0)),
     ]
 
@@ -101,8 +101,8 @@ def test_tomo_experiment():
 
 def test_tomo_experiment_pre_grouped():
     expts = [
-        [ExperimentSetting(sI(), sX(0) * sI(1)), ExperimentSetting(sI(), sI(0) * sX(1))],
-        [ExperimentSetting(sI(), sZ(0) * sI(1)), ExperimentSetting(sI(), sI(0) * sZ(1))],
+        [ExperimentSetting(TensorProductState(), sX(0) * sI(1)), ExperimentSetting(TensorProductState(), sI(0) * sX(1))],
+        [ExperimentSetting(TensorProductState(), sZ(0) * sI(1)), ExperimentSetting(TensorProductState(), sI(0) * sZ(1))],
     ]
 
     suite = ObservablesExperiment(
@@ -125,8 +125,8 @@ def test_tomo_experiment_empty():
 
 def test_experiment_deser(tmpdir):
     expts = [
-        [ExperimentSetting(sI(), sX(0) * sI(1)), ExperimentSetting(sI(), sI(0) * sX(1))],
-        [ExperimentSetting(sI(), sZ(0) * sI(1)), ExperimentSetting(sI(), sI(0) * sZ(1))],
+        [ExperimentSetting(TensorProductState(), sX(0) * sI(1)), ExperimentSetting(TensorProductState(), sI(0) * sX(1))],
+        [ExperimentSetting(TensorProductState(), sZ(0) * sI(1)), ExperimentSetting(TensorProductState(), sI(0) * sZ(1))],
     ]
 
     suite = ObservablesExperiment(
@@ -154,8 +154,8 @@ def test_expt_settings_share_ntpb():
 
 def test_group_experiments(grouping_method):
     expts = [  # cf above, I removed the inner nesting. Still grouped visually
-        ExperimentSetting(sI(), sX(0) * sI(1)), ExperimentSetting(sI(), sI(0) * sX(1)),
-        ExperimentSetting(sI(), sZ(0) * sI(1)), ExperimentSetting(sI(), sI(0) * sZ(1)),
+        ExperimentSetting(TensorProductState(), sX(0) * sI(1)), ExperimentSetting(TensorProductState(), sI(0) * sX(1)),
+        ExperimentSetting(TensorProductState(), sZ(0) * sI(1)), ExperimentSetting(TensorProductState(), sI(0) * sZ(1)),
     ]
     suite = ObservablesExperiment(expts, Program())
     grouped_suite = group_experiments(suite, method=grouping_method)
@@ -185,7 +185,7 @@ def test_experiment_result():
 
 def test_estimate_observables(forest):
     expts = [
-        ExperimentSetting(sI(), o1 * o2)
+        ExperimentSetting(TensorProductState(), o1 * o2)
         for o1, o2 in itertools.product([sI(0), sX(0), sY(0), sZ(0)], [sI(1), sX(1), sY(1), sZ(1)])
     ]
     suite = ObservablesExperiment(expts, program=Program(X(0), CNOT(0, 1)))
@@ -249,20 +249,20 @@ def test_estimate_observables_many_progs(forest):
 
 def test_append():
     expts = [
-        [ExperimentSetting(sI(), sX(0) * sI(1)), ExperimentSetting(sI(), sI(0) * sX(1))],
-        [ExperimentSetting(sI(), sZ(0) * sI(1)), ExperimentSetting(sI(), sI(0) * sZ(1))],
+        [ExperimentSetting(TensorProductState(), sX(0) * sI(1)), ExperimentSetting(TensorProductState(), sI(0) * sX(1))],
+        [ExperimentSetting(TensorProductState(), sZ(0) * sI(1)), ExperimentSetting(TensorProductState(), sI(0) * sZ(1))],
     ]
     suite = ObservablesExperiment(
         settings=expts,
         program=Program(X(0), Y(1))
     )
-    suite.append(ExperimentSetting(sI(), sY(0) * sX(1)))
+    suite.append(ExperimentSetting(TensorProductState(), sY(0) * sX(1)))
     assert (len(str(suite))) > 0
 
 
 def test_no_complex_coeffs(forest):
     qc = get_qc('2q-qvm')
-    suite = ObservablesExperiment([ExperimentSetting(sI(), 1.j * sY(0))], program=Program(X(0)))
+    suite = ObservablesExperiment([ExperimentSetting(TensorProductState(), 1.j * sY(0))], program=Program(X(0)))
     with pytest.raises(ValueError):
         res = list(estimate_observables(qc, suite, num_shots=1000))
 
@@ -461,7 +461,7 @@ def test_estimate_observables_symmetrize(forest):
     Symmetrization alone should not change the outcome on the QVM
     """
     expts = [
-        ExperimentSetting(sI(), o1 * o2)
+        ExperimentSetting(TensorProductState(), o1 * o2)
         for o1, o2 in itertools.product([sI(0), sX(0), sY(0), sZ(0)], [sI(1), sX(1), sY(1), sZ(1)])
     ]
     suite = ObservablesExperiment(expts, program=Program(X(0), CNOT(0, 1)))
@@ -482,7 +482,7 @@ def test_estimate_observables_symmetrize_calibrate(forest):
     Symmetrization + calibration should not change the outcome on the QVM
     """
     expts = [
-        ExperimentSetting(sI(), o1 * o2)
+        ExperimentSetting(TensorProductState(), o1 * o2)
         for o1, o2 in itertools.product([sI(0), sX(0), sY(0), sZ(0)], [sI(1), sX(1), sY(1), sZ(1)])
     ]
     suite = ObservablesExperiment(expts, program=Program(X(0), CNOT(0, 1)))
@@ -515,9 +515,11 @@ def test_estimate_observables_zero_expectation(forest):
 def test_flip_array_to_prog():
     qubits = [0, 2, 3]
     ops_strings = list(itertools.product([0, 1], repeat=len(qubits)))
-    d_expected = {(0, 0, 0): '', (0, 0, 1): 'X 3\n', (0, 1, 0): 'X 2\n', (0, 1, 1): 'X 2\nX 3\n',
-                  (1, 0, 0): 'X 0\n', (1, 0, 1): 'X 0\nX 3\n', (1, 1, 0): 'X 0\nX 2\n',
-                  (1, 1, 1): 'X 0\nX 2\nX 3\n'}
+    d_expected = {(0, 0, 0): '', (0, 0, 1): 'RX(pi) 3\n', (0, 1, 0): 'RX(pi) 2\n',
+                  (0, 1, 1): 'RX(pi) 2\nRX(pi) 3\n',
+                  (1, 0, 0): 'RX(pi) 0\n', (1, 0, 1): 'RX(pi) 0\nRX(pi) 3\n',
+                  (1, 1, 0): 'RX(pi) 0\nRX(pi) 2\n',
+                  (1, 1, 1): 'RX(pi) 0\nRX(pi) 2\nRX(pi) 3\n'}
     for op_str in ops_strings:
         p = _flip_array_to_prog(op_str, qubits)
         assert str(p) == d_expected[op_str]
@@ -1538,6 +1540,7 @@ def test_uncalibrated_symmetric_readout_nontrivial_1q_state(forest):
 
 def test_calibrated_symmetric_readout_nontrivial_1q_state(forest):
     qc = get_qc('1q-qvm')
+    qc.qam.random_seed = 1
     expt = ExperimentSetting(TensorProductState(), sZ(0))
     # pick some random value for RX rotation
     theta = np.random.uniform(0.0, 2 * np.pi)
@@ -1557,9 +1560,9 @@ def test_calibrated_symmetric_readout_nontrivial_1q_state(forest):
     z_cal_expect_arr = np.zeros(runs * len(expt_list))
 
     results = calibrate_observable_estimates(qc, list(estimate_observables(qc,
-                                                  tomo_expt, num_shots=500,
+                                                  tomo_expt, num_shots=750,
                                                   symmetrization_method=exhaustive_symmetrization)),
-                                             num_shots=500, noisy_program=p)
+                                             num_shots=750, noisy_program=p)
     for idx, res in enumerate(results):
         expect_arr[idx] = res.expectation
         z_cal_expect_arr[idx] = res.calibration_expectation
