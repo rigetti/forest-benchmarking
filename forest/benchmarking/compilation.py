@@ -59,7 +59,8 @@ def _RY(angle, q):
 
 def _RX(angle, q):
     """
-    A RX in terms of RX(+-pi/2) and RZ(theta)
+    A RX in terms of RZ(+-pi/2) and _RY(theta), which is itself decomposed
+    into native gates RX(+-pi/2) and RZ(theta) above.
     """
     p = Program()
     p += RZ(pi / 2, q)

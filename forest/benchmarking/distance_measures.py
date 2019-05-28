@@ -90,7 +90,7 @@ def bures_angle(rho, sigma):
 
 
 def quantum_chernoff_bound(rho, sigma):
-    """
+    r"""
     Computes the quantum Chernoff bound between rho and sigma. It is defined as
 
     ξ_{QCB}(rho,sigma) = - log[ min_{0\le s\le 1} tr(rho**s sigma**{1-s} ].
@@ -183,7 +183,7 @@ def total_variation_distance(P, Q):
 # Functions for quantum processes
 # ============================================================================
 def entanglement_fidelity(pauli_lio0: np.ndarray, pauli_lio1: np.ndarray) -> float:
-    """Returns the entanglement fidelity (F_e) between two channels, E and F, represented as Pauli
+    r"""Returns the entanglement fidelity (F_e) between two channels, E and F, represented as Pauli
     Liouville matrix. The expression is
 
             F_e(E,F) = Tr[E^\dagger F] / (dim ** 2),
