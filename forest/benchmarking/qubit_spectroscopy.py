@@ -12,7 +12,7 @@ from pyquil.paulis import PauliTerm
 
 from forest.benchmarking.utils import transform_pauli_moments_to_bit
 from forest.benchmarking.analysis.fitting import fit_decay_constant_param_decay, \
-    fit_decaying_sinusoid, fit_shifted_cosine
+    fit_decaying_cosine, fit_shifted_cosine
 from forest.benchmarking.operator_estimation import ObservablesExperiment, ExperimentResult, \
     ExperimentSetting, estimate_observables, minusZ, plusZ, plusY
 
@@ -257,7 +257,7 @@ def fit_t2_results(times: Sequence[float], y_expectations: Sequence[float],
         'decay_constant'
     """
     if param_guesses is None:  # make some standard reasonable guess
-        param_guesses = (.5, 10, 0.5, 0., detuning / MHZ)
+        param_guesses = (.5, 10, 0.0, 0.5, detuning / MHZ)
 
     y_expectations = np.asarray(y_expectations)
     if y_std_errs is not None:
@@ -270,10 +270,10 @@ def fit_t2_results(times: Sequence[float], y_expectations: Sequence[float],
 
         weights = 1 / non_zero_err
     else:
-        probability_one, _ = transform_pauli_moments_to_bit(np.asarray(-1 * y_expectations), 0)
+        probability_one, _ = transform_pauli_moments_to_bit(np.asarray(y_expectations), 0)
         weights = None
 
-    return fit_decaying_sinusoid(np.asarray(times), probability_one, weights, param_guesses)
+    return fit_decaying_cosine(np.asarray(times), probability_one, weights, param_guesses)
 
 
 # ==================================================================================================

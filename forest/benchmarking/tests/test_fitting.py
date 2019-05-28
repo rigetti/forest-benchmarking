@@ -1,7 +1,7 @@
 import numpy as np
 
 from forest.benchmarking.analysis.fitting import fit_shifted_cosine, \
-    fit_decay_constant_param_decay, fit_decaying_sinusoid
+    fit_decay_constant_param_decay, fit_decaying_cosine
 
 
 def test_shifted_cosine():
@@ -40,7 +40,7 @@ def test_decaying_sinusoid():
     data = np.asarray([0.5 * np.exp(-1 * t / mock_t2['T2']) *
                        np.sin(mock_t2['qubit_detuning'] * t) + 0.5 for t in times])
 
-    fit = fit_decaying_sinusoid(times, data)
+    fit = fit_decaying_cosine(times, data)
 
     assert np.isclose(fit.params['decay_constant'], mock_t2['T2'])
     assert np.isclose(fit.params['frequency'], mock_t2['qubit_detuning'])
