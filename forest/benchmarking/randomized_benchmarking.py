@@ -284,7 +284,8 @@ def run_unitarity_measurement(df: DataFrame, qc: QuantumComputer, num_trials: in
         for qubits in subgraph:
             state_prep = prog
             tomo_exp = generate_state_tomography_experiment(state_prep, qubits=qubits)
-            _rs = list(measure_observables(qc, tomo_exp, num_trials))
+            _rs = list(measure_observables(qc, tomo_exp, num_trials, symmetrize_readout=None,
+                                           calibrate_readout=None))
             # Inelegant shim from state tomo refactor. To clean up!
             expectations=[r.expectation for r in _rs[1:]]
             variances=[r.std_err ** 2 for r in _rs[1:]]
