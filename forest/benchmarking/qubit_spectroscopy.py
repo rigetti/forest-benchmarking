@@ -5,7 +5,7 @@ from numpy import pi
 from lmfit.model import ModelResult
 
 from pyquil.api import QuantumComputer
-from pyquil.gates import RX, RZ, CZ, MEASURE
+from pyquil.gates import RX, RY, RZ, CZ, MEASURE
 from pyquil.quil import Program
 from pyquil.quilbase import Pragma
 from pyquil.paulis import PauliTerm
@@ -14,14 +14,12 @@ from forest.benchmarking.utils import transform_pauli_moments_to_bit
 from forest.benchmarking.analysis.fitting import fit_decay_constant_param_decay, \
     fit_decaying_sinusoid, fit_shifted_cosine
 from forest.benchmarking.operator_estimation import ObservablesExperiment, ExperimentResult, \
-    ExperimentSetting, estimate_observables, zeros_state, minusZ, plusZ, minusY
+    ExperimentSetting, estimate_observables, minusZ, plusZ, plusY
 
 MICROSECOND = 1e-6  # A microsecond (us) is an SI unit of time
 
 # A Hertz (Hz) is a derived unit of frequency in SI Units; 1 Hz is defined as one cycle per second.
-KHZ = 1e3  # kHz
-MHZ = 1e6  # MHz
-GHZ = 1e9  # GHz
+MHZ = 1e6  # MHz, megahertz
 
 
 def acquire_qubit_spectroscopy_data(qc: QuantumComputer,
@@ -30,8 +28,8 @@ def acquire_qubit_spectroscopy_data(qc: QuantumComputer,
     """
 
     :param qc:
-    :param experiments:
-    :param num_shots:
+    :param experiments: the ObservablesExperiments to run on the given qc
+    :param num_shots: the number of shots to collect for each experiment.
     :return:
     """
     results = []
@@ -70,16 +68,18 @@ def get_stats_by_qubit(expt_results: List[List[ExperimentResult]]) \
 # ==================================================================================================
 
 
-def generate_t1_experiments(qubits: Sequence[int], times: Sequence[float],
-                            make_simultaneous = False) -> List[ObservablesExperiment]:
+def generate_t1_experiments(qubits: Sequence[int], times: Sequence[float]) \
+        -> List[ObservablesExperiment]:
     """
     Return a ObservablesExperiment containing programs which constitute a t1 experiment to
-    measure the decay time from the excited state to ground state.
+    measure the decay time from the excited state to ground state for each qubit in qubits.
+
+    For each delay time in times a single program will be generated in which all qubits are
+    initialized to the excited state (|1>) and simultaneously measured after the given delay.
 
     :param qubits: list of qubits to measure.
-    :param times: The times at which to measure, given in seconds.
-    :param make_simultaneous: generate len(times) simultaneous experiments, each consisting of a
-        program which measures all qubits.
+    :param times: The times at which to measure, given in seconds. Each time is rounded to the
+        nearest .1 microseconds.
     :return: ObservablesExperiments which will measure the decay of each qubit after
         initialization to the 1 state and delay of t seconds for each t in times.
     """
@@ -92,10 +92,7 @@ def generate_t1_experiments(qubits: Sequence[int], times: Sequence[float],
             program += Pragma('DELAY', [q], str(t))
             settings.append(ExperimentSetting(minusZ(q), PauliTerm('Z', q)))
 
-        if make_simultaneous:
-            settings = [settings]
-
-        expts.append(ObservablesExperiment(settings, program))
+        expts.append(ObservablesExperiment([settings], program))
 
     return expts
 
@@ -106,8 +103,8 @@ def acquire_t1_data(qc: QuantumComputer, experiments: Sequence[ObservablesExperi
     Acquire data to measure the T1 decay time for each of the input experiments.
 
     :param qc: The QuantumComputer to run the experiment on
-    :param experiments:
-    :param num_shots
+    :param experiments: the ObservablesExperiments to run on the given qc
+    :param num_shots: the number of shots to collect for each experiment.
     :return:
     """
     return acquire_qubit_spectroscopy_data(qc, experiments, num_shots)
@@ -154,18 +151,22 @@ def fit_t1_results(times: Sequence[float], z_expectations: Sequence[float],
 #   T2 star and T2 echo functions
 # ==================================================================================================
 def generate_t2_star_experiments(qubits: Sequence[int], times: Sequence[float],
-                                 detuning: float = 5e6, make_simultaneous = False) \
-        -> List[ObservablesExperiment]:
+                                 detuning: float = 5e6) -> List[ObservablesExperiment]:
     """
     Return ObservablesExperiments containing programs which constitute a T2 star experiment to
-    measure the T2 star coherence decay time.
+    measure the T2 star coherence decay time for each qubit in qubits.
+
+    For each delay time in times a single program will be generated in which all qubits are
+    initialized to the plusY state and simultaneously measured along the Y axis after the given
+    delay and Z rotation. If the qubit frequency is perfectly calibrated then the Y expectation
+    will oscillate at the given detuning frequency as the qubit is rotated about the Z axis (with
+    respect to the lab frame, which by hypothesis matches the natural qubit frame).
 
     :param qubits: list of qubits to measure.
-    :param times: the times at which to measure, given in seconds.
+    :param times: the times at which to measure, given in seconds. Each time is rounded to the
+        nearest .1 microseconds.
     :param detuning: The additional detuning frequency about the z axis in Hz.
-    :param make_simultaneous: generate len(times) simultaneous experiments, each consisting of a
-        program which measures all qubits.
-    :return:
+    :return: ObservablesExperiments which can be run to acquire an estimate of T2*
     """
     expts = []
     for t in times:
@@ -175,45 +176,46 @@ def generate_t2_star_experiments(qubits: Sequence[int], times: Sequence[float],
         for q in qubits:
             program += Pragma('DELAY', [q], str(t))
             program += RZ(2 * pi * t * detuning, q)
-            settings.append(ExperimentSetting(minusY(q), PauliTerm('Y', q)))
+            settings.append(ExperimentSetting(plusY(q), PauliTerm('Y', q)))
 
-        if make_simultaneous:
-            settings = [settings]
-
-        expts.append(ObservablesExperiment(settings, program))
+        expts.append(ObservablesExperiment([settings], program))
 
     return expts
 
 
 def generate_t2_echo_experiments(qubits: Sequence[int], times: Sequence[float],
-                                 detuning: float = 5e6, make_simultaneous = False) \
-        -> List[ObservablesExperiment]:
+                                 detuning: float = 5e6) -> List[ObservablesExperiment]:
     """
     Return ObservablesExperiments containing programs which constitute a T2 echo experiment to
     measure the T2 echo coherence decay time.
 
+    For each delay time in times a single program will be generated in which all qubits are
+    initialized to the plusY state and later simultaneously measured along the Y axis. Unlike in
+    the t2_star experiment above there is a 'echo' applied in the middle of the delay in which
+    the qubit is rotated by pi radians around the X axis.
+
+    As for t2_star, if the qubit frequency is perfectly calibrated then the Y expectation will
+    oscillate at the given detuning frequency as the qubit is rotated about the Z axis (with
+    respect to the lab frame, which by hypothesis matches the natural qubit frame).
+
     :param qubits: list of qubits to measure.
-    :param times: the times at which to measure, given in seconds.
+    :param times: the times at which to measure, given in seconds. Each time is rounded to the
+        nearest .1 microseconds.
     :param detuning: The additional detuning frequency about the z axis.
-    :param make_simultaneous: generate len(times) simultaneous experiments, each consisting of a
-        program which measures all qubits.
     :return:
     """
     expts = []
     for t in times:
-        half_time = round(t/2, 7) # enforce 100ns boundaries
+        half_time = round(t/2, 7)  # enforce 100ns boundaries
         program = Program()
         settings = []
         for q in qubits:
             half_delay = Pragma('DELAY', [q], str(half_time))
             # echo
-            program += Program([half_delay, RX(pi / 2, q), RX(pi / 2, q), half_delay])
+            program += [half_delay, RY(pi, q), half_delay]
             # apply detuning
             program += RZ(2 * pi * t * detuning, q)
-            settings.append(ExperimentSetting(minusY(q), PauliTerm('Y', q)))
-
-        if make_simultaneous:
-            settings = [settings]
+            settings.append(ExperimentSetting(plusY(q), PauliTerm('Y', q)))
 
         expts.append(ObservablesExperiment(settings, program))
 
@@ -226,8 +228,8 @@ def acquire_t2_data(qc: QuantumComputer, experiments: Sequence[ObservablesExperi
     Execute experiments to measure the T2 time of one or more qubits.
 
     :param qc: The QuantumComputer to run the experiment on
-    :param experiments:
-    :param num_shots
+    :param experiments: the ObservablesExperiments to run on the given qc
+    :param num_shots: the number of shots to collect for each experiment.
     :return:
     """
     return acquire_qubit_spectroscopy_data(qc, experiments, num_shots)
@@ -259,7 +261,7 @@ def fit_t2_results(times: Sequence[float], y_expectations: Sequence[float],
 
     y_expectations = np.asarray(y_expectations)
     if y_std_errs is not None:
-        probability_one, var = transform_pauli_moments_to_bit(np.asarray(-1 * y_expectations),
+        probability_one, var = transform_pauli_moments_to_bit(np.asarray(y_expectations),
                                                               np.asarray(y_std_errs)**2)
         err = np.sqrt(var)
         min_non_zero = min([v for v in err if v > 0])
@@ -313,8 +315,8 @@ def acquire_rabi_data(qc: QuantumComputer, experiments: Sequence[ObservablesExpe
     Execute Rabi experiments.
 
     :param qc: The QuantumComputer to run the experiment on
-    :param experiments:
-    :param num_shots
+    :param experiments: the ObservablesExperiments to run on the given qc
+    :param num_shots: the number of shots to collect for each experiment.
     :return:
     """
     return acquire_qubit_spectroscopy_data(qc, experiments, num_shots)
@@ -401,8 +403,8 @@ def acquire_cz_phase_ramsey_data(qc: QuantumComputer, experiments: Sequence[Obse
     Execute experiments to measure the RZ incurred as a result of a CZ gate.
 
     :param qc: The QuantumComputer to run the experiment on
-    :param experiments:
-    :param num_shots
+    :param experiments: the ObservablesExperiments to run on the given qc
+    :param num_shots: the number of shots to collect for each experiment.
     :return:
     """
     return acquire_qubit_spectroscopy_data(qc, experiments, num_shots)
