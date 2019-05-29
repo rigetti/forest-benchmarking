@@ -15,39 +15,56 @@ from forest.benchmarking.tomography import _state_tomo_settings
 from forest.benchmarking.utils import all_pauli_z_terms
 from forest.benchmarking.analysis.fitting import fit_base_param_decay
 from forest.benchmarking.operator_estimation import ExperimentSetting, ExperimentResult, \
-    zeros_state, estimate_observables, ObservablesExperiment, group_experiment_settings
+    zeros_state, estimate_observables, ObservablesExperiment, group_settings
 
 
-def get_results_by_qubit_group(qubits: Sequence[Sequence[int]],
-                               parallel_results: List[ExperimentResult]) \
+def get_results_by_qubit_group(qubit_groups: Sequence[Sequence[int]],
+                               parallel_results: Iterable[ExperimentResult]) \
         -> Dict[Tuple[int], List[ExperimentResult]]:
     """
+    Organizes ExperimentResults by separate qubit groups when the input results are returned from
+    running a particular ObservablesExperiment which is part of a simultaneous RB experiment.
 
-    :param qubits:
-    :param parallel_results:
-    :return:
+    :param qubit_groups: disjoint groups of qubits for which we have simultaneous RB results.
+    :param parallel_results: the results from running an ObservablesExperiment as part of a
+        simultaneous RB experiment
+    :return: a dictionary whose keys are individual groups of qubits (as tuples) with
+        corresponding value which is the list of experiment results which measure some subset of
+        that qubit group. The results are output in the order they are input.
     """
-    qubits = [tuple(group) for group in qubits]
-    results_by_qubit_group = {group: [] for group in qubits}
+    qubit_groups = [tuple(group) for group in qubit_groups]
+    results_by_qubit_group = {group: [] for group in qubit_groups}
     for res in parallel_results:
         res_qs = res.setting.observable.get_qubits()
 
-        for group in qubits:
+        for group in qubit_groups:
             if set(res_qs).issubset(set(group)):
                 results_by_qubit_group[group].append(res)
 
     return results_by_qubit_group
 
 
-def get_stats_by_qubit_group(qubits: Sequence[Sequence[int]],
-                               expt_results: List[List[ExperimentResult]]) \
+def get_stats_by_qubit_group(qubit_groups: Sequence[Sequence[int]],
+                               expt_results: Iterable[Iterable[ExperimentResult]]) \
         -> Dict[Tuple[int], Dict[str, List[float]]]:
-    qubits = [tuple(group) for group in qubits]
-    stats_by_qubit_group = {group: {'expectation': [], 'std_err': []} for group in qubits}
+    """
+    Organize the results of a simultaneous RB experiment into lists of expectations and std_errs
+    for each sequence; these lists are stored in a dict for each qubit group.
+
+    :param qubit_groups: disjoint groups of qubits for which we have simultaneous RB results.
+    :param expt_results: ExperimentResults for each ObservablesExperiment run as part of a
+        RB experiment
+    :return: a dict whose keys are qubit groups (as tuples) with corresponding value which is an
+        inner dict with 'expectation' and 'std_err' estimates for each observable
+        measured on each sequence.
+    """
+    qubits = [tuple(group) for group in qubit_groups]
+    stats_by_qubit_group = {group: {'expectation': [], 'std_err': []} for group in qubit_groups}
     for results in expt_results:
         res_by_qubit_group = get_results_by_qubit_group(qubits, results)
 
         for group in qubits:
+            # pull out the expectation and std_err from each result
             stats_by_qubit_group[group]['expectation'].append([res.expectation for res in
                                                                res_by_qubit_group[group]])
             stats_by_qubit_group[group]['std_err'].append([res.std_err for res in
@@ -131,17 +148,127 @@ def generate_rb_sequence(bm: BenchmarkConnection, qubits: Sequence[int], depth: 
     return programs
 
 
-def generate_rb_experiments(bm: BenchmarkConnection, qubits: Sequence[Sequence[int]],
+def generate_rb_experiment_sequences(bm: BenchmarkConnection, qubits: Sequence[int],
+                                     depths: Sequence[int], num_sequences: int,
+                                     interleaved_gate: Program = None, random_seed: int = None,
+                                     use_self_inv_seqs = True) \
+        -> List[List[Program]]:
+    """
+    Generate the sequences of Clifford gates necessary to run a randomized benchmarking
+    experiment for a single (group of) qubit(s).
+
+    A Clifford is given as a compiled sequence of native gates in a Program. The compilation is
+    done by the BenchmarkConnection object. A sequence at a depth d is thus provided as a list of
+    d programs each representing a random Clifford.
+
+    Calling this method separately on several different groups of qubits with the same depths and
+    num_sequences will yield separate lists of sequences which can be passed to
+    group_sequences_into_parallel_experiments in order to generate a 'simultaneous' RB experiment.
+
+    :param bm: object returned from get_benchmarker() used to generate clifford sequences
+    :param qubits: the qubits for a single isolated rb experiment
+    :param depths: the depths of the sequences in the experiment
+    :param num_sequences: the number of sequences at each depth
+    :param interleaved_gate: optional gate to interleave throughout the sequence, see [IRB]
+    :param random_seed: Random seed passed to bm to seed sequence generation.
+    :param use_self_inv_seqs: by default True, the last Clifford of the sequence will be the
+        inverse of the composition of the previous Cliffords in the sequence; the entire sequence
+        is thus the identity operation in the ideal case. If set to False then this last gate is
+        simply omitted but the total number of gates is preserved.
+    :return: a list of all of the num_sequences * len(depths) many different Clifford sequences.
+    """
+    sequences = []  # we will have len(depths)*num_sequences many sequences
+    for depth in depths:
+        for idx in range(num_sequences):
+
+            if random_seed is not None:  # need to change the base seed for each sequence generated
+                random_seed += 1
+
+            if use_self_inv_seqs:
+                # a sequence is a list of Cliffords, with last Clifford inverting the sequence
+                sequence = generate_rb_sequence(bm, qubits, depth, interleaved_gate, random_seed)
+            else: # this might be desired for unitarity experiments
+                # provide larger depth and strip inverse from end of each sequence
+                sequence = generate_rb_sequence(bm, qubits, depth + 1, random_seed=random_seed)[:-1]
+
+            sequences.append(sequence)
+
+    return sequences
+
+
+def group_sequences_into_parallel_experiments(parallel_expts_seqs: Sequence[List[List[Program]]],
+                                              qubit_groups: Sequence[Sequence[int]],
+                                              is_unitarity_expt: bool = False) \
+        -> List[ObservablesExperiment]:
+    """
+    Consolidates randomized benchmarking sequences on separate groups of qubits into a flat list
+    of ObservablesExperiments which merge parallel sets of distinct sequences.
+
+    Each returned ObservablesExperiment constitutes a single 'parallel RB sequence' where all of
+    the qubits are acted upon and measured. Running all of these ObservablesExperiments in series
+    constitutes a 'parallel RB' experiment from which you can determine a decay constant for each
+    group of qubits. Note that there is an important physical distinction (e.g. due to
+    cross-talk) between running separate RB experiments on different groups of qubits and running
+    a 'parallel RB' experiment on the collection of those groups. For this reason one should not
+    expect in general that the rb decay for the a particular group of qubits is comparable between
+    the individual and parallel modes of rb experiment.
+
+    :param parallel_expts_seqs: the outer Sequence is indexed by disjoint groups of qubits;
+        Clifford sequences from each of these different groups (which should be of the same depth)
+        will be merged together into a single program. The intended use-case is that each
+        List[List[program]] sequence of Cliffords is an output of generate_rb_experiment_sequences
+        for disjoint groups of qubits but with identical list of depths and num_sequences (see
+        generate_rb_experiments for example). If sequences of different depth are merged into
+        a Program then some qubits may be sitting idle while the sequences of greater depth
+        continue running. Measurement occurs only when all sequences have terminated.
+    :param qubit_groups: The partition of the qubits into groups for each of which you would like to
+        estimate an rb decay. Typically this grouping of qubits should match the qubits that are
+        acted on by each sequence in the corresponding List[List[Program]] of the input
+        parallel_expts_seqs.
+    :param is_unitarity_expt: True if the desired experiment is a unitarity experiment, in which
+        case additional settings are required to estimate the purity of the sequence output.
+    :return: a list of ObservablesExperiments constituting a parallel rb experiment.
+    """
+    expts = []
+    for parallel_sequence_group in zip(*parallel_expts_seqs):
+        program = merge_programs(merge_sequences(parallel_sequence_group))
+
+        if is_unitarity_expt:
+            settings = [sett for group in qubit_groups for sett in _state_tomo_settings(group)]
+            expt = group_settings(ObservablesExperiment(settings, program))
+        else:
+            # measure observables of products of I and Z on qubits in the group, excluding all I
+            settings = [ExperimentSetting(zeros_state(group), op)
+                    for group in qubit_groups for op in all_pauli_z_terms(group)]
+            expt = ObservablesExperiment([settings], program)
+        expts.append(expt)
+    return expts
+
+
+def generate_rb_experiments(bm: BenchmarkConnection, qubit_groups: Sequence[Sequence[int]],
                             depths: Sequence[int], num_sequences: int,
                             interleaved_gate: Program = None, random_seed: int = None) \
-        -> Tuple[List[ObservablesExperiment], List[List[List[Program]]]]:
+        -> List[ObservablesExperiment]:
     """
-    Creates all of the programs and organizes all information necessary for a RB or IRB
-    experiment on the given qubits.
+    Creates list of ObservablesExperiments which, when run in series, constitute a
+    simultaneous randomized benchmarking experiment on the disjoint qubit_groups.
 
-    The StratifiedExperiment returned can be passed to acquire_rb_data or acquire_stratified_data
-    for data collection on a Qauntum Computer. To run simultaneous experiments, create multiple
-    RB experiments and pass all of them to one of these methods with the appropriate flags set.
+    The number of ObservablesExperiments returned is equal to the product of num_sequences and
+    len(depths). A particular ObservablesExperiment consists of
+        - a program, which is a random sequence of Clifford gates compiled down to native gates.
+            If len(qubit_groups) > 1 then the program is actually the sum of len(qubit_groups) many
+            separate random sequences; each sequence acts only on the group of qubits in a
+            particular element of the input 'qubit_groups' list.
+        - settings; for each group within qubit_groups there will be settings which dictate that
+            each qubit in that group is initialized to the |0> state and that some observable
+            which is a tensor product of Z and I factors is measured for that group. All of these
+            settings are initialized within the ObservablesExperiment to be run in parallel.
+
+    Specifying a interleaved_gate will generate a Clifford sequence which alternates depth many
+    times between a random Clifford and the specified gate. The gate itself should be a Program
+    written as a sequence of native gates implementing a Clifford element. The sequence will
+    still contain depth many random Cliffords (excluding the interleaved gate) including the
+    final inverting Clifford.
 
     For standard RB see
     [RB] Scalable and Robust Randomized Benchmarking of Quantum Processes
@@ -150,49 +277,45 @@ def generate_rb_experiments(bm: BenchmarkConnection, qubits: Sequence[Sequence[i
          https://dx.doi.org/10.1103/PhysRevLett.106.180504
          https://arxiv.org/abs/1009.3639
 
+    For interleaved RB see
+    [IRB] Efficient measurement of quantum gate error by interleaved randomized benchmarking
+        Magesan et al.,
+        Phys. Rev. Lett. 109, 080505 (2012)
+        https://dx.doi.org/10.1103/PhysRevLett.109.080505
+        https://arxiv.org/abs/1203.4550
+
     :param bm: object returned from get_benchmarker() used to generate clifford sequences
-    :param qubits: the qubits for a single isolated rb experiment (for simultaneous rb,
-        create multiple experiments and run them simultaneously)
+    :param qubit_groups: the disjoint groups qubits for which random sequences will be
+        generated and merged into a series of programs each of which runs groups of disjoint
+        sequences 'simultaneously'.
     :param depths: the depths of the sequences in the experiment
     :param num_sequences: the number of sequences at each depth
     :param interleaved_gate: optional gate to interleave throughout the sequence, see [IRB]
     :param random_seed: Random seed passed to bm to seed sequence generation.
-    :return: a StratifiedExperiment with all programs and information necessary for data
-        collection in a RB or IRB experiment
+    :return: a list of ObservablesExperiments which constitute a simultaneous RB or IRB experiment
     """
-    expts = []  # we will have len(depths)*num_sequences many experiments
-    sequences = []
-    for depth in depths:
-        for idx in range(num_sequences):
-            parallel_sequences = []
-            parallel_settings = []
-            for group in qubits:
-                if random_seed is not None:  # need to change the base seed for each sequence generated
-                    random_seed += 1
+    parallel_sequences = []
+    for group in qubit_groups:
+        if random_seed is not None:
+            # need to change the base seed for each set of qubits
+            random_seed += len(depths) * num_sequences
 
-                # a sequence is just a list of Cliffords, with last Clifford inverting the sequence
-                sequence = generate_rb_sequence(bm, group, depth, interleaved_gate, random_seed)
-                parallel_sequences.append(sequence)
+        parallel_sequences.append(generate_rb_experiment_sequences(bm, group, depths,
+                                                                   num_sequences,
+                                                                   interleaved_gate, random_seed))
 
-                settings = [ExperimentSetting(zeros_state(group), op)
-                            for op in all_pauli_z_terms(group)]
-                parallel_settings += settings
-
-            program = merge_programs(merge_sequences(parallel_sequences))
-            expts.append(ObservablesExperiment([parallel_settings], program))
-            sequences.append(parallel_sequences)
-
-    return expts, sequences
+    return group_sequences_into_parallel_experiments(parallel_sequences, qubit_groups)
 
 
-def acquire_rb_data(qc: QuantumComputer, experiments: Sequence[ObservablesExperiment],
+def acquire_rb_data(qc: QuantumComputer, experiments: Iterable[ObservablesExperiment],
                     num_shots: int = 500) -> List[List[ExperimentResult]]:
     """
+    Runs each ObservablesExperiment and returns each group of resulting ExperimentResults
 
     :param qc: a quantum computer, e.g. QVM or QPU, that runs the experiments
     :param experiments: a list of Observables experiments
-    :param num_shots: the number of shots to run each group of simultaneously ran ExperimentSettings
-    :return:
+    :param num_shots: the number of shots to run each group of simultaneous ExperimentSettings
+    :return: a list of ExperimentResults for each ObservablesExperiment
     """
     results = []
     for expt in experiments:
@@ -204,8 +327,8 @@ def fit_rb_results(depths: Sequence[int], z_expectations: Sequence[Sequence[floa
                    z_std_errs: Sequence[Sequence[float]], param_guesses: tuple = None) \
         -> ModelResult:
     """
-    Wrapper for fitting the results of RB or IRB; simply extracts key parameters
-    and passes on to the standard fit.
+    Fits the results of a standard RB or IRB experiment by converting expectations into survival
+    probabilities (probability of measuring zero) and passing these on to the standard fit.
 
     The estimate for the rb decay can be found in the returned fit.params['decay']
 
@@ -250,16 +373,20 @@ def fit_rb_results(depths: Sequence[int], z_expectations: Sequence[Sequence[floa
     return fit_base_param_decay(np.asarray(depths), np.asarray(survivals), weights, param_guesses)
 
 
-def generate_unitarity_experiments(bm: BenchmarkConnection, qubits: Sequence[Sequence[int]],
+def generate_unitarity_experiments(bm: BenchmarkConnection, qubit_groups: Sequence[Sequence[int]],
                                   depths: Sequence[int], num_sequences: int,
-                                  use_self_inv_seqs = False, random_seed: int = None) \
-        -> Tuple[List[ObservablesExperiment], List[List[List[Program]]]]:
+                                  random_seed: int = None, use_self_inv_seqs = False) \
+        -> List[ObservablesExperiment]:
     """
-    Creates all of the programs and organizes all information necessary for a unitarity
-    experiment on the given qubits.
+    Creates list of ObservablesExperiments which, when run in series, constitute a
+    simultaneous unitarity experiment on the disjoint qubit_groups.
 
-    Similarly to generate_rb_experiment, the StratifiedExperiment returned can be passed to
-    acquire_unitarity_data or acquire_stratified_data for data collection on a Qauntum Computer.
+    Similar to a standard RB experiment, save for two changes:
+        1) the sequence of Cliffords need not be self-inverting
+        2) currently the purity of the output state is estimated by measuring each of the
+            observables in the Pauli basis on the given qubits. As such not all Observables can
+            be estimate simultaneously and we use the simultaneous grouping offered by
+            operator_estimation
 
     Unitarity algorithm is due to
     [ECN]  Estimating the Coherence of Noise
@@ -269,42 +396,31 @@ def generate_unitarity_experiments(bm: BenchmarkConnection, qubits: Sequence[Seq
            https://arxiv.org/abs/1503.07865
 
     :param bm: object returned from get_benchmarker() used to generate clifford sequences
-    :param qubits: the qubits for a single isolated rb experiment (for simultaneous rb,
-        create multiple experiments and run them simultaneously)
+    :param qubit_groups: the disjoint groups qubits for which random sequences will be
+        generated and merged into a series of programs each of which runs groups of disjoint
+        sequences 'simultaneously'.
     :param depths: the depths of the sequences in the experiment
     :param num_sequences: the number of sequences at each depth
-    :param use_self_inv_seqs: if True, the last inverting gate of the sequence will be left off.
-        This may allow the sequence to also be interpreted as a regular RB sequence.
     :param random_seed: Random seed passed to bm to seed sequence generation.
-    :return: a StratifiedExperiment with all programs and information necessary for data
-        collection in a unitarity experiment.
+    :param use_self_inv_seqs: by default False, unlike with a typical RB sequence the last
+        Clifford does not invert the sequence. If True, the subset of Z*I observable experiment
+        results can equally well be analyzed as a unitarity or RB experiment. This argument does
+        not affect the total number of Cliffords in the sequence.
+    :return: a list of ObservablesExperiments which constitute a simultaneous unitarity experiment
     """
-    expts = []  # we will have len(depths)*num_sequences many experiments
-    sequences = []
-    for depth in depths:
-        for idx in range(num_sequences):
-            parallel_sequences = []
-            parallel_seq_settings = []
-            for group in qubits:
-                if random_seed is not None:  # need to change the base seed for each sequence generated
-                    random_seed += 1
+    parallel_sequences = []
+    for group in qubit_groups:
+        if random_seed is not None:
+            # need to change the base seed for each set of qubits
+            random_seed += len(depths) * num_sequences
 
-                if use_self_inv_seqs:
-                    sequence = generate_rb_sequence(bm, group, depth, random_seed=random_seed)
-                else:  # provide larger depth and strip inverse from end of each sequence
-                    sequence = generate_rb_sequence(bm, group, depth + 1,
-                                                    random_seed=random_seed)[:-1]
+        parallel_sequences.append(generate_rb_experiment_sequences(bm, group, depths,
+                                                                   num_sequences,
+                                                                   random_seed=random_seed,
+                                                                   use_self_inv_seqs = use_self_inv_seqs))
 
-                parallel_sequences.append(sequence)
-                parallel_seq_settings += list(_state_tomo_settings(group))
-
-            program = merge_programs(merge_sequences(parallel_sequences))
-            expt = ObservablesExperiment(parallel_seq_settings, program)
-            expt = group_experiment_settings(expt)
-            expts.append(expt)
-            sequences.append(parallel_sequences)
-
-    return expts, sequences
+    return group_sequences_into_parallel_experiments(parallel_sequences, qubit_groups,
+                                                     is_unitarity_expt = True)
 
 
 def estimate_purity(dim: int, op_expect: np.ndarray, renorm: bool=True):
@@ -353,8 +469,8 @@ def fit_unitarity_results(depths: Sequence[int], expectations: Sequence[Sequence
                    std_errs: Sequence[Sequence[float]], param_guesses: tuple = None) \
         -> ModelResult:
     """
-    Wrapper for fitting the results of a unitarity experiment; calculates shifted purities
-    and passes these on to the standard fit.
+    Fits the results of a unitarity experiment by first calculating shifted purities and
+    subsequently passing these on to the standard decay fit.
 
     The estimate for the unitarity (the decay) can be found in the returned fit.params['decay']
 
@@ -447,12 +563,7 @@ def interleaved_gate_fidelity_bounds(irb_decay, rb_decay, dim, unitarity = None)
     Use observed rb_decay to place a bound on fidelity of a particular gate with given interleaved rb decay.
     Optionally, use unitarity measurement result to provide improved bounds on the interleaved gate's fidelity.
 
-    Bounds due to
-    [IRB] Efficient measurement of quantum gate error by interleaved randomized benchmarking
-          Magesan et al.,
-          Phys. Rev. Lett. 109, 080505 (2012)
-          https://dx.doi.org/10.1103/PhysRevLett.109.080505
-          https://arxiv.org/abs/1203.4550
+    Bounds due to [IRB]
 
     Improved bounds using unitarity due to
     [U+IRB]  Efficiently characterizing the total error in quantum circuits
