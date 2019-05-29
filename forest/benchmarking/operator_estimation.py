@@ -158,12 +158,12 @@ def zeros_state(qubits: Iterable[int]):
 @dataclass(frozen=True, init=False)
 class ExperimentSetting:
     """
-    Input and output settings for a tomography-like experiment.
-    Many near-term quantum algorithms take the following form:
+    Input and output settings for an ObservablesExperiment.
+    Many near-term quantum algorithms and QCVV protocols take the following form:
      - Start in a pauli state
-     - Prepare some ansatz
-     - Measure it w.r.t. pauli operators
-    Where we typically use a large number of (start, measure) pairs but keep the ansatz preparation
+     - Do some interesting quantum circuit (e.g. prepare some ansatz)
+     - Measure the output of the circuit w.r.t. expectations of Pauli observables.
+    Where we typically use a large number of (start, measure) pairs but keep the quantum circuit
     program consistent. This class represents the (start, measure) pairs. Typically a large
     number of these :py:class:`ExperimentSetting` objects will be created and grouped into
     a :py:class:`ObservablesExperiment`.
@@ -172,38 +172,9 @@ class ExperimentSetting:
     observable: PauliTerm
 
     def __init__(self, in_state: TensorProductState, observable: PauliTerm):
-        # For backwards compatibility, handle in_state specified by PauliTerm.
-        if isinstance(in_state, PauliTerm):
-            warnings.warn("Please specify in_state as a TensorProductState",
-                          DeprecationWarning, stacklevel=2)
-
-            if is_identity(in_state):
-                in_state = TensorProductState()
-            else:
-                in_state = TensorProductState([
-                    _OneQState(label=pauli_label, index=0, qubit=qubit)
-                    for qubit, pauli_label in in_state._ops.items()
-                ])
 
         object.__setattr__(self, 'in_state', in_state)
         object.__setattr__(self, 'observable', observable)
-
-    @property
-    def in_operator(self):
-        warnings.warn("ExperimentSetting.in_operator is deprecated in favor of in_state",
-                      stacklevel=2)
-
-        # Backwards compat
-        pt = sI()
-        for oneq_state in self.in_state.states:
-            if oneq_state.label not in ['X', 'Y', 'Z']:
-                raise ValueError(f"Can't shim {oneq_state.label} into a pauli term. Use in_state.")
-            if oneq_state.index != 0:
-                raise ValueError(f"Can't shim {oneq_state} into a pauli term. Use in_state.")
-
-            pt *= PauliTerm(op=oneq_state.label, index=oneq_state.qubit)
-
-        return pt
 
     def __str__(self):
         return f'{self.in_state}→{self.observable.compact_str()}'
@@ -240,22 +211,21 @@ def _abbrev_program(program: Program, max_len=10):
 
 class ObservablesExperiment:
     """
-    A tomography-like experiment.
     Many near-term quantum algorithms involve:
-     - some limited state preparation
+     - some limited state preparation, e.g. prepare a Pauli eigenstate
      - enacting a quantum process (like in tomography) or preparing a variational ansatz state
-       (like in VQE)
-     - measuring observables of the state.
-    Where we typically use a large number of (state_prep, measure) pairs but keep the ansatz
-    program consistent. This class stores the ansatz program as a :py:class:`~pyquil.Program`
-    and maintains a list of :py:class:`ExperimentSetting` objects which each represent a
-    (state_prep, measure) pair.
+       (like in VQE) with some circuit.
+     - Measure the output of the circuit w.r.t. expectations of Pauli observables
+    Where we typically use a large number of (state_prep, measure_observable) pairs but keep the
+    quantum circuit program consistent. This class stores the circuit program as a
+    :py:class:`~pyquil.Program` and maintains a list of :py:class:`ExperimentSetting` objects
+    which each represent a (state_prep, measure_observable) pair.
     Settings diagonalized by a shared tensor product basis (TPB) can (optionally) be estimated
     simultaneously. Therefore, this class is backed by a list of list of ExperimentSettings.
     Settings sharing an inner list will be estimated simultaneously. If you don't want this,
     provide a list of length-1-lists. As a convenience, if you pass a 1D list to the constructor
     will expand it to a list of length-1-lists.
-    This class will not group settings for you. Please see :py:func:`group_experiments` for
+    This class will not group settings for you. Please see :py:func:`group_settings` for
     a function that will automatically process a ObservablesExperiment to group Experiments sharing
     a TPB.
     """
@@ -474,60 +444,63 @@ def _local_pauli_eig_meas(op, idx):
     raise ValueError(f'Unknown operation {op}')
 
 
-def construct_tpb_graph(experiments: ObservablesExperiment):
+def construct_tpb_graph(obs_expt: ObservablesExperiment):
     """
-    Construct a graph where an edge signifies two experiments are diagonal in a TPB.
+    Construct a graph where an edge signifies two settings are diagonal in a TPB.
     """
     g = nx.Graph()
-    for expt in experiments:
-        assert len(expt) == 1, 'already grouped?'
-        expt = expt[0]
+    for groups in obs_expt:
+        assert len(groups) == 1, 'already grouped?'
+        setting = groups[0]
 
-        if expt not in g:
-            g.add_node(expt, count=1)
+        if setting not in g:
+            g.add_node(setting, count=1)
         else:
-            g.nodes[expt]['count'] += 1
+            g.nodes[setting]['count'] += 1
 
-    for expt1, expt2 in itertools.combinations(experiments, r=2):
-        expt1 = expt1[0]
-        expt2 = expt2[0]
+    for group1, group2 in itertools.combinations(obs_expt, r=2):
+        sett1 = group1[0]
+        sett2 = group2[0]
 
-        if expt1 == expt2:
+        if sett1 == sett2:
             continue
 
-        max_weight_in = _max_weight_state([expt1.in_state, expt2.in_state])
-        max_weight_out = _max_weight_operator([expt1.observable, expt2.observable])
+        max_weight_in = _max_weight_state([sett1.in_state, sett2.in_state])
+        max_weight_out = _max_weight_operator([sett1.observable, sett2.observable])
         if max_weight_in is not None and max_weight_out is not None:
-            g.add_edge(expt1, expt2)
+            g.add_edge(sett1, sett2)
 
     return g
 
 
-def group_experiments_clique_removal(experiments: ObservablesExperiment) -> ObservablesExperiment:
+def group_settings_clique_removal(experiment: ObservablesExperiment) -> ObservablesExperiment:
     """
-    Group experiments that are diagonal in a shared tensor product basis (TPB) to minimize number
+    Group settings that are diagonal in a shared tensor product basis (TPB) to minimize number
     of QPU runs, using a graph clique removal algorithm.
-    :param experiments: a tomography experiment
-    :return: a tomography experiment with all the same settings, just grouped according to shared
+
+    :param experiment: an ObservablesExperiment
+    :return: a ObservablesExperiment with all the same settings, just grouped according to shared
         TPBs.
     """
-    g = construct_tpb_graph(experiments)
+    g = construct_tpb_graph(experiment)
     _, cliqs = clique_removal(g)
     new_cliqs = []
     for cliq in cliqs:
         new_cliq = []
-        for expt in cliq:
+        for sett in cliq:
             # duplicate `count` times
-            new_cliq += [expt] * g.nodes[expt]['count']
+            new_cliq += [sett] * g.nodes[sett]['count']
 
         new_cliqs += [new_cliq]
 
-    return ObservablesExperiment(new_cliqs, program=experiments.program)
+    return ObservablesExperiment(new_cliqs, program=experiment.program)
 
 
 def _max_weight_operator(ops: Iterable[PauliTerm]) -> Union[None, PauliTerm]:
-    """Construct a PauliTerm operator by taking the non-identity single-qubit operator at each
+    """
+    Construct a PauliTerm operator by taking the non-identity single-qubit operator at each
     qubit position.
+
     This function will return ``None`` if the input operators do not share a natural tensor
     product basis.
     For example, the max_weight_operator of ["XI", "IZ"] is "XZ". Asking for the max weight
@@ -546,8 +519,10 @@ def _max_weight_operator(ops: Iterable[PauliTerm]) -> Union[None, PauliTerm]:
 
 
 def _max_weight_state(states: Iterable[TensorProductState]) -> Union[None, TensorProductState]:
-    """Construct a TensorProductState by taking the single-qubit state at each
+    """
+    Construct a TensorProductState by taking the single-qubit state at each
     qubit position.
+
     This function will return ``None`` if the input states are not compatible
     For example, the max_weight_state of ["(+X, q0)", "(-Z, q1)"] is "(+X, q0; -Z q1)". Asking for
     the max weight state of something like ["(+X, q0)", "(+Z, q0)"] will return None.
@@ -563,11 +538,12 @@ def _max_weight_state(states: Iterable[TensorProductState]) -> Union[None, Tenso
     return TensorProductState(list(mapping.values()))
 
 
-def _max_tpb_overlap(tomo_expt: ObservablesExperiment):
+def _max_tpb_overlap(obs_expt: ObservablesExperiment):
     """
     Given an input ObservablesExperiment, provide a dictionary indicating which ExperimentSettings
     share a tensor product basis
-    :param tomo_expt: ObservablesExperiment, from which to group ExperimentSettings that share a tpb
+
+    :param obs_expt: ObservablesExperiment, from which to group ExperimentSettings that share a tpb
         and can be run together
     :return: dictionary keyed with ExperimentSetting (specifying a tpb), and with each value being a
             list of ExperimentSettings (diagonal in that tpb)
@@ -575,7 +551,7 @@ def _max_tpb_overlap(tomo_expt: ObservablesExperiment):
     # initialize empty dictionary
     diagonal_sets = {}
     # loop through ExperimentSettings of the ObservablesExperiment
-    for expt_setting in tomo_expt:
+    for expt_setting in obs_expt:
         # no need to group already grouped ObservablesExperiment
         assert len(expt_setting) == 1, 'already grouped?'
         expt_setting = expt_setting[0]
@@ -613,23 +589,24 @@ def _max_tpb_overlap(tomo_expt: ObservablesExperiment):
     return diagonal_sets
 
 
-def group_experiments_greedy(tomo_expt: ObservablesExperiment):
+def group_settings_greedy(obs_expt: ObservablesExperiment):
     """
     Greedy method to group ExperimentSettings in a given ObservablesExperiment
-    :param tomo_expt: ObservablesExperiment to group ExperimentSettings within
+
+    :param obs_expt: ObservablesExperiment to group ExperimentSettings within
     :return: ObservablesExperiment, with grouped ExperimentSettings according to whether
         it consists of PauliTerms diagonal in the same tensor product basis
     """
-    diag_sets = _max_tpb_overlap(tomo_expt)
+    diag_sets = _max_tpb_overlap(obs_expt)
     grouped_expt_settings_list = list(diag_sets.values())
-    grouped_tomo_expt = ObservablesExperiment(grouped_expt_settings_list, program=tomo_expt.program)
-    return grouped_tomo_expt
+    grouped_obs_expt = ObservablesExperiment(grouped_expt_settings_list, program=obs_expt.program)
+    return grouped_obs_expt
 
 
-def group_experiments(experiments: ObservablesExperiment,
-                      method: str = 'greedy') -> ObservablesExperiment:
+def group_settings(obs_expt: ObservablesExperiment,
+                   method: str = 'greedy') -> ObservablesExperiment:
     """
-    Group experiments that are diagonal in a shared tensor product basis (TPB) to minimize number
+    Group settings that are diagonal in a shared tensor product basis (TPB) to minimize number
     of QPU runs.
     Background
     ----------
@@ -661,24 +638,27 @@ def group_experiments(experiments: ObservablesExperiment,
     share an nTPB and then uses networkx's algorithm for clique removal. This method can give
     you marginally better groupings in certain circumstances, but constructing the
     graph is pretty slow so "greedy" is the default.
-    :param experiments: a tomography experiment
+
+    :param obs_expt: an ObservablesExperiment
     :param method: method used for grouping; the allowed methods are one of
         ['greedy', 'clique-removal']
-    :return: a tomography experiment with all the same settings, just grouped according to shared
+    :return: an ObservablesExperiment with all the same settings, just grouped according to shared
         TPBs.
     """
     allowed_methods = ['greedy', 'clique-removal']
     assert method in allowed_methods, f"'method' should be one of {allowed_methods}."
     if method == 'greedy':
-        return group_experiments_greedy(experiments)
+        return group_settings_greedy(obs_expt)
     elif method == 'clique-removal':
-        return group_experiments_clique_removal(experiments)
+        return group_settings_clique_removal(obs_expt)
 
 
 @dataclass(frozen=True)
 class ExperimentResult:
-    """An expectation and standard deviation for the measurement of one experiment setting
-    in a tomographic experiment.
+    """
+    An expectation and standard deviation for the measurement of one experiment setting
+    in an ObservablesExperiment.
+
     In the case of readout error calibration, we also include
     expectation, standard deviation and count for the calibration results, as well as the
     expectation and standard deviation for the corrected results.
@@ -786,7 +766,7 @@ def generate_experiment_programs(obs_expt: ObservablesExperiment, active_reset: 
     """
     Generate the programs necessary to estimate the observables in an ObservablesExperiment.
 
-    Grouping of settings to be run in parallel, e.g. by a call to group_experiments, should be
+    Grouping of settings to be run in parallel, e.g. by a call to group_settings, should be
     done before this method is called.
 
     By default the program field of the input obs_expt is assumed to hold a program composed of
