@@ -466,6 +466,28 @@ def apply_choi_matrix_2_state(choi: np.ndarray, state: np.ndarray) -> np.ndarray
 # ==================================================================================================
 # Check physicality of Channels
 # ==================================================================================================
+def kraus_operators_are_valid(kraus_ops: Sequence[np.ndarray],
+                              rtol: float = 1e-05,
+                              atol: float = 1e-08)-> bool:
+    """
+    Checks if a set of Kraus operators are valid.
+
+    :param kraus_ops: A list of Kraus operators
+    :param rtol: The relative tolerance parameter in np.allclose
+    :param atol: The absolute tolerance parameter in np.allclose
+    :return: True if the Kraus operators are valid with the given tolerance; False otherwise.
+    """
+    if isinstance(kraus_ops, np.ndarray):  # handle input of single kraus op
+        if len(kraus_ops[0].shape) < 2:  # first elem is not a matrix
+            kraus_ops = [kraus_ops]
+    rows, _ = np.asarray(kraus_ops[0]).shape
+    # Standard case of square Kraus operators is if rows==cols. For non-square Kraus ops it is
+    # required that sum_i M_i^\dagger M_i  = np.eye(rows,rows).
+    id_iff_valid = sum(np.transpose(op).conjugate().dot(op) for op in kraus_ops)
+    # TODO: check if each POVM element (i.e. M_i^\dagger M_i) is PSD
+    return np.allclose(id_iff_valid, np.eye(rows), rtol=rtol, atol=atol)
+
+
 def choi_is_hermitian_preserving(choi: np.ndarray, rtol: float = 1e-05,
                                  atol: float = 1e-08) -> bool:
     """
