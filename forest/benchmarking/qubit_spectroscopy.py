@@ -14,7 +14,7 @@ from forest.benchmarking.utils import transform_pauli_moments_to_bit
 from forest.benchmarking.analysis.fitting import fit_decay_constant_param_decay, \
     fit_decaying_cosine, fit_shifted_cosine
 from forest.benchmarking.operator_estimation import ObservablesExperiment, ExperimentResult, \
-    ExperimentSetting, estimate_observables, minusZ, plusZ, plusY
+    ExperimentSetting, estimate_observables, minusZ, plusZ, minusY
 
 MICROSECOND = 1e-6  # A microsecond (us) is an SI unit of time
 
@@ -26,11 +26,16 @@ def acquire_qubit_spectroscopy_data(qc: QuantumComputer,
                                     experiments: Sequence[ObservablesExperiment],
                                     num_shots: int = 500) -> List[List[ExperimentResult]]:
     """
+    A standard data acquisition method for all experiments in this module.
 
-    :param qc:
+    Each input ObservablesExperiment is simply run in series, and a list of results are returned
+    for each experiment in the corresponding order.
+
+    :param qc: a quantum computer on which to run the experiments
     :param experiments: the ObservablesExperiments to run on the given qc
     :param num_shots: the number of shots to collect for each experiment.
-    :return:
+    :return: a list of ExperimentResults for each ObservablesExperiment, returned in order of the
+        input sequence of experiments.
     """
     results = []
     for expt in experiments:
@@ -41,10 +46,17 @@ def acquire_qubit_spectroscopy_data(qc: QuantumComputer,
 def get_stats_by_qubit(expt_results: List[List[ExperimentResult]]) \
         -> Dict[int, Dict[str, List[float]]]:
     """
-    Organize the mean and std_err of an experiment by qubit.
+    Organize the mean and std_err of a single-observable experiment by qubit.
+
+    Each individual experiment result is assumed to consist of a single qubit observable. The
+    inner list of observables should be a group of such experiments acting on different qubits.
+    The outer list dictates the order of the returned statistics for each qubit. For example,
+    in a T1 experiment the outer list of results is indexed by increasing time; the returned
+    statistics will also be arranged in order of increasing time for each qubit separately.
 
     :param expt_results:
-    :return:
+    :return: a dictionary indexed by qubit label, where each value is itself a dictionary with
+        'expectation' and 'std_err' values for the given qubit.
     """
     stats_by_qubit = {}
     for results in expt_results:
@@ -102,10 +114,14 @@ def acquire_t1_data(qc: QuantumComputer, experiments: Sequence[ObservablesExperi
     """
     Acquire data to measure the T1 decay time for each of the input experiments.
 
+    This simply calls the standard data acquisition method but is included to keep consistency
+    with other routines in forest-benchmarking which offer named data acquisition methods.
+
     :param qc: The QuantumComputer to run the experiment on
     :param experiments: the ObservablesExperiments to run on the given qc
     :param num_shots: the number of shots to collect for each experiment.
-    :return:
+    :return: a list of ExperimentResults for each ObservablesExperiment, returned in order of the
+        input sequence of experiments.
     """
     return acquire_qubit_spectroscopy_data(qc, experiments, num_shots)
 
@@ -157,7 +173,7 @@ def generate_t2_star_experiments(qubits: Sequence[int], times: Sequence[float],
     measure the T2 star coherence decay time for each qubit in qubits.
 
     For each delay time in times a single program will be generated in which all qubits are
-    initialized to the plusY state and simultaneously measured along the Y axis after the given
+    initialized to the minusY state and simultaneously measured along the Y axis after the given
     delay and Z rotation. If the qubit frequency is perfectly calibrated then the Y expectation
     will oscillate at the given detuning frequency as the qubit is rotated about the Z axis (with
     respect to the lab frame, which by hypothesis matches the natural qubit frame).
@@ -166,7 +182,7 @@ def generate_t2_star_experiments(qubits: Sequence[int], times: Sequence[float],
     :param times: the times at which to measure, given in seconds. Each time is rounded to the
         nearest .1 microseconds.
     :param detuning: The additional detuning frequency about the z axis in Hz.
-    :return: ObservablesExperiments which can be run to acquire an estimate of T2*
+    :return: ObservablesExperiments which can be run to acquire an estimate of T2* for each qubit
     """
     expts = []
     for t in times:
@@ -176,7 +192,7 @@ def generate_t2_star_experiments(qubits: Sequence[int], times: Sequence[float],
         for q in qubits:
             program += Pragma('DELAY', [q], str(t))
             program += RZ(2 * pi * t * detuning, q)
-            settings.append(ExperimentSetting(plusY(q), PauliTerm('Y', q)))
+            settings.append(ExperimentSetting(minusY(q), PauliTerm('Y', q)))
 
         expts.append(ObservablesExperiment([settings], program))
 
@@ -190,19 +206,23 @@ def generate_t2_echo_experiments(qubits: Sequence[int], times: Sequence[float],
     measure the T2 echo coherence decay time.
 
     For each delay time in times a single program will be generated in which all qubits are
-    initialized to the plusY state and later simultaneously measured along the Y axis. Unlike in
+    initialized to the minusY state and later simultaneously measured along the Y axis. Unlike in
     the t2_star experiment above there is a 'echo' applied in the middle of the delay in which
-    the qubit is rotated by pi radians around the X axis.
+    the qubit is rotated by pi radians around the Y axis.
 
-    As for t2_star, if the qubit frequency is perfectly calibrated then the Y expectation will
-    oscillate at the given detuning frequency as the qubit is rotated about the Z axis (with
-    respect to the lab frame, which by hypothesis matches the natural qubit frame).
+    Similarly to t2_star, if the qubit frequency is perfectly calibrated then the Y expectation
+    will oscillate at the given detuning frequency as the qubit is rotated about the Z axis (with
+    respect to the lab frame, which by hypothesis matches the natural qubit frame). Unlike in a
+    t2_star experiment, even if the qubit frequency is off such that there is some spurious
+    rotation about the Z axis during the DELAY, the effect of an ideal echo is to cancel the
+    effect of this rotation so that the qubit returns to the initial state minusY before the
+    detuning rotation is applied.
 
     :param qubits: list of qubits to measure.
     :param times: the times at which to measure, given in seconds. Each time is rounded to the
         nearest .1 microseconds.
     :param detuning: The additional detuning frequency about the z axis.
-    :return:
+    :return: ObservablesExperiments which can be run to acquire an estimate of T2 for each qubit.
     """
     expts = []
     for t in times:
@@ -215,7 +235,7 @@ def generate_t2_echo_experiments(qubits: Sequence[int], times: Sequence[float],
             program += [half_delay, RY(pi, q), half_delay]
             # apply detuning
             program += RZ(2 * pi * t * detuning, q)
-            settings.append(ExperimentSetting(plusY(q), PauliTerm('Y', q)))
+            settings.append(ExperimentSetting(minusY(q), PauliTerm('Y', q)))
 
         expts.append(ObservablesExperiment(settings, program))
 
@@ -227,10 +247,14 @@ def acquire_t2_data(qc: QuantumComputer, experiments: Sequence[ObservablesExperi
     """
     Execute experiments to measure the T2 time of one or more qubits.
 
+    This simply calls the standard data acquisition method but is included to keep consistency
+    with other routines in forest-benchmarking which offer named data acquisition methods.
+
     :param qc: The QuantumComputer to run the experiment on
     :param experiments: the ObservablesExperiments to run on the given qc
     :param num_shots: the number of shots to collect for each experiment.
-    :return:
+    :return: a list of ExperimentResults for each ObservablesExperiment, returned in order of the
+        input sequence of experiments.
     """
     return acquire_qubit_spectroscopy_data(qc, experiments, num_shots)
 
@@ -261,7 +285,7 @@ def fit_t2_results(times: Sequence[float], y_expectations: Sequence[float],
 
     y_expectations = np.asarray(y_expectations)
     if y_std_errs is not None:
-        probability_one, var = transform_pauli_moments_to_bit(np.asarray(y_expectations),
+        probability_one, var = transform_pauli_moments_to_bit(np.asarray(-1 * y_expectations),
                                                               np.asarray(y_std_errs)**2)
         err = np.sqrt(var)
         min_non_zero = min([v for v in err if v > 0])
@@ -270,7 +294,7 @@ def fit_t2_results(times: Sequence[float], y_expectations: Sequence[float],
 
         weights = 1 / non_zero_err
     else:
-        probability_one, _ = transform_pauli_moments_to_bit(np.asarray(y_expectations), 0)
+        probability_one, _ = transform_pauli_moments_to_bit(np.asarray(-1 * y_expectations), 0)
         weights = None
 
     return fit_decaying_cosine(np.asarray(times), probability_one, weights, param_guesses)
@@ -294,7 +318,8 @@ def generate_rabi_experiments(qubits: Sequence[int], angles: Sequence[float]) \
 
     :param qubits: list of qubits to measure.
     :param angles: A list of angles at which to make a measurement
-    :return:
+    :return: ObservablesExperiments which can be run to verify the  RX(*, q) calibration
+        for each qubit
     """
     expts = []
     for angle in angles:
@@ -314,10 +339,14 @@ def acquire_rabi_data(qc: QuantumComputer, experiments: Sequence[ObservablesExpe
     """
     Execute Rabi experiments.
 
+    This simply calls the standard data acquisition method but is included to keep consistency
+    with other routines in forest-benchmarking which offer named data acquisition methods.
+
     :param qc: The QuantumComputer to run the experiment on
     :param experiments: the ObservablesExperiments to run on the given qc
     :param num_shots: the number of shots to collect for each experiment.
-    :return:
+    :return: a list of ExperimentResults for each ObservablesExperiment, returned in order of the
+        input sequence of experiments.
     """
     return acquire_qubit_spectroscopy_data(qc, experiments, num_shots)
 
@@ -380,7 +409,8 @@ def generate_cz_phase_ramsey_experiment(cz_qubits: Sequence[int], measure_qubit:
     :param cz_qubits: the qubits participating in the cz gate
     :param measure_qubit: Which qubit to measure.
     :param angles: A list of angles at which to make a measurement
-    :return:
+    :return: ObservablesExperiments which can be run to estimate the effective RZ rotation
+        applied to a single qubit during the application of a CZ gate.
     """
     expts = []
     for angle in angles:
@@ -402,10 +432,14 @@ def acquire_cz_phase_ramsey_data(qc: QuantumComputer, experiments: Sequence[Obse
     """
     Execute experiments to measure the RZ incurred as a result of a CZ gate.
 
+    This simply calls the standard data acquisition method but is included to keep consistency
+    with other routines in forest-benchmarking which offer named data acquisition methods.
+
     :param qc: The QuantumComputer to run the experiment on
     :param experiments: the ObservablesExperiments to run on the given qc
     :param num_shots: the number of shots to collect for each experiment.
-    :return:
+    :return: a list of ExperimentResults for each ObservablesExperiment, returned in order of the
+        input sequence of experiments.
     """
     return acquire_qubit_spectroscopy_data(qc, experiments, num_shots)
 
