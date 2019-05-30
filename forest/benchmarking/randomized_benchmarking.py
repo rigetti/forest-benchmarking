@@ -12,7 +12,7 @@ from pyquil.quil import merge_programs
 from pyquil import Program
 
 from forest.benchmarking.tomography import _state_tomo_settings
-from forest.benchmarking.utils import all_pauli_z_terms
+from forest.benchmarking.utils import all_pauli_z_terms, is_pos_pow_two
 from forest.benchmarking.analysis.fitting import fit_base_param_decay
 from forest.benchmarking.operator_estimation import ExperimentSetting, ExperimentResult, \
     zeros_state, estimate_observables, ObservablesExperiment, group_settings
@@ -20,7 +20,7 @@ from forest.benchmarking.operator_estimation import ExperimentSetting, Experimen
 
 def get_results_by_qubit_group(qubit_groups: Sequence[Sequence[int]],
                                parallel_results: Iterable[ExperimentResult]) \
-        -> Dict[Tuple[int], List[ExperimentResult]]:
+        -> Dict[Tuple[int, ...], List[ExperimentResult]]:
     """
     Organizes ExperimentResults by separate qubit groups when the input results are returned from
     running a particular ObservablesExperiment which is part of a simultaneous RB experiment.
@@ -46,7 +46,7 @@ def get_results_by_qubit_group(qubit_groups: Sequence[Sequence[int]],
 
 def get_stats_by_qubit_group(qubit_groups: Sequence[Sequence[int]],
                                expt_results: Iterable[Iterable[ExperimentResult]]) \
-        -> Dict[Tuple[int], Dict[str, List[float]]]:
+        -> Dict[Tuple[int, ...], Dict[str, List[List[float]]]]:
     """
     Organize the results of a simultaneous RB experiment into lists of expectations and std_errs
     for each sequence; these lists are stored in a dict for each qubit group.
@@ -55,7 +55,7 @@ def get_stats_by_qubit_group(qubit_groups: Sequence[Sequence[int]],
     :param expt_results: ExperimentResults for each ObservablesExperiment run as part of a
         RB experiment
     :return: a dict whose keys are qubit groups (as tuples) with corresponding value which is an
-        inner dict with 'expectation' and 'std_err' estimates for each observable
+        inner dict with 'expectation' and 'std_err' estimates for each group of observables
         measured on each sequence.
     """
     qubits = [tuple(group) for group in qubit_groups]
@@ -323,9 +323,81 @@ def acquire_rb_data(qc: QuantumComputer, experiments: Iterable[ObservablesExperi
     return results
 
 
+def covariances_of_all_iz_obs(expectations: Sequence[float], num_shots: int):
+    """
+    Calculate the sum of the pairwise covariance of every distinct pair of observables whose
+    expectations are given.
+
+    It is assumed that the list of expectations corresponds to 2**num_qubits-1 == dim - 1 many
+    observables, where the observables all consist of every combination of I and Z acting on
+    different qubits. Calculating this covariance is necessary if
+        1) all observables were calculated from the same set of shot data
+        2) you are calculating the variance for a sum of the expectations.
+
+    We calculate the covariance using
+        cov(O_i, O_j) = E[O_i O_j] - E[O_i] E[O_j]
+    and noticing that the product of two distinct observables O_i O_j from our list is simply a
+    second observable O_k in the list. Furthermore, taking every possible pairwise product simply
+    results in two copies of our original list. Hence if we take the sum over all distinct pairs
+    we can calculate the covariance purely as a function of observable expectations.
+
+    :param expectations:
+    :param num_shots:
+    :return:
+    """
+    assert is_pos_pow_two(len(expectations) + 1)
+
+    # first, we have the contribution of all expectations of products
+    # E[O_i O_j] = E[O_j O_i] = E[O_k]
+    covariance = 2 * sum(expectations)
+
+    # now we subtract the pairwise products of expectations E[O_i]E[O_j]
+    covariance -= sum([exp1 * exp2 for i, exp1 in enumerate(expectations)
+                       for j, exp2 in enumerate(expectations) if i != j])
+    # return the sample covariance
+    return covariance / num_shots
+
+
+def z_obs_stats_to_survival_statistics(expectations: Sequence[float], std_errs: Sequence[float],
+                                       num_shots = None, obs_are_independent = False):
+    """
+    Convert expectations of the dim - 1 observables which are the nontrivial combinations of tensor
+    products of I and Z into survival mean and variance, where survival is the all zeros outcome.
+
+    If dim > 2, i.e. there are more than 2 qubits, and the observable expectations were collected
+    simultaneously on the same set of shot data then there will be covariance between the
+    different observables; thus to calculate the survival variance we must include the
+    contribution of the covariance, which requires knowledge of the number of shots.
+
+    :param expectations:
+    :param std_errs:
+    :param num_shots:
+    :param obs_are_independent:
+    :return:
+    """
+    # This assumes inclusion of all terms with at least one Z to make dim-1 many total terms
+    dim = len(expectations) + 1  # = 2**num_qubits
+    assert is_pos_pow_two(dim)
+
+    survival_probability = (sum(expectations) + 1) / dim
+    survival_var = sum(np.asarray(std_errs) ** 2) / dim**2
+
+    if dim > 2 and not obs_are_independent:
+        if num_shots is None:
+            raise ValueError("The number of shots is necessary information for computing the "
+                             "sample covariance.")
+
+        # since the observables are not independent, e.g. they were calculated using the same set
+        # of shot data, we need to calculate the sum of the covariance of each distinct pair of
+        # observables and add this to our variance, appropriately scaled
+        survival_var += covariances_of_all_iz_obs(expectations, num_shots) / dim**2
+
+    return survival_probability, survival_var
+
+
 def fit_rb_results(depths: Sequence[int], z_expectations: Sequence[Sequence[float]],
-                   z_std_errs: Sequence[Sequence[float]], param_guesses: tuple = None) \
-        -> ModelResult:
+                   z_std_errs: Sequence[Sequence[float]], num_shots: int = None,
+                   param_guesses: tuple = None) -> ModelResult:
     """
     Fits the results of a standard RB or IRB experiment by converting expectations into survival
     probabilities (probability of measuring zero) and passing these on to the standard fit.
@@ -349,16 +421,13 @@ def fit_rb_results(depths: Sequence[int], z_expectations: Sequence[Sequence[floa
                                                'to be repeated for the appropriate number of ' \
                                                'sequences.'
 
-    for depth, expectations, z_std_errs in zip(depths, z_expectations, z_std_errs):
-        # This assumes inclusion of all terms with at least one Z to make dim-1 many total terms
-        dim = len(expectations) + 1  # = 2**num_qubits
+    for depth, expectations, std_errs in zip(depths, z_expectations, z_std_errs):
         # get the fraction of all zero outcomes 00...00
-        survival_probability = (sum(expectations) + 1) / dim
-        survival_prob_var = sum(np.asarray(z_std_errs)**2) / dim**2
+        survival_prob, survival_var = z_obs_stats_to_survival_statistics(expectations, std_errs,
+                                                                         num_shots)
 
-
-        survivals.append(survival_probability)
-        variances.append(survival_prob_var)
+        survivals.append(survival_prob)
+        variances.append(survival_var)
 
     if param_guesses is None:  # make some standard reasonable guess (amplitude, decay, baseline)
         param_guesses = (survivals[0] - survivals[-1], 0.95, survivals[-1])
@@ -451,6 +520,8 @@ def estimate_purity_err(dim: int, op_expect: np.ndarray, op_expect_var: np.ndarr
     :param renorm: flag that provides error for the renormalized purity
     :return: purity given the operator expectations
     """
+    # TODO: incorporate covariance of observables estimated simultaneously; see covariances_of_all_iz_obs
+
     #TODO: check validitiy of approximation |op_expect| >> 0, and functional form below (squared?)
     var_of_square_op_expect = (2 * np.abs(op_expect)) ** 2 * op_expect_var
     #TODO: check if this adequately handles |op_expect| >\> 0

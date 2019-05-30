@@ -13,7 +13,8 @@ from pyquil.api import QuantumComputer
 from pyquil.unitary_tools import all_bitstrings
 from forest.benchmarking.compilation import basic_compile
 from forest.benchmarking.utils import transform_bit_moments_to_pauli, local_pauli_eig_prep, \
-    local_pauli_eig_meas, determine_simultaneous_grouping, bloch_vector_to_standard_basis
+    local_pauli_eig_meas, determine_simultaneous_grouping, bloch_vector_to_standard_basis, \
+    is_pos_pow_two
 
 import matplotlib.pyplot as plt
 
@@ -38,19 +39,6 @@ def bloch_rotation_to_eigenvectors(theta: float, phi: float) -> Sequence[np.ndar
     return eig1, eig2
 
 
-def _is_pos_pow_two(x: int) -> bool:
-    """
-    Simple check that an integer is a positive power of two.
-    :param x: number to check
-    :return: whether x is a positive power of two
-    """
-    if x <= 0:
-        return False
-    while (x & 1) == 0:
-        x = x >> 1
-    return x == 1
-
-
 def get_change_of_basis_from_eigvecs(eigenvectors: Sequence[np.ndarray]) -> np.ndarray:
     """
     Generates a unitary matrix that sends each computational basis state to the corresponding
@@ -68,7 +56,7 @@ def get_change_of_basis_from_eigvecs(eigenvectors: Sequence[np.ndarray]) -> np.n
         states to the given eigenvectors. Necessary for generate_rpe_experiments called on a 
         rotation with the given eigenvectors.
     """
-    assert len(eigenvectors) > 1 and _is_pos_pow_two(len(eigenvectors)), \
+    assert len(eigenvectors) > 1 and is_pos_pow_two(len(eigenvectors)), \
         "Specification of all dim-many eigenvectors is required."
 
     # standardize the possible list, 1d or 2d-row-vector ndarray inputs to column vectors

@@ -15,6 +15,19 @@ from pyquil.quil import Program
 from pyquil.api import QuantumComputer
 
 
+def is_pos_pow_two(x: int) -> bool:
+    """
+    Simple check that an integer is a positive power of two.
+    :param x: number to check
+    :return: whether x is a positive power of two
+    """
+    if x <= 0:
+        return False
+    while (x & 1) == 0:
+        x = x >> 1
+    return x == 1
+
+
 def bit_array_to_int(bit_array: Sequence[int]) -> int:
     """
     Converts a bit array into an integer where the right-most bit is least significant.
