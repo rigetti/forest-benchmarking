@@ -6,6 +6,8 @@ from datetime import date, datetime
 from git import Repo
 import numpy as np
 from numpy import pi
+import networkx as nx
+from networkx.algorithms.approximation.clique import clique_removal
 import pandas as pd
 
 from pyquil.gates import I, RX, RY, RZ, H, MEASURE
@@ -50,6 +52,41 @@ def int_to_bit_array(num: int, n_bits: int) -> Sequence[int]:
     :return:  an array of n_bits bits with right-most bit considered least significant.
     """
     return [num >> bit & 1 for bit in range(n_bits - 1, -1, -1)]
+
+
+def determine_simultaneous_grouping(experiments: Sequence[DataFrame],
+                                    equivalent_column_label: str = None) -> List[Set[int]]:
+    """
+    Determines a grouping of experiments acting on disjoint sets of qubits that can be run
+    simultaneously.
+    :param experiments:
+    :return: a list of the simultaneous groups, each specified by a set of indices of each grouped
+        experiment in experiments
+    """
+    g = nx.Graph()
+    nodes = np.arange(len(experiments))
+    g.add_nodes_from(nodes)
+    qubits = [expt["Qubits"].values[0] for expt in experiments]
+
+    need_equiv = None
+    if equivalent_column_label is not None:
+        need_equiv = [expt[equivalent_column_label].values for expt in experiments]
+
+    for node1 in nodes:
+        qbs1 = qubits[node1]
+        for node2 in nodes[node1+1:]:
+            if len(qbs1.intersection(qubits[node2])) == 0:
+                # check that the requested columns are equivalent
+                if equivalent_column_label is not None:
+                    if not np.array_equal(need_equiv[node1], need_equiv[node2]):
+                        continue
+                # no shared qubits, and requested columns are identical, so add edge
+                g.add_edge(node1, node2)
+
+    # get the largest groups of nodes with shared edges, as each can be run simultaneously
+    _, cliqs = clique_removal(g)
+
+    return cliqs
 
 
 def bloch_vector_to_standard_basis(theta: float, phi: float) -> Tuple[complex, complex]:
@@ -470,6 +507,7 @@ def parameterized_bitstring_prep(qubits: Sequence[int], reg_name: str, append_me
     """
     Produces a parameterized program for the given group of qubits, where each qubit is prepared
     in the 0 or 1 state depending on the parameterization specified at run-time.
+
     See also bitstring_prep which produces a non-parameterized program that prepares
     and measures a single pre-specified bitstring on the given qubits. Parameterization allows
     for a single program to measure each bitstring (specified at run-time) and speeds up
@@ -477,6 +515,7 @@ def parameterized_bitstring_prep(qubits: Sequence[int], reg_name: str, append_me
     produced by bitstring_prep does not execute any gates when preparing 0 on a particular qubit
     and executes only one gate to prepare 1; meanwhile, this method produces a program which
     executes three gates for either preparation on each qubit.
+
     :param qubits: labels of qubits on which some bitstring will be prepared and, perhaps, measured
     :param reg_name: the name of the register that will hold the bitstring parameters.
     :param append_measure: dictates whether to measure the qubits after preparing the bitstring
@@ -512,6 +551,7 @@ def bitstring_prep(qubits: Sequence[int], bitstring: Sequence[int], append_measu
                    in_x_basis: bool = False) -> Program:
     """
     Produces a program that prepares the given bitstring on the given qubits.
+
     See also _readout_group_parameterized_bitstring which produces an analogous parameterized
     program that measures any run-time specified bitstring on the given qubits. Parameterization
     speeds up the collective measurement of all bitstrings on a group of qubits. Note that
@@ -519,6 +559,7 @@ def bitstring_prep(qubits: Sequence[int], bitstring: Sequence[int], append_measu
     qubit to prepare either a 0 or a 1 on that qubit; meanwhile, this method creates a program
     which executes no gates to prepare the 0 state and only one gate to prepare the 1 state on a
     particular qubit.
+
     :param qubits: labels of qubits on which some bitstring will be prepared and, perhaps, measured
     :param bitstring: a sequence of bits (0 or 1) to prepare on the given qubits. The
         qubit qubits[idx] is prepare in the state bitstring[idx]
