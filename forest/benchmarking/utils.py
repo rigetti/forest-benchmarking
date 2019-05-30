@@ -1,7 +1,7 @@
 import itertools
 from collections import OrderedDict
 from random import random, seed
-from typing import Sequence, Tuple
+from typing import Sequence, Tuple, List, Set
 from datetime import date, datetime
 from git import Repo
 import numpy as np
@@ -54,7 +54,7 @@ def int_to_bit_array(num: int, n_bits: int) -> Sequence[int]:
     return [num >> bit & 1 for bit in range(n_bits - 1, -1, -1)]
 
 
-def determine_simultaneous_grouping(experiments: Sequence[DataFrame],
+def determine_simultaneous_grouping(experiments: Sequence[pd.DataFrame],
                                     equivalent_column_label: str = None) -> List[Set[int]]:
     """
     Determines a grouping of experiments acting on disjoint sets of qubits that can be run
