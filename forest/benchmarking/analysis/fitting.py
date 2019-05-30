@@ -76,8 +76,8 @@ def fit_decay_constant_param_decay(x: np.ndarray, y: np.ndarray, weights: np.nda
     return decay_model.fit(y, x=x, params=params, weights=weights)
 
 
-def decaying_sinusoid(x: np.ndarray, amplitude: float, decay_constant: float,  offset: float,
-                      baseline: float, frequency: float) -> np.ndarray:
+def decaying_cosine(x: np.ndarray, amplitude: float, decay_constant: float, offset: float,
+                    baseline: float, frequency: float) -> np.ndarray:
     """
     Calculate exponentially decaying sinusoid at a series of points.
 
@@ -89,11 +89,11 @@ def decaying_sinusoid(x: np.ndarray, amplitude: float, decay_constant: float,  o
     :param frequency: The frequency of the sinusoid, e.g. f for sin(f x)
     :return: The exponentially decaying sinusoid evaluated at the point(s) x
     """
-    return amplitude * np.exp(-1 * x / decay_constant) * np.sin(frequency * (x - offset)) + baseline
+    return amplitude * np.exp(-1 * x / decay_constant) * np.cos(frequency * (x - offset)) + baseline
 
 
-def fit_decaying_sinusoid(x: np.ndarray, y: np.ndarray, weights: np.ndarray = None,
-                          param_guesses: tuple = (.5, 10, 0.5, 0., 5)) -> ModelResult:
+def fit_decaying_cosine(x: np.ndarray, y: np.ndarray, weights: np.ndarray = None,
+                        param_guesses: tuple = (.5, 10, 0.0, 0.5, 5)) -> ModelResult:
     """
     Fit experimental data x, y to an exponentially decaying sinusoid.
 
@@ -104,7 +104,7 @@ def fit_decaying_sinusoid(x: np.ndarray, y: np.ndarray, weights: np.ndarray = No
     :return: a lmfit Model
     """
     _check_data(x, y, weights)
-    decay_model = Model(decaying_sinusoid)
+    decay_model = Model(decaying_cosine)
     params = decay_model.make_params(amplitude=param_guesses[0], decay_constant=param_guesses[1],
                                      offset=param_guesses[2], baseline=param_guesses[3],
                                      frequency=param_guesses[4])
