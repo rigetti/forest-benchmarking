@@ -149,9 +149,8 @@ def generate_rb_sequence(bm: BenchmarkConnection, qubits: Sequence[int], depth: 
 
 
 def generate_rb_experiment_sequences(bm: BenchmarkConnection, qubits: Sequence[int],
-                                     depths: Sequence[int], num_sequences: int,
-                                     interleaved_gate: Program = None, random_seed: int = None,
-                                     use_self_inv_seqs = True) \
+                                     depths: Sequence[int], interleaved_gate: Program = None,
+                                     random_seed: int = None, use_self_inv_seqs = True) \
         -> List[List[Program]]:
     """
     Generate the sequences of Clifford gates necessary to run a randomized benchmarking
@@ -161,37 +160,34 @@ def generate_rb_experiment_sequences(bm: BenchmarkConnection, qubits: Sequence[i
     done by the BenchmarkConnection object. A sequence at a depth d is thus provided as a list of
     d programs each representing a random Clifford.
 
-    Calling this method separately on several different groups of qubits with the same depths and
-    num_sequences will yield separate lists of sequences which can be passed to
+    Calling this method separately on several different groups of qubits with the same depths
+    will yield separate lists of sequences which can be passed to
     group_sequences_into_parallel_experiments in order to generate a 'simultaneous' RB experiment.
 
     :param bm: object returned from get_benchmarker() used to generate clifford sequences
     :param qubits: the qubits for a single isolated rb experiment
-    :param depths: the depths of the sequences in the experiment
-    :param num_sequences: the number of sequences at each depth
+    :param depths: the depth of each sequence in the experiment.
     :param interleaved_gate: optional gate to interleave throughout the sequence, see [IRB]
     :param random_seed: Random seed passed to bm to seed sequence generation.
     :param use_self_inv_seqs: by default True, the last Clifford of the sequence will be the
         inverse of the composition of the previous Cliffords in the sequence; the entire sequence
         is thus the identity operation in the ideal case. If set to False then this last gate is
         simply omitted but the total number of gates is preserved.
-    :return: a list of all of the num_sequences * len(depths) many different Clifford sequences.
+    :return: a list of all of the len(depths) many different Clifford sequences.
     """
-    sequences = []  # we will have len(depths)*num_sequences many sequences
+    sequences = []  # we will have len(depths) many sequences
     for depth in depths:
-        for idx in range(num_sequences):
+        if random_seed is not None:  # need to change the base seed for each sequence generated
+            random_seed += 1
 
-            if random_seed is not None:  # need to change the base seed for each sequence generated
-                random_seed += 1
+        if use_self_inv_seqs:
+            # a sequence is a list of Cliffords, with last Clifford inverting the sequence
+            sequence = generate_rb_sequence(bm, qubits, depth, interleaved_gate, random_seed)
+        else: # this might be desired for unitarity experiments
+            # First we provide larger depth, then strip inverse from end of the sequence
+            sequence = generate_rb_sequence(bm, qubits, depth + 1, random_seed=random_seed)[:-1]
 
-            if use_self_inv_seqs:
-                # a sequence is a list of Cliffords, with last Clifford inverting the sequence
-                sequence = generate_rb_sequence(bm, qubits, depth, interleaved_gate, random_seed)
-            else: # this might be desired for unitarity experiments
-                # provide larger depth and strip inverse from end of each sequence
-                sequence = generate_rb_sequence(bm, qubits, depth + 1, random_seed=random_seed)[:-1]
-
-            sequences.append(sequence)
+        sequences.append(sequence)
 
     return sequences
 
@@ -217,7 +213,7 @@ def group_sequences_into_parallel_experiments(parallel_expts_seqs: Sequence[List
         Clifford sequences from each of these different groups (which should be of the same depth)
         will be merged together into a single program. The intended use-case is that each
         List[List[program]] sequence of Cliffords is an output of generate_rb_experiment_sequences
-        for disjoint groups of qubits but with identical list of depths and num_sequences (see
+        for disjoint groups of qubits but with identical list of depths (see
         generate_rb_experiments for example). If sequences of different depth are merged into
         a Program then some qubits may be sitting idle while the sequences of greater depth
         continue running. Measurement occurs only when all sequences have terminated.
@@ -246,15 +242,14 @@ def group_sequences_into_parallel_experiments(parallel_expts_seqs: Sequence[List
 
 
 def generate_rb_experiments(bm: BenchmarkConnection, qubit_groups: Sequence[Sequence[int]],
-                            depths: Sequence[int], num_sequences: int,
-                            interleaved_gate: Program = None, random_seed: int = None) \
-        -> List[ObservablesExperiment]:
+                            depths: Sequence[int], interleaved_gate: Program = None,
+                            random_seed: int = None) -> List[ObservablesExperiment]:
     """
     Creates list of ObservablesExperiments which, when run in series, constitute a
     simultaneous randomized benchmarking experiment on the disjoint qubit_groups.
 
-    The number of ObservablesExperiments returned is equal to the product of num_sequences and
-    len(depths). A particular ObservablesExperiment consists of
+    The number of ObservablesExperiments returned is equal to len(depths). A particular
+    ObservablesExperiment consists of
         - a program, which is a random sequence of Clifford gates compiled down to native gates.
             If len(qubit_groups) > 1 then the program is actually the sum of len(qubit_groups) many
             separate random sequences; each sequence acts only on the group of qubits in a
@@ -288,8 +283,7 @@ def generate_rb_experiments(bm: BenchmarkConnection, qubit_groups: Sequence[Sequ
     :param qubit_groups: the disjoint groups qubits for which random sequences will be
         generated and merged into a series of programs each of which runs groups of disjoint
         sequences 'simultaneously'.
-    :param depths: the depths of the sequences in the experiment
-    :param num_sequences: the number of sequences at each depth
+    :param depths: the depth of each sequence in the experiment
     :param interleaved_gate: optional gate to interleave throughout the sequence, see [IRB]
     :param random_seed: Random seed passed to bm to seed sequence generation.
     :return: a list of ObservablesExperiments which constitute a simultaneous RB or IRB experiment
@@ -298,10 +292,9 @@ def generate_rb_experiments(bm: BenchmarkConnection, qubit_groups: Sequence[Sequ
     for group in qubit_groups:
         if random_seed is not None:
             # need to change the base seed for each set of qubits
-            random_seed += len(depths) * num_sequences
+            random_seed += len(depths)
 
         parallel_sequences.append(generate_rb_experiment_sequences(bm, group, depths,
-                                                                   num_sequences,
                                                                    interleaved_gate, random_seed))
 
     return group_sequences_into_parallel_experiments(parallel_sequences, qubit_groups)
@@ -443,9 +436,8 @@ def fit_rb_results(depths: Sequence[int], z_expectations: Sequence[Sequence[floa
 
 
 def generate_unitarity_experiments(bm: BenchmarkConnection, qubit_groups: Sequence[Sequence[int]],
-                                  depths: Sequence[int], num_sequences: int,
-                                  random_seed: int = None, use_self_inv_seqs = False) \
-        -> List[ObservablesExperiment]:
+                                   depths: Sequence[int], random_seed: int = None,
+                                   use_self_inv_seqs = False)  -> List[ObservablesExperiment]:
     """
     Creates list of ObservablesExperiments which, when run in series, constitute a
     simultaneous unitarity experiment on the disjoint qubit_groups.
@@ -468,9 +460,8 @@ def generate_unitarity_experiments(bm: BenchmarkConnection, qubit_groups: Sequen
     :param qubit_groups: the disjoint groups qubits for which random sequences will be
         generated and merged into a series of programs each of which runs groups of disjoint
         sequences 'simultaneously'.
-    :param depths: the depths of the sequences in the experiment
-    :param num_sequences: the number of sequences at each depth
-    :param random_seed: Random seed passed to bm to seed sequence generation.
+    :param depths: the depth of each sequences in the experiment.
+\    :param random_seed: Random seed passed to bm to seed sequence generation.
     :param use_self_inv_seqs: by default False, unlike with a typical RB sequence the last
         Clifford does not invert the sequence. If True, the subset of Z*I observable experiment
         results can equally well be analyzed as a unitarity or RB experiment. This argument does
@@ -481,10 +472,9 @@ def generate_unitarity_experiments(bm: BenchmarkConnection, qubit_groups: Sequen
     for group in qubit_groups:
         if random_seed is not None:
             # need to change the base seed for each set of qubits
-            random_seed += len(depths) * num_sequences
+            random_seed += len(depths)
 
         parallel_sequences.append(generate_rb_experiment_sequences(bm, group, depths,
-                                                                   num_sequences,
                                                                    random_seed=random_seed,
                                                                    use_self_inv_seqs = use_self_inv_seqs))
 
