@@ -23,21 +23,19 @@ def test_1q_general_pauli_noise(qvm, benchmarker):
     kraus_ops = pauli_kraus_map(probs)
 
     num_sequences_per_depth = 30
-    num_shots = 35
-    depths = [2, 8, 10, 25]
+    num_shots = 50
+    depths = [2, 8, 10, 16, 25]
+    depths = [depth for depth in depths for _ in range(num_sequences_per_depth)]
     qubits = (0, )
 
-    sequences = generate_rb_experiment_sequences(benchmarker, qubits, depths,
-                                                 num_sequences_per_depth)
+    sequences = generate_rb_experiment_sequences(benchmarker, qubits, depths)
     add_noise_to_sequences(sequences, qubits, kraus_ops)
 
     expts = group_sequences_into_parallel_experiments([sequences], [qubits])
 
     results = acquire_rb_data(qvm, expts, num_shots)
     stats = get_stats_by_qubit_group([qubits], results)[qubits]
-    fit = fit_rb_results([d for d in depths for _ in range(num_sequences_per_depth)],
-                         stats['expectation'],
-                         stats['std_err'])
+    fit = fit_rb_results(depths, stats['expectation'], stats['std_err'])
 
     observed_decay = fit.params['decay'].value
     decay_error = fit.params['decay'].stderr
@@ -55,18 +53,17 @@ def test_2q_general_pauli_noise(qvm, benchmarker):
     num_sequences_per_depth = 5
     num_shots = 25
     depths = [2, 10, 12, 25]
+    depths = [depth for depth in depths for _ in range(num_sequences_per_depth)]
     qubits = (0, 1)
 
-    sequences = generate_rb_experiment_sequences(benchmarker, qubits, depths,
-                                                 num_sequences_per_depth)
+    sequences = generate_rb_experiment_sequences(benchmarker, qubits, depths)
     add_noise_to_sequences(sequences, qubits, kraus_ops)
 
     expts = group_sequences_into_parallel_experiments([sequences], [qubits])
 
     results = acquire_rb_data(qvm, expts, num_shots)
     stats = get_stats_by_qubit_group([qubits], results)[qubits]
-    fit = fit_rb_results([d for d in depths for _ in range(num_sequences_per_depth)],
-                         stats['expectation'], stats['std_err'], num_shots)
+    fit = fit_rb_results(depths, stats['expectation'], stats['std_err'], num_shots)
 
     observed_decay = fit.params['decay'].value
     decay_error = fit.params['decay'].stderr
@@ -174,20 +171,20 @@ def test_unitarity(qvm, benchmarker):
     num_sequences_per_depth = 5
     num_shots = 50
     depths = [1, 6, 7, 8, 10]
+    depths = [depth for depth in depths for _ in range(num_sequences_per_depth)]
     qubits = (0, )
     expected_p = .90
     kraus_ops = depolarizing_noise(len(qubits), expected_p)
 
     sequences = generate_rb_experiment_sequences(benchmarker, qubits, depths,
-                                                 num_sequences_per_depth, use_self_inv_seqs=False)
+                                                 use_self_inv_seqs=False)
     add_noise_to_sequences(sequences, qubits, kraus_ops)
 
     expts = group_sequences_into_parallel_experiments([sequences], [qubits], is_unitarity_expt=True)
 
     results = acquire_rb_data(qvm, expts, num_shots)
     stats = get_stats_by_qubit_group([qubits], results)[qubits]
-    fit = fit_unitarity_results([d for d in depths for _ in range(num_sequences_per_depth)],
-                                stats['expectation'], stats['std_err'])
+    fit = fit_unitarity_results(depths, stats['expectation'], stats['std_err'])
 
     observed_unitarity = fit.params['decay'].value
     unitarity_error = fit.params['decay'].stderr
