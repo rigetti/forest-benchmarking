@@ -57,6 +57,7 @@ def test_fidelity():
     sigma = np.matmul(psi_theta, psi_theta.transpose())
     assert np.allclose(dm.fidelity(rho, sigma), 0.0)
 
+
 def test_smith_fidelity():
     psi = np.zeros((2, 1))
     psi[0] = 1
@@ -137,7 +138,7 @@ def test_qcb_for_mixed_states():
     rho = np.diag([lam_p, lam_m])
     rho_theta = np.matmul(np.matmul(G, rho), G.transpose())
     qcb, s = dm.quantum_chernoff_bound(rho, rho_theta)
-    assert np.allclose(dm.quantum_chernoff_bound(rho, rho_theta)[0], 0.59999999999)
+    assert np.allclose(qcb, 0.59999999999)
 
 
 # =================================================================================================
@@ -169,7 +170,7 @@ def test_HS_obeys_linearity():
 # =================================================================================================
 # Test:  distance measured for Processes
 # =================================================================================================
-def test_diamond_norm():
+def test_diamond_norm_distance():
     if int(os.getenv('SKIP_SCS', 0)) == 1:
         return pytest.skip('Having issues with SCS, skipping for now')
 
