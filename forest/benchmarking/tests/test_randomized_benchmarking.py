@@ -2,7 +2,7 @@ import numpy as np
 from pyquil.noise import pauli_kraus_map
 from forest.benchmarking.operator_estimation import ExperimentSetting, ExperimentResult, zeros_state
 from forest.benchmarking.randomized_benchmarking import *
-from forest.benchmarking.utils import all_pauli_z_terms
+from forest.benchmarking.utils import all_traceless_pauli_z_terms
 
 
 def add_noise_to_sequences(sequences, qubits, kraus_ops):
@@ -81,7 +81,7 @@ def test_survival_statistics():
     n = 10000
     qubits = (0, 1)
 
-    settings = [ExperimentSetting(zeros_state(qubits), op) for op in all_pauli_z_terms(qubits)]
+    settings = [ExperimentSetting(zeros_state(qubits), op) for op in all_traceless_pauli_z_terms(qubits)]
     results = (ExperimentResult(setting, exp, n, std_err=np.sqrt(v/n)) for setting, exp, v
                in zip(settings, expectations, variances))
     stats = get_stats_by_qubit_group([qubits], [results])[qubits]
@@ -104,7 +104,7 @@ def test_survival_statistics_2():
         variance = p0*(1-p0) * 2**2
         n = 100
         qubits = (0, )
-        setting = [ExperimentSetting(zeros_state(qubits), op) for op in all_pauli_z_terms(qubits)][0]
+        setting = [ExperimentSetting(zeros_state(qubits), op) for op in all_traceless_pauli_z_terms(qubits)][0]
         results = (ExperimentResult(setting, exp, n, std_err=np.sqrt(variance/n)), )
 
         stats = get_stats_by_qubit_group([qubits], [results])[qubits]
@@ -130,7 +130,7 @@ def test_survival_statistics_3():
         variances = np.asarray([p0*(1-p0), p1*(1-p1), p_joint*(1-p_joint)]) * 2**2
         n = 100
         qubits = (0, 1)
-        settings = [ExperimentSetting(zeros_state(qubits), op) for op in all_pauli_z_terms(qubits)]
+        settings = [ExperimentSetting(zeros_state(qubits), op) for op in all_traceless_pauli_z_terms(qubits)]
         results = (ExperimentResult(setting, exp, n, std_err=np.sqrt(v/n)) for setting, exp, v
                    in zip(settings, expectations, variances))
 

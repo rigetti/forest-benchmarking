@@ -12,7 +12,7 @@ from pyquil.quil import merge_programs
 from pyquil import Program
 
 from forest.benchmarking.tomography import _state_tomo_settings
-from forest.benchmarking.utils import all_pauli_z_terms, is_pos_pow_two
+from forest.benchmarking.utils import all_traceless_pauli_z_terms, is_pos_pow_two
 from forest.benchmarking.analysis.fitting import fit_base_param_decay
 from forest.benchmarking.operator_estimation import ExperimentSetting, ExperimentResult, \
     zeros_state, estimate_observables, ObservablesExperiment, group_settings
@@ -235,7 +235,7 @@ def group_sequences_into_parallel_experiments(parallel_expts_seqs: Sequence[List
         else:
             # measure observables of products of I and Z on qubits in the group, excluding all I
             settings = [ExperimentSetting(zeros_state(group), op)
-                    for group in qubit_groups for op in all_pauli_z_terms(group)]
+                    for group in qubit_groups for op in all_traceless_pauli_z_terms(group)]
             expt = ObservablesExperiment([settings], program)
         expts.append(expt)
     return expts
