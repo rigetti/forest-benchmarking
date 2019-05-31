@@ -728,7 +728,7 @@ def test_estimate_observables_2q_readout_error_one_measured(forest):
 
     results = calibrate_observable_estimates(qc, list(estimate_observables(qc, expt, num_shots=1000,
                                                   symmetrization_method=exhaustive_symmetrization)),
-                                             num_shots=500, noisy_program=p)
+                                             num_shots=1000, noisy_program=p)
     for idx, res in enumerate(results):
         raw_e[idx] = res.raw_expectation
         obs_e[idx] = res.expectation

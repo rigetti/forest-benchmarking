@@ -32,7 +32,8 @@ def _state_to_pauli(state: TensorProductState) -> PauliTerm:
 
 def _exhaustive_dfe(program: Program, qubits: Sequence[int], in_states,
                     benchmarker: BenchmarkConnection) -> Iterable[ExperimentSetting]:
-    """Yield experiments over itertools.product(in_paulis).
+    """
+    Yield experiments over itertools.product(in_paulis).
 
     Used as a helper function for generate_exhaustive_xxx_dfe_experiment routines.
 
@@ -41,8 +42,7 @@ def _exhaustive_dfe(program: Program, qubits: Sequence[int], in_states,
         used in ``program``.
     :param in_states: Use these single-qubit Pauli operators in every itertools.product()
         to generate an exhaustive list of DFE experiments.
-    :return: experiment setting iterator
-    :rtype: ``ExperimentSetting``
+    :return: experiment setting iterator for exhaustive dfe settings
     """
     n_qubits = len(qubits)
     for i_states in itertools.product(in_states, repeat=n_qubits):
@@ -59,7 +59,8 @@ def _exhaustive_dfe(program: Program, qubits: Sequence[int], in_states,
 
 
 def generate_exhaustive_process_dfe_experiment(program: Program, qubits: list,
-                                               benchmarker: BenchmarkConnection) -> ObservablesExperiment:
+                                               benchmarker: BenchmarkConnection) \
+        -> ObservablesExperiment:
     """
     Estimate process fidelity by exhaustive direct fidelity estimation (DFE).
 
@@ -84,9 +85,8 @@ def generate_exhaustive_process_dfe_experiment(program: Program, qubits: list,
         which we estimate the fidelity.
     :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
         used in ``program``.
-    :param benchmarker: A ``BecnhmarkConnection`` object to be used in experiment design
-    :return: a set of experiments
-    :rtype: ``ObservablesExperiment`
+    :param benchmarker: A ``BenchmarkConnection`` object to be used in experiment design
+    :return: an ObservablesExperiment that constitutes a process DFE experiment.
     """
     expr = ObservablesExperiment(list(
         _exhaustive_dfe(program=program,
@@ -123,9 +123,8 @@ def generate_exhaustive_state_dfe_experiment(program: Program, qubits: list,
         for which we estimate the fidelity.
     :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
         used in ``program``.
-    :param benchmarker: A ``BecnhmarkConnection`` object to be used in experiment design
-    :return: a set of experiments
-    :rtype: ``ObservablesExperiment`
+    :param benchmarker: A ``BenchmarkConnection`` object to be used in experiment design
+    :return: an ObservablesExperiment that constitutes a state DFE experiment.
     """
     expr = ObservablesExperiment(list(
         _exhaustive_dfe(program=program,
@@ -149,7 +148,6 @@ def _monte_carlo_dfe(program: Program, qubits: Sequence[int], in_states: list, n
         to generate an exhaustive list of DFE experiments.
     :param n_terms: Number of preparation and measurement settings to be chosen at random
     :return: experiment setting iterator
-    :rtype: ``ExperimentSetting``
     """
     all_st_inds = np.random.randint(len(in_states), size=(n_terms, len(qubits)))
     for st_inds in all_st_inds:
@@ -194,8 +192,7 @@ def generate_monte_carlo_state_dfe_experiment(program: Program, qubits: List[int
     :param benchmarker: The `BenchmarkConnection` object used to design experiments
     :param n_terms: Number of randomly chosen observables to measure. This number should be 
         a constant less than ``2**len(qubits)``, otherwise ``exhaustive_state_dfe`` is more efficient.
-    :return: a set of experiments
-    :rtype: ``ObservablesExperiment`
+    :return: an ObservablesExperiment that constitutes a state DFE experiment.
     """
     expr = ObservablesExperiment(list(
         _monte_carlo_dfe(program=program, qubits=qubits,
@@ -205,7 +202,8 @@ def generate_monte_carlo_state_dfe_experiment(program: Program, qubits: List[int
     return expr
 
 
-def generate_monte_carlo_process_dfe_experiment(program: Program, qubits: List[int], benchmarker: BenchmarkConnection,
+def generate_monte_carlo_process_dfe_experiment(program: Program, qubits: List[int],
+                                                benchmarker: BenchmarkConnection,
                                                 n_terms: int = 200) -> ObservablesExperiment:
     """
     Estimate process fidelity by randomly sampled direct fidelity estimation.
@@ -229,8 +227,7 @@ def generate_monte_carlo_process_dfe_experiment(program: Program, qubits: List[i
     :param benchmarker: The `BenchmarkConnection` object used to design experiments
     :param n_terms: Number of randomly chosen observables to measure. This number should be 
         a constant less than ``2**len(qubits)``, otherwise ``exhaustive_process_dfe`` is more efficient.
-    :return: a DFE experiment object
-    :rtype: ``DFEExperiment`
+    :return: an ObservablesExperiment that constitutes a process DFE experiment.
     """
     expr = ObservablesExperiment(list(
         _monte_carlo_dfe(program=program, qubits=qubits,
@@ -240,20 +237,21 @@ def generate_monte_carlo_process_dfe_experiment(program: Program, qubits: List[i
     return expr
 
 
-def acquire_dfe_data(qc: QuantumComputer, expr: ObservablesExperiment, num_shots=10_000, active_reset=False,
-                     mitigate_readout_errors=True) -> List[ExperimentResult]:
+def acquire_dfe_data(qc: QuantumComputer, expr: ObservablesExperiment, num_shots=10_000,
+                     active_reset=False, mitigate_readout_errors=True) -> List[ExperimentResult]:
     """
     Acquire data necessary for direct fidelity estimate (DFE).
 
     :param qc: A quantum computer object where the experiment will run.
-    :param expr: A partial tomography(``ObservablesExperiment``) object describing the experiments to be run.
-    :param num_shots: The minimum number of shots to be taken in each experiment (including calibration).
-    :param active_reset: Boolean flag indicating whether experiments should terminate with an active reset instruction
-        (this can make experiments a lot faster).
-    :param mitigate_readout_errors: Boolean flag indicating whether bias due to imperfect readout should be corrected
-        for
-    :return: a DFE data object
-    :rtype: ``DFEData`
+    :param expr: An ObservablesExperiment object describing the experiments to be run.
+    :param num_shots: The number of shots to be taken in each experiment. If
+        mitigate_readout_errors is set to True then this same number of shots will be used for
+        each round of symmetrized data collection and each calibration of an observable.
+    :param active_reset: Boolean flag indicating whether experiments should terminate with an
+        active reset instruction (this can make experiments a lot faster).
+    :param mitigate_readout_errors: Boolean flag indicating whether bias due to imperfect
+        readout should be corrected
+    :return: results from running the given DFE experiment. These can be passed to estimate_dfe
     """
     if mitigate_readout_errors:
         res = list(estimate_observables(qc, expr, num_shots=num_shots, active_reset=active_reset,
