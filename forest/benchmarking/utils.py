@@ -9,13 +9,25 @@ from numpy import pi
 import networkx as nx
 from networkx.algorithms.approximation.clique import clique_removal
 import pandas as pd
-from pandas import DataFrame
 
 from pyquil.gates import I, RX, RY, RZ, H, MEASURE
 from pyquil.gate_matrices import X, Y, Z
 from pyquil.paulis import PauliTerm
 from pyquil.quil import Program
 from pyquil.api import QuantumComputer
+
+
+def is_pos_pow_two(x: int) -> bool:
+    """
+    Simple check that an integer is a positive power of two.
+    :param x: number to check
+    :return: whether x is a positive power of two
+    """
+    if x <= 0:
+        return False
+    while (x & 1) == 0:
+        x = x >> 1
+    return x == 1
 
 
 def bit_array_to_int(bit_array: Sequence[int]) -> int:
@@ -146,16 +158,16 @@ def str_to_pauli_term(pauli_str: str, qubit_labels=None):
     >>> str_to_pauli_term('XY', [])
 
     :param str pauli_str: The input string, made of of 'I', 'X', 'Y' or 'Z'
-    :param set qubit_labels: The integer labels for the qubits in the string, given in reverse
-    order. If None, default to the range of the length of pauli_str.
+    :param qubit_labels: The integer labels for the qubits in the string
+        If None, default to the range of the length of pauli_str.
     :return: the corresponding PauliTerm
     :rtype: pyquil.paulis.PauliTerm
     """
+    # TODO: why was this reversed?
     if qubit_labels is None:
-        labels_list = [qubit for qubit in reversed(range(len(pauli_str)))]
-    else:
-        labels_list = sorted(qubit_labels)[::-1]
-    pauli_term = PauliTerm.from_list(list(zip(pauli_str, labels_list)))
+        qubit_labels = [qubit for qubit in range(len(pauli_str))]
+
+    pauli_term = PauliTerm.from_list(list(zip(pauli_str, qubit_labels)))
     return pauli_term
 
 
@@ -198,33 +210,45 @@ def all_sic_terms(qubit_count: int, qubit_labels=None):
     return [tuple([op[q] + '_' + str(qubit) for q, qubit in enumerate(qubit_labels)]) for op in labels]
 
 
-def all_pauli_terms(qubit_count: int, qubit_labels=None):
+def all_pauli_terms(qubits: Sequence[int]):
     """
     Generate list of all Pauli terms (with weight > 0) on N qubits.
 
-    :param int qubit_count: The number of qubits
-    :param set qubit_labels: The integer labels for the qubits
+    :param qubits: The integer labels for the qubits
     :return: list of `PauliTerm`s
     :rtype: list
     """
-    # we exclude the all identity string since that maps to no preparation and no measurement
-    all_ixyz_strs = [''.join(x) for x in itertools.product('IXYZ', repeat=qubit_count)][1:]
-    list_of_terms = [str_to_pauli_term(s, qubit_labels) for s in all_ixyz_strs]
+    all_ixyz_strs = [''.join(x) for x in itertools.product('IXYZ', repeat=len(qubits))][1:]
+    list_of_terms = [str_to_pauli_term(s, qubits) for s in all_ixyz_strs]
     return list_of_terms
 
 
-def all_pauli_z_terms(qubit_count: int, qubit_labels=None):
+def all_pauli_choice_terms(qubits: Sequence[int], pauli_choice: str):
+    """
+    Generate list of all Pauli terms (with weight > 0) on N qubits with choice pauli.
+
+    If pauli_choice is 'Z' then this is identical to all_pauli_z_terms
+
+    :param qubits: The integer labels for the qubits
+    :param pauli_choice: choice of which pauli to form combinations.
+    :return: list of `PauliTerm`s made from combinations of I and the given choice pauli
+    """
+    all_ichoice_strs = [''.join(x) for x in itertools.product('I' + pauli_choice.upper(),
+                                                              repeat=len(qubits))][1:]
+    list_of_terms = [str_to_pauli_term(s, qubits) for s in all_ichoice_strs]
+    return list_of_terms
+
+
+def all_pauli_z_terms(qubits: Sequence[int]):
     """
     Generate list of all Pauli Z terms (with weight > 0) on N qubits
 
-    :param int n: The number of qubits
-    :param set qubit_labels: The integer labels for the qubits
+    :param qubits: The integer labels for the qubits
     :return: list of `PauliTerm`s
     :rtype: list
     """
-    # we exclude the all identity string since that maps to no preparation and no measurement
-    all_iz_strs = [''.join(x) for x in itertools.product('IZ', repeat=qubit_count)][1:]
-    list_of_terms = [str_to_pauli_term(s, qubit_labels) for s in all_iz_strs]
+    all_iz_strs = [''.join(x) for x in itertools.product('IZ', repeat=len(qubits))][1:]
+    list_of_terms = [str_to_pauli_term(s, qubits) for s in all_iz_strs]
     return list_of_terms
 
 
@@ -449,35 +473,6 @@ def n_qubit_pauli_basis(n):
         raise ValueError("n = {} should be at least 1.".format(n))
 
 
-computational_label_ops = [('0', np.array([[1], [0]])), ('1', np.array([[0], [1]]))]
-
-COMPUTATIONAL_BASIS = OperatorBasis(computational_label_ops)
-
-
-def n_qubit_computational_basis(n):
-    """
-    Construct the tensor product operator basis of `n` COMPUTATIONAL_BASIS's.
-
-    :param int n: The number of qubits.
-    :return: The product Pauli operator basis of `n` qubits
-    :rtype: OperatorBasis
-    """
-    if n >= 1:
-        return COMPUTATIONAL_BASIS ** n
-    else:
-        raise ValueError("n = {} should be at least 1.".format(n))
-        
-
-def pauli_basis_measurements(qubit):
-    """
-    Generates the Programs required to measure the expectation values of the pauli operators.
-
-    :param qubit: Required argument (so that the caller has a reference).
-    """
-    pauli_label_meas_progs = [Program(), Program(RY(-np.pi / 2, qubit)), Program(RX(-np.pi / 2, qubit)), Program()]
-    return pauli_label_meas_progs
-
-
 def transform_pauli_moments_to_bit(mean_p, var_p):
     """
     Changes the first of a Pauli operator to the moments of a bit (a Bernoulli process).
@@ -626,7 +621,7 @@ def partial_trace(rho, keep, dims, optimize=False):
 def metadata_save(qc: QuantumComputer,
                   repo_path: str = None,
                   filename: str = None) -> pd.DataFrame:
-    '''
+    """
     This helper function saves metadata related to your run on a Quantum computer.
 
     Basic data saved includes the date and time. Additionally information related to the quantum
@@ -640,7 +635,7 @@ def metadata_save(qc: QuantumComputer,
     :param repo_path: path to repository e.g. '../'
     :param filename: The name of the file to write JSON-serialized results to.
     :return: pandas DataFrame
-    '''
+    """
 
     # Git related things
     if repo_path is not None:

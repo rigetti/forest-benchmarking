@@ -20,35 +20,37 @@ def test_2q_pauli_str_to_pauli_term():
     for pauli_str1 in ['I', 'X', 'Y', 'Z']:
         for pauli_str2 in ['I', 'X', 'Y', 'Z']:
             assert str_to_pauli_term(pauli_str1 + pauli_str2) == \
-                   PauliTerm(pauli_str1, 1) * PauliTerm(pauli_str2, 0)
-            assert str_to_pauli_term(pauli_str1 + pauli_str2, set([10, 21])) == \
+                   PauliTerm(pauli_str1, 0) * PauliTerm(pauli_str2, 1)
+            assert str_to_pauli_term(pauli_str1 + pauli_str2, [21, 10]) == \
                    PauliTerm(pauli_str1, 21) * PauliTerm(pauli_str2, 10)
     return
 
 
 def test_all_pauli_terms():
-    a1 = all_pauli_terms(1)
-    a2 = all_pauli_terms(2)
+    a1 = all_pauli_terms([0])
+    a2 = all_pauli_terms([0, 1])
     assert len(a1) == 3
     assert len(a2) == 15
     for pauli_str1 in ['X', 'Y', 'Z']:
         assert PauliTerm(pauli_str1, 0) in a1
     for pauli_str1 in ['I', 'X', 'Y', 'Z']:
         for pauli_str2 in ['I', 'X', 'Y', 'Z']:
-            if not (pauli_str1 == 'I' and pauli_str2 == 'I'):
-                assert PauliTerm(pauli_str1, 0) * PauliTerm(pauli_str2, 1) in a2
+            if pauli_str1 == pauli_str2 == 'I':
+                continue
+            assert PauliTerm(pauli_str1, 0) * PauliTerm(pauli_str2, 1) in a2
 
 
 def test_all_pauli_z_terms():
-    a1 = all_pauli_z_terms(1)
-    a2 = all_pauli_z_terms(2)
+    a1 = all_pauli_z_terms([0])
+    a2 = all_pauli_z_terms([0, 1])
     assert len(a1) == 1
     assert len(a2) == 3
     assert PauliTerm('Z', 0) in a1
     for pauli_str1 in ['I', 'Z']:
         for pauli_str2 in ['I', 'Z']:
-            if not (pauli_str1 == 'I' and pauli_str2 == 'I'):
-                assert PauliTerm(pauli_str1, 0) * PauliTerm(pauli_str2, 1) in a2
+            if pauli_str1 == pauli_str2 == 'I':
+                continue
+            assert PauliTerm(pauli_str1, 0) * PauliTerm(pauli_str2, 1) in a2
 
 
 def test_partial_trace():
