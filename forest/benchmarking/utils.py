@@ -473,6 +473,25 @@ def n_qubit_pauli_basis(n):
         raise ValueError("n = {} should be at least 1.".format(n))
 
 
+computational_label_ops = [('0', np.array([[1], [0]])), ('1', np.array([[0], [1]]))]
+
+COMPUTATIONAL_BASIS = OperatorBasis(computational_label_ops)
+
+
+def n_qubit_computational_basis(n):
+    """
+    Construct the tensor product operator basis of `n` COMPUTATIONAL_BASIS's.
+
+    :param int n: The number of qubits.
+    :return: The product Pauli operator basis of `n` qubits
+    :rtype: OperatorBasis
+    """
+    if n >= 1:
+        return COMPUTATIONAL_BASIS ** n
+    else:
+        raise ValueError("n = {} should be at least 1.".format(n))
+
+
 def transform_pauli_moments_to_bit(mean_p, var_p):
     """
     Changes the first of a Pauli operator to the moments of a bit (a Bernoulli process).
