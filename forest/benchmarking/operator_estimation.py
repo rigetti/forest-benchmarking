@@ -589,7 +589,6 @@ def _max_tpb_overlap(obs_expt: ObservablesExperiment):
     return diagonal_sets
 
 
-
 def group_settings_greedy(obs_expt: ObservablesExperiment):
     """
     Greedy method to group ExperimentSettings in a given ObservablesExperiment
