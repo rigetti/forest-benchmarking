@@ -54,7 +54,7 @@ def int_to_bit_array(num: int, n_bits: int) -> Sequence[int]:
     return [num >> bit & 1 for bit in range(n_bits - 1, -1, -1)]
 
 
-def determine_simultaneous_grouping(experiments: Sequence[DataFrame],
+def determine_simultaneous_grouping(experiments: Sequence[pd.DataFrame],
                                     equivalent_column_label: str = None) -> List[Set[int]]:
     """
     Determines a grouping of experiments acting on disjoint sets of qubits that can be run
@@ -210,7 +210,7 @@ def all_sic_terms(qubit_count: int, qubit_labels=None):
     return [tuple([op[q] + '_' + str(qubit) for q, qubit in enumerate(qubit_labels)]) for op in labels]
 
 
-def all_pauli_terms(qubits: Sequence[int]):
+def all_traceless_pauli_terms(qubits: Sequence[int]):
     """
     Generate list of all Pauli terms (with weight > 0) on N qubits.
 
@@ -223,11 +223,11 @@ def all_pauli_terms(qubits: Sequence[int]):
     return list_of_terms
 
 
-def all_pauli_choice_terms(qubits: Sequence[int], pauli_choice: str):
+def all_traceless_pauli_choice_terms(qubits: Sequence[int], pauli_choice: str):
     """
     Generate list of all Pauli terms (with weight > 0) on N qubits with choice pauli.
 
-    If pauli_choice is 'Z' then this is identical to all_pauli_z_terms
+    If pauli_choice is 'Z' then this is identical to all_traceless_pauli_z_terms
 
     :param qubits: The integer labels for the qubits
     :param pauli_choice: choice of which pauli to form combinations.
@@ -239,7 +239,7 @@ def all_pauli_choice_terms(qubits: Sequence[int], pauli_choice: str):
     return list_of_terms
 
 
-def all_pauli_z_terms(qubits: Sequence[int]):
+def all_traceless_pauli_z_terms(qubits: Sequence[int]):
     """
     Generate list of all Pauli Z terms (with weight > 0) on N qubits
 

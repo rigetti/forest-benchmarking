@@ -14,8 +14,8 @@ from pyquil.api._qac import AbstractCompiler
 from pyquil.device import NxDevice
 from pyquil.gates import I, H, CZ
 from pyquil.numpy_simulator import NumpyWavefunctionSimulator
-from pyquil.operator_estimation import measure_observables, ExperimentResult, ExperimentSetting, \
-    zeros_state
+from forest.benchmarking.operator_estimation import estimate_observables, ExperimentResult, \
+    ExperimentSetting, zeros_state, exhaustive_symmetrization, calibrate_observable_estimates
 from pyquil.paulis import sI, sZ, sX
 from pyquil.quil import Program
 from rpcq.messages import PyQuilExecutableResponse
@@ -31,9 +31,9 @@ PLUS = np.array([[1], [1]]) / np.sqrt(2)
 PROJ_PLUS = PLUS @ PLUS.T.conj()
 PROJ_MINUS = ID - PROJ_PLUS
 
-ID_SETTING = ExperimentSetting(in_state=zeros_state([Q0]), out_operator=sI(Q0))
-Z_SETTING = ExperimentSetting(in_state=zeros_state([Q0]), out_operator=sZ(Q0))
-X_SETTING = ExperimentSetting(in_state=zeros_state([Q0]), out_operator=sX(Q0))
+ID_SETTING = ExperimentSetting(in_state=zeros_state([Q0]), observable=sI(Q0))
+Z_SETTING = ExperimentSetting(in_state=zeros_state([Q0]), observable=sZ(Q0))
+X_SETTING = ExperimentSetting(in_state=zeros_state([Q0]), observable=sX(Q0))
 
 # Two qubit defs
 P00 = np.kron(PROJ_ZERO, PROJ_ZERO)
@@ -48,8 +48,8 @@ def test_generate_1q_state_tomography_experiment():
     one_q_exp = generate_state_tomography_experiment(prog, qubits=qubits)
     dimension = 2 ** len(qubits)
 
-    assert [one_q_exp[idx][0].out_operator[qubits[0]] for idx in range(0, dimension ** 2)] == \
-           ['I', 'X', 'Y', 'Z']
+    assert [one_q_exp[idx][0].observable[qubits[0]] for idx in range(0, dimension ** 2-1)] == \
+           ['X', 'Y', 'Z']
 
 
 def test_generate_2q_state_tomography_experiment():
@@ -59,8 +59,8 @@ def test_generate_2q_state_tomography_experiment():
     two_q_exp = generate_state_tomography_experiment(p, qubits=[0, 1])
     dimension = 2 ** 2
 
-    assert [str(two_q_exp[idx][0].out_operator) for idx in list(range(0, dimension ** 2))] == \
-           ['(1+0j)*I', '(1+0j)*X1', '(1+0j)*Y1', '(1+0j)*Z1',
+    assert [str(two_q_exp[idx][0].observable) for idx in list(range(0, dimension ** 2-1))] == \
+           ['(1+0j)*X1', '(1+0j)*Y1', '(1+0j)*Z1',
             '(1+0j)*X0', '(1+0j)*X0*X1', '(1+0j)*X0*Y1', '(1+0j)*X0*Z1',
             '(1+0j)*Y0', '(1+0j)*Y0*X1', '(1+0j)*Y0*Y1', '(1+0j)*Y0*Z1',
             '(1+0j)*Z0', '(1+0j)*Z0*X1', '(1+0j)*Z0*Y1', '(1+0j)*Z0*Z1']
@@ -108,9 +108,9 @@ def test_R_operator_with_hand_calc_example_1_qubit():
 def test_R_operator_fixed_point_2_qubit():
     # Check fixed point of operator. See Eq. 5 in Řeháček et al., PRA 75, 042108 (2007).
     qubits = [0, 1]
-    id_setting = ExperimentSetting(in_state=zeros_state(qubits), out_operator=sI(qubits[0])*sI(
+    id_setting = ExperimentSetting(in_state=zeros_state(qubits), observable=sI(qubits[0])*sI(
         qubits[1]))
-    zz_setting = ExperimentSetting(in_state=zeros_state(qubits), out_operator=sZ(qubits[0])*sI(
+    zz_setting = ExperimentSetting(in_state=zeros_state(qubits), observable=sZ(qubits[0])*sI(
         qubits[1]))
 
     id_result = ExperimentResult(setting=id_setting, expectation=1, total_counts=1)
@@ -164,7 +164,9 @@ def single_q_tomo_fixture():
 
     # Get data from QVM
     tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
-    results = list(measure_observables(qc=qc, tomo_experiment=tomo_expt, n_shots=752))
+    results = list(estimate_observables(qc=qc, obs_expt=tomo_expt, num_shots=500,
+                                        symmetrization_method=exhaustive_symmetrization))
+    results = list(calibrate_observable_estimates(qc, results))
 
     return results, rho_true
 
@@ -189,7 +191,9 @@ def two_q_tomo_fixture():
 
     # Get data from QVM
     tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
-    results = list(measure_observables(qc=qc, tomo_experiment=tomo_expt, n_shots=752))
+    results = list(estimate_observables(qc=qc, obs_expt=tomo_expt, num_shots=500,
+                                        symmetrization_method=exhaustive_symmetrization))
+    results = list(calibrate_observable_estimates(qc, results))
 
     return results, rho_true
 
@@ -236,7 +240,7 @@ def test_maxent_single_qubit(single_q_tomo_fixture):
 def test_maxent_two_qubit(two_q_tomo_fixture):
     qubits = [0, 1]
     results, rho_true = two_q_tomo_fixture
-    rho_est = iterative_mle_state_estimate(results=results, qubits=qubits, entropy_penalty=.01,
+    rho_est = iterative_mle_state_estimate(results=results, qubits=qubits, entropy_penalty=.001,
                                            tol=1e-5)
 
     np.testing.assert_allclose(rho_true, rho_est, atol=0.02)

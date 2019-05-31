@@ -27,8 +27,8 @@ def test_2q_pauli_str_to_pauli_term():
 
 
 def test_all_pauli_terms():
-    a1 = all_pauli_terms([0])
-    a2 = all_pauli_terms([0, 1])
+    a1 = all_traceless_pauli_terms([0])
+    a2 = all_traceless_pauli_terms([0, 1])
     assert len(a1) == 3
     assert len(a2) == 15
     for pauli_str1 in ['X', 'Y', 'Z']:
@@ -41,8 +41,8 @@ def test_all_pauli_terms():
 
 
 def test_all_pauli_z_terms():
-    a1 = all_pauli_z_terms([0])
-    a2 = all_pauli_z_terms([0, 1])
+    a1 = all_traceless_pauli_z_terms([0])
+    a2 = all_traceless_pauli_z_terms([0, 1])
     assert len(a1) == 1
     assert len(a2) == 3
     assert PauliTerm('Z', 0) in a1
