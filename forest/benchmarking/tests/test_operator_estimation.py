@@ -759,7 +759,7 @@ def test_exhaustive_symmetrization_1q(forest):
     expected_frac0 = (p00 + p11) / 2
 
     assert symm_prog_qs == [[5]] * 2
-    assert np.isclose(frac0, expected_frac0, 2e-2)
+    assert np.isclose(frac0, expected_frac0, atol=2e-2)
 
 
 def test_exhaustive_symmetrization_2q(forest):
@@ -788,8 +788,8 @@ def test_exhaustive_symmetrization_2q(forest):
     expected_frac5_0 = (p5_00 + p5_11) / 2
     expected_frac7_0 = (p7_00 + p7_11) / 2
 
-    assert np.isclose(frac5_0, expected_frac5_0, 2e-2)
-    assert np.isclose(frac7_0, expected_frac7_0, 2e-2)
+    assert np.isclose(frac5_0, expected_frac5_0, atol=2e-2)
+    assert np.isclose(frac7_0, expected_frac7_0, atol=2e-2)
 
 
 def test_estimate_observables_inherit_noise_errors(forest):
