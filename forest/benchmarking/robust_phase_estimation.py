@@ -11,9 +11,9 @@ from pyquil.quilbase import Gate
 from pyquil.api import QuantumComputer
 from pyquil.paulis import PauliTerm
 from forest.benchmarking.utils import bloch_vector_to_standard_basis
-from forest.benchmarking.operator_estimation import ExperimentSetting, zeros_state, plusZ, minusZ, \
+from forest.benchmarking.operator_estimation import ExperimentSetting, plusZ, minusZ, \
     ObservablesExperiment, ExperimentResult, estimate_observables, plusX, _OneQState, \
-    TensorProductState, group_experiment_settings
+    TensorProductState, group_settings
 
 import matplotlib.pyplot as plt
 
@@ -219,7 +219,7 @@ def generate_rpe_experiments(rotation: Program, prep_prog: Program, pre_meas_pro
         depth = 2 ** exponent
         depth_many_rot = [Program(rotation) for _ in range(depth)]
         program = Program(prep_prog) + sum(depth_many_rot, Program()) + Program(pre_meas_prog)
-        expts.append(group_experiment_settings(ObservablesExperiment(list(settings), program)))
+        expts.append(group_settings(ObservablesExperiment(list(settings), program)))
 
     return expts
 
