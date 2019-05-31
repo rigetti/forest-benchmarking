@@ -345,6 +345,10 @@ def test_apply_choi_matrix_2_state():
 # ==================================================================================================
 # Test physicality of Channels
 # ==================================================================================================
+def test_kraus_operators_are_valid():
+    assert kraus_operators_are_valid(amplitude_damping_kraus(np.random.rand()))
+    assert kraus_operators_are_valid(H)
+    assert not kraus_operators_are_valid(AdKrausOps[0])
 
 def test_choi_is_hermitian_preserving():
     D = 2

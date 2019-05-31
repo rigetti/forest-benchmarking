@@ -1,5 +1,4 @@
 import functools
-from functools import partial
 import itertools
 import json
 import logging
@@ -17,10 +16,10 @@ import networkx as nx
 from networkx.algorithms.approximation.clique import clique_removal
 from pyquil import Program
 from pyquil.api import QuantumComputer
-from pyquil.gates import *
+from pyquil.gates import RX, RZ, MEASURE
 from pyquil.paulis import PauliTerm, sI, is_identity
 
-from forest.benchmarking.compilation import basic_compile
+from forest.benchmarking.compilation import basic_compile, _RY
 from forest.benchmarking.utils import transform_bit_moments_to_pauli
 
 if sys.version_info < (3, 7):
@@ -159,12 +158,12 @@ def zeros_state(qubits: Iterable[int]):
 @dataclass(frozen=True, init=False)
 class ExperimentSetting:
     """
-    Input and output settings for a tomography-like experiment.
-    Many near-term quantum algorithms take the following form:
+    Input and output settings for an ObservablesExperiment.
+    Many near-term quantum algorithms and QCVV protocols take the following form:
      - Start in a pauli state
-     - Prepare some ansatz
-     - Measure it w.r.t. pauli operators
-    Where we typically use a large number of (start, measure) pairs but keep the ansatz preparation
+     - Do some interesting quantum circuit (e.g. prepare some ansatz)
+     - Measure the output of the circuit w.r.t. expectations of Pauli observables.
+    Where we typically use a large number of (start, measure) pairs but keep the quantum circuit
     program consistent. This class represents the (start, measure) pairs. Typically a large
     number of these :py:class:`ExperimentSetting` objects will be created and grouped into
     a :py:class:`ObservablesExperiment`.
@@ -173,38 +172,9 @@ class ExperimentSetting:
     observable: PauliTerm
 
     def __init__(self, in_state: TensorProductState, observable: PauliTerm):
-        # For backwards compatibility, handle in_state specified by PauliTerm.
-        if isinstance(in_state, PauliTerm):
-            warnings.warn("Please specify in_state as a TensorProductState",
-                          DeprecationWarning, stacklevel=2)
-
-            if is_identity(in_state):
-                in_state = TensorProductState()
-            else:
-                in_state = TensorProductState([
-                    _OneQState(label=pauli_label, index=0, qubit=qubit)
-                    for qubit, pauli_label in in_state._ops.items()
-                ])
 
         object.__setattr__(self, 'in_state', in_state)
         object.__setattr__(self, 'observable', observable)
-
-    @property
-    def in_operator(self):
-        warnings.warn("ExperimentSetting.in_operator is deprecated in favor of in_state",
-                      stacklevel=2)
-
-        # Backwards compat
-        pt = sI()
-        for oneq_state in self.in_state.states:
-            if oneq_state.label not in ['X', 'Y', 'Z']:
-                raise ValueError(f"Can't shim {oneq_state.label} into a pauli term. Use in_state.")
-            if oneq_state.index != 0:
-                raise ValueError(f"Can't shim {oneq_state} into a pauli term. Use in_state.")
-
-            pt *= PauliTerm(op=oneq_state.label, index=oneq_state.qubit)
-
-        return pt
 
     def __str__(self):
         return f'{self.in_state}→{self.observable.compact_str()}'
@@ -241,22 +211,21 @@ def _abbrev_program(program: Program, max_len=10):
 
 class ObservablesExperiment:
     """
-    A tomography-like experiment.
     Many near-term quantum algorithms involve:
-     - some limited state preparation
+     - some limited state preparation, e.g. prepare a Pauli eigenstate
      - enacting a quantum process (like in tomography) or preparing a variational ansatz state
-       (like in VQE)
-     - measuring observables of the state.
-    Where we typically use a large number of (state_prep, measure) pairs but keep the ansatz
-    program consistent. This class stores the ansatz program as a :py:class:`~pyquil.Program`
-    and maintains a list of :py:class:`ExperimentSetting` objects which each represent a
-    (state_prep, measure) pair.
+       (like in VQE) with some circuit.
+     - Measure the output of the circuit w.r.t. expectations of Pauli observables
+    Where we typically use a large number of (state_prep, measure_observable) pairs but keep the
+    quantum circuit program consistent. This class stores the circuit program as a
+    :py:class:`~pyquil.Program` and maintains a list of :py:class:`ExperimentSetting` objects
+    which each represent a (state_prep, measure_observable) pair.
     Settings diagonalized by a shared tensor product basis (TPB) can (optionally) be estimated
     simultaneously. Therefore, this class is backed by a list of list of ExperimentSettings.
     Settings sharing an inner list will be estimated simultaneously. If you don't want this,
     provide a list of length-1-lists. As a convenience, if you pass a 1D list to the constructor
     will expand it to a list of length-1-lists.
-    This class will not group settings for you. Please see :py:func:`group_experiments` for
+    This class will not group settings for you. Please see :py:func:`group_settings` for
     a function that will automatically process a ObservablesExperiment to group Experiments sharing
     a TPB.
     """
@@ -428,9 +397,9 @@ def _one_q_pauli_prep(label, index, qubit):
 
     if label == 'X':
         if index == 0:
-            return Program(RY(pi / 2, qubit))
+            return Program(_RY(pi / 2, qubit))
         else:
-            return Program(RY(-pi / 2, qubit))
+            return Program(_RY(-pi / 2, qubit))
 
     elif label == 'Y':
         if index == 0:
@@ -467,7 +436,7 @@ def _local_pauli_eig_meas(op, idx):
     Program are essentially the Hermitian conjugates of those in :py:func:`_one_q_pauli_prep`)
     """
     if op == 'X':
-        return Program(RY(-pi / 2, idx))
+        return Program(_RY(-pi / 2, idx))
     elif op == 'Y':
         return Program(RX(pi / 2, idx))
     elif op == 'Z':
@@ -475,41 +444,42 @@ def _local_pauli_eig_meas(op, idx):
     raise ValueError(f'Unknown operation {op}')
 
 
-def construct_tpb_graph(experiments: ObservablesExperiment):
+def construct_tpb_graph(obs_expt: ObservablesExperiment):
     """
-    Construct a graph where an edge signifies two experiments are diagonal in a TPB.
+    Construct a graph where an edge signifies two settings are diagonal in a TPB.
     """
     g = nx.Graph()
-    for expt in experiments:
-        assert len(expt) == 1, 'already grouped?'
-        expt = expt[0]
+    for groups in obs_expt:
+        assert len(groups) == 1, 'already grouped?'
+        setting = groups[0]
 
-        if expt not in g:
-            g.add_node(expt, count=1)
+        if setting not in g:
+            g.add_node(setting, count=1)
         else:
-            g.nodes[expt]['count'] += 1
+            g.nodes[setting]['count'] += 1
 
-    for expt1, expt2 in itertools.combinations(experiments, r=2):
-        expt1 = expt1[0]
-        expt2 = expt2[0]
+    for group1, group2 in itertools.combinations(obs_expt, r=2):
+        sett1 = group1[0]
+        sett2 = group2[0]
 
-        if expt1 == expt2:
+        if sett1 == sett2:
             continue
 
-        max_weight_in = _max_weight_state([expt1.in_state, expt2.in_state])
-        max_weight_out = _max_weight_operator([expt1.observable, expt2.observable])
+        max_weight_in = _max_weight_state([sett1.in_state, sett2.in_state])
+        max_weight_out = _max_weight_operator([sett1.observable, sett2.observable])
         if max_weight_in is not None and max_weight_out is not None:
-            g.add_edge(expt1, expt2)
+            g.add_edge(sett1, sett2)
 
     return g
 
 
 def group_settings_clique_removal(experiment: ObservablesExperiment) -> ObservablesExperiment:
     """
-    Group experiments that are diagonal in a shared tensor product basis (TPB) to minimize number
+    Group settings that are diagonal in a shared tensor product basis (TPB) to minimize number
     of QPU runs, using a graph clique removal algorithm.
-    :param experiments: a tomography experiment
-    :return: a tomography experiment with all the same settings, just grouped according to shared
+
+    :param experiment: an ObservablesExperiment
+    :return: a ObservablesExperiment with all the same settings, just grouped according to shared
         TPBs.
     """
     g = construct_tpb_graph(experiment)
@@ -517,9 +487,9 @@ def group_settings_clique_removal(experiment: ObservablesExperiment) -> Observab
     new_cliqs = []
     for cliq in cliqs:
         new_cliq = []
-        for expt in cliq:
+        for sett in cliq:
             # duplicate `count` times
-            new_cliq += [expt] * g.nodes[expt]['count']
+            new_cliq += [sett] * g.nodes[sett]['count']
 
         new_cliqs += [new_cliq]
 
@@ -527,8 +497,10 @@ def group_settings_clique_removal(experiment: ObservablesExperiment) -> Observab
 
 
 def _max_weight_operator(ops: Iterable[PauliTerm]) -> Union[None, PauliTerm]:
-    """Construct a PauliTerm operator by taking the non-identity single-qubit operator at each
+    """
+    Construct a PauliTerm operator by taking the non-identity single-qubit operator at each
     qubit position.
+
     This function will return ``None`` if the input operators do not share a natural tensor
     product basis.
     For example, the max_weight_operator of ["XI", "IZ"] is "XZ". Asking for the max weight
@@ -547,8 +519,10 @@ def _max_weight_operator(ops: Iterable[PauliTerm]) -> Union[None, PauliTerm]:
 
 
 def _max_weight_state(states: Iterable[TensorProductState]) -> Union[None, TensorProductState]:
-    """Construct a TensorProductState by taking the single-qubit state at each
+    """
+    Construct a TensorProductState by taking the single-qubit state at each
     qubit position.
+
     This function will return ``None`` if the input states are not compatible
     For example, the max_weight_state of ["(+X, q0)", "(-Z, q1)"] is "(+X, q0; -Z q1)". Asking for
     the max weight state of something like ["(+X, q0)", "(+Z, q0)"] will return None.
@@ -564,11 +538,12 @@ def _max_weight_state(states: Iterable[TensorProductState]) -> Union[None, Tenso
     return TensorProductState(list(mapping.values()))
 
 
-def _max_tpb_overlap(tomo_expt: ObservablesExperiment):
+def _max_tpb_overlap(obs_expt: ObservablesExperiment):
     """
     Given an input ObservablesExperiment, provide a dictionary indicating which ExperimentSettings
     share a tensor product basis
-    :param tomo_expt: ObservablesExperiment, from which to group ExperimentSettings that share a tpb
+
+    :param obs_expt: ObservablesExperiment, from which to group ExperimentSettings that share a tpb
         and can be run together
     :return: dictionary keyed with ExperimentSetting (specifying a tpb), and with each value being a
             list of ExperimentSettings (diagonal in that tpb)
@@ -576,7 +551,7 @@ def _max_tpb_overlap(tomo_expt: ObservablesExperiment):
     # initialize empty dictionary
     diagonal_sets = {}
     # loop through ExperimentSettings of the ObservablesExperiment
-    for expt_setting in tomo_expt:
+    for expt_setting in obs_expt:
         # no need to group already grouped ObservablesExperiment
         assert len(expt_setting) == 1, 'already grouped?'
         expt_setting = expt_setting[0]
@@ -614,23 +589,25 @@ def _max_tpb_overlap(tomo_expt: ObservablesExperiment):
     return diagonal_sets
 
 
-def group_settings_greedy(expt: ObservablesExperiment):
+
+def group_settings_greedy(obs_expt: ObservablesExperiment):
     """
     Greedy method to group ExperimentSettings in a given ObservablesExperiment
-    :param tomo_expt: ObservablesExperiment to group ExperimentSettings within
+
+    :param obs_expt: ObservablesExperiment to group ExperimentSettings within
     :return: ObservablesExperiment, with grouped ExperimentSettings according to whether
         it consists of PauliTerms diagonal in the same tensor product basis
     """
-    diag_sets = _max_tpb_overlap(expt)
+    diag_sets = _max_tpb_overlap(obs_expt)
     grouped_expt_settings_list = list(diag_sets.values())
-    grouped_tomo_expt = ObservablesExperiment(grouped_expt_settings_list, program=expt.program)
-    return grouped_tomo_expt
+    grouped_obs_expt = ObservablesExperiment(grouped_expt_settings_list, program=obs_expt.program)
+    return grouped_obs_expt
 
 
-def group_experiment_settings(experiment: ObservablesExperiment,
-                              method: str = 'greedy') -> ObservablesExperiment:
+def group_settings(obs_expt: ObservablesExperiment,
+                   method: str = 'greedy') -> ObservablesExperiment:
     """
-    Group experiments that are diagonal in a shared tensor product basis (TPB) to minimize number
+    Group settings that are diagonal in a shared tensor product basis (TPB) to minimize number
     of QPU runs.
     Background
     ----------
@@ -662,24 +639,27 @@ def group_experiment_settings(experiment: ObservablesExperiment,
     share an nTPB and then uses networkx's algorithm for clique removal. This method can give
     you marginally better groupings in certain circumstances, but constructing the
     graph is pretty slow so "greedy" is the default.
-    :param experiments: a tomography experiment
+
+    :param obs_expt: an ObservablesExperiment
     :param method: method used for grouping; the allowed methods are one of
         ['greedy', 'clique-removal']
-    :return: a tomography experiment with all the same settings, just grouped according to shared
+    :return: an ObservablesExperiment with all the same settings, just grouped according to shared
         TPBs.
     """
     allowed_methods = ['greedy', 'clique-removal']
     assert method in allowed_methods, f"'method' should be one of {allowed_methods}."
     if method == 'greedy':
-        return group_settings_greedy(experiment)
+        return group_settings_greedy(obs_expt)
     elif method == 'clique-removal':
-        return group_settings_clique_removal(experiment)
+        return group_settings_clique_removal(obs_expt)
 
 
 @dataclass(frozen=True)
 class ExperimentResult:
-    """An expectation and standard deviation for the measurement of one experiment setting
-    in a tomographic experiment.
+    """
+    An expectation and standard deviation for the measurement of one experiment setting
+    in an ObservablesExperiment.
+
     In the case of readout error calibration, we also include
     expectation, standard deviation and count for the calibration results, as well as the
     expectation and standard deviation for the corrected results.
@@ -781,25 +761,51 @@ class ExperimentResult:
         }
 
 
-def generate_experiment_programs(obs_expt: ObservablesExperiment, active_reset: bool) \
+def generate_experiment_programs(obs_expt: ObservablesExperiment, active_reset: bool = False,
+                                 use_basic_compile: bool = True) \
         -> Tuple[List[Program], List[List[int]]]:
     """
     Generate the programs necessary to estimate the observables in an ObservablesExperiment.
 
-    :param obs_expt:
-    :param active_reset:
-    :return:
+    Grouping of settings to be run in parallel, e.g. by a call to group_settings, should be
+    done before this method is called.
+
+    By default the program field of the input obs_expt is assumed to hold a program composed of
+    gates which are either native quil gates or else can be compiled to native quil by the method
+    basic_compile. If this is not the case, then use_basic_compile should be set to False and
+    each returned program must be compiled before being executed on a QPU; NOTE however that
+    compiling a program may change the qubit indices so meas_qubits might need to be re-ordered
+    as well if the MEASURE instructions were not compiled with the program. For this reason it is
+    recommended that obs_expt.program be compiled before this method is called. If one is careful
+    then it is still possible to add the measurement instructions first and subsequently compile
+    the programs before running, e.g. by setting use_compilation = True in the call to
+    _measure_bitstrings (but compiling in this way could interfere with symmetrization).
+
+    :param obs_expt: a single ObservablesExperiment to be translated to a series of programs that
+        when run serially can be used to estimate each of obs_expt's observables.
+    :param active_reset: whether or not to begin the program by actively resetting. If true,
+        execution of each of the returned programs in a loop on the QPU will generally be faster.
+    :param use_basic_compile: whether or not to call basic_compile on the programs after they are
+        created. To run on a QPU it is necessary that programs use only native quil gates. See
+        the warning above about setting use_basic_compile to false.
+    :return: a list of programs along with a corresponding list of the groups of qubits that are
+        measured by that program. The returned programs may be run on a qc after measurement
+        instructions are added for the corresponding group of qubits in meas_qubits -- see
+        estimate_observables and _measure_bitstrings for possible usage.
     """
     # Outer loop over a collection of grouped settings for which we can simultaneously estimate.
     programs = []
     meas_qubits = []
-    for i, settings in enumerate(obs_expt):
+    for settings in obs_expt:
 
         # Prepare a state according to the amalgam of all setting.in_state
         total_prog = Program()
         if active_reset:
             total_prog += RESET()
         max_weight_in_state = _max_weight_state(setting.in_state for setting in settings)
+        if max_weight_in_state is None:
+            raise ValueError('Input states are not compatible. Re-group the experiment settings '
+                             'so that groups of parallel settings have compatible input states.')
         for oneq_state in max_weight_in_state.states:
             total_prog += _one_q_state_prep(oneq_state)
 
@@ -808,10 +814,17 @@ def generate_experiment_programs(obs_expt: ObservablesExperiment, active_reset: 
 
         # Prepare for measurement state according to setting.observable
         max_weight_out_op = _max_weight_operator(setting.observable for setting in settings)
+        if max_weight_out_op is None:
+            raise ValueError('Observables not compatible. Re-group the experiment settings '
+                             'so that groups of parallel settings have compatible observables.')
         for qubit, op_str in max_weight_out_op:
             total_prog += _local_pauli_eig_meas(op_str, qubit)
 
-        programs.append(total_prog)
+        if use_basic_compile:
+            programs.append(basic_compile(total_prog))
+        else:
+            programs.append(total_prog)
+
         meas_qubits.append(max_weight_out_op.get_qubits())
     return programs, meas_qubits
 
@@ -821,34 +834,50 @@ def _flip_array_to_prog(flip_array: Tuple[bool], qubits: List[int]) -> Program:
     Generate a pre-measurement program that flips the qubit state according to the flip_array of
     bools.
 
-    :param ops_bool: tuple of booleans specifying the operation to be carried out on `qubits`
-    :param qubits: list specifying the qubits to be carried operations on
-    :return: Program with the operations specified in `ops_bool` on the qubits specified in
-        `qubits`
+    This is used, for example, in exhaustive_symmetrization to produce programs which flip a
+    select subset of qubits immediately before measurement.
+
+    :param flip_array: tuple of booleans specifying whether the qubit in the corresponding index
+        should be flipped or not.
+    :param qubits: list specifying the qubits in order corresponding to the flip_array
+    :return: Program which flips each qubit (i.e. instructs RX(pi, q)) according to the flip_array.
     """
     assert len(flip_array) == len(qubits), "Mismatch of qubits and operations"
     prog = Program()
-    for i, flip_output in enumerate(flip_array):
+    for qubit, flip_output in zip(qubits, flip_array):
         if flip_output == 0:
             continue
         elif flip_output == 1:
-            prog += Program(X(qubits[i]))
+            prog += Program(RX(pi, qubit))
         else:
             raise ValueError("flip_bools should only consist of 0s and/or 1s")
     return prog
 
 
 def exhaustive_symmetrization(programs: List[Program], meas_qubits: List[List[int]]) \
-        -> Tuple[List[Program], List[Tuple[bool]], List[int]]:
+        -> Tuple[List[Program], List[List[int]], List[Tuple[bool]], List[int]]:
     """
     For each program in the input programs generate new programs which flip the measured qubits
     in every possible combination in order to symmetrize readout.
 
-    :param programs:
-    :param meas_qubits:
-    :return:
+    The expanded list of programs is returned along with a correspondingly expanded list of
+    meas_qubits, a list of bools which indicates which qubits are flipped in each program,
+    and a list of indices which records from which program in the input programs list each
+    symmetrized program originated.
+
+    :param programs: a list of programs each of which will be symmetrized.
+    :param meas_qubits: the corresponding groups of measurement qubits for the input list of
+        programs. Only these qubits will be symmetrized over, even if the program acts on other
+        qubits.
+    :return: a list of symmetrized programs, the corresponding measurement qubits,
+        the corresponding array of bools indicating which qubits were flipped,
+        and a corresponding list of indices specifying the generating `program'
     """
+    assert len(programs) == len(meas_qubits), 'mismatch of programs and qubits; must know which ' \
+                                              'qubits are being measured to symmetrize them.'
+
     symm_programs = []
+    symm_meas_qs = []
     prog_groups = []
     flip_arrays = []
 
@@ -858,37 +887,47 @@ def exhaustive_symmetrization(programs: List[Program], meas_qubits: List[List[in
             prog_symm = _flip_array_to_prog(flip_array, meas_qs)
             total_prog_symm += prog_symm
             symm_programs.append(total_prog_symm)
+            symm_meas_qs.append(meas_qs)
             prog_groups.append(idx)
             flip_arrays.append(flip_array)
 
-    return symm_programs, flip_arrays, prog_groups
+    return symm_programs, symm_meas_qs, flip_arrays, prog_groups
 
 
-def _measure_bitstrings(qc: QuantumComputer, programs: List[Program], prog_qubits: List[List[int]],
-                        num_shots = 500) -> List[np.ndarray]:
+def _measure_bitstrings(qc: QuantumComputer, programs: List[Program], meas_qubits: List[List[int]],
+                        num_shots = 500, use_compiler = False) -> List[np.ndarray]:
     """
     Wrapper for appending measure instructions onto each program, running the program,
     and accumulating the resulting bitarrays.
 
-    Each program is assumed to be composed of gates that can be compiled into native quil by
-    basic_compile.
+    By default each program is assumed to be native quil.
 
-    :param qc:
-    :param programs:
-    :param prog_qubits:
-    :param num_shots:
-    :return:
+    :param qc: a quantum computer object on which to run each program
+    :param programs: a list of programs to run
+    :param meas_qubits: groups of qubits to measure for each program
+    :param num_shots: the number of shots to run for each program
+    :return: a len(programs) long list of num_shots by num_meas_qubits bit arrays of results for
+        each program.
     """
+    assert len(programs) == len(meas_qubits), 'The qubits to measure must be specified for each ' \
+                                              'program, one list of qubits per program.'
+
     results = []
-    for program, qubits in zip(programs, prog_qubits):
-
-        ro = program.declare('ro', 'BIT', len(qubits))
+    for program, qubits in zip(programs, meas_qubits):
+        if len(qubits) == 0:
+            # corresponds to measuring identity; no program needs to be run.
+            results.append(np.array([[]]))
+            continue
+        # copy the program so the original is not mutated
+        prog = program.copy()
+        ro = prog.declare('ro', 'BIT', len(qubits))
         for idx, q in enumerate(qubits):
-            program += MEASURE(q, ro[idx])
+            prog += MEASURE(q, ro[idx])
 
-        program.wrap_in_numshots_loop(num_shots)
-        native_quil = basic_compile(program)
-        exe = qc.compiler.native_quil_to_executable(native_quil)
+        prog.wrap_in_numshots_loop(num_shots)
+        if use_compiler:
+            prog = qc.quil_to_native_quil(prog)
+        exe = qc.compiler.native_quil_to_executable(prog)
         shots = qc.run(exe)
         results.append(shots)
     return results
@@ -914,6 +953,12 @@ def shots_to_obs_moments(bitarray: np.ndarray, qubits: List[int], observable: Pa
     obs_qubits = [q for q, _ in observable]
     # Identify classical register indices to select
     idxs = [idx for idx, q in enumerate(qubits) if q in obs_qubits]
+
+    if len(idxs) == 0: # identity term
+        return coeff, 0
+
+    assert bitarray.shape[1] == len(qubits), 'qubits should label each column of the bitarray'
+
     # Pick columns corresponding to qubits with a non-identity out_operation
     obs_strings = bitarray[:, idxs]
     # Transform bits to eigenvalues; ie (+1, -1)
@@ -943,21 +988,32 @@ def shots_to_obs_moments(bitarray: np.ndarray, qubits: List[int], observable: Pa
 def consolidate_symmetrization_outputs(outputs: List[np.ndarray], flip_arrays: List[Tuple[bool]],
                                        groups: List[int]) -> List[np.ndarray]:
     """
-    Given outputs from a series of symmetrization programs, appropriately flip output bits and
-    consolidate results into groups.
+    Given bitarray results from a series of symmetrization programs, appropriately flip output
+    bits and consolidate results into new bitarrays.
 
-    :param outputs:
-    :param flip_arrays:
-    :param groups:
-    :return:
+    :param outputs: a list of the raw bitarrays resulting from running a list of symmetrized
+        programs; for example, the results returned from _measure_bitstrings
+    :param flip_arrays: a list of boolean arrays in one-to-one correspondence with the list of
+        outputs indicating which qubits where flipped before each bitarray was measured.
+    :param groups: the group from which each symmetrized program was generated. E.g. if only one
+        program was symmetrized then groups is simply [0] * len(outputs). The length of the
+        returned consolidated outputs is exactly the number of distinct integers in groups.
+    :return: a list of the consolidated bitarray outputs which can be treated as the symmetrized
+        outputs of the original programs passed into a symmetrization method. See
+        estimate_observables for example usage.
     """
-    output = []
+    assert len(outputs) == len(groups) == len(flip_arrays)
+
+    output = {group: [] for group in set(groups)}
     for bitarray, group, flip_array in zip(outputs, groups, flip_arrays):
-        if len(output) <= group:
-            output[group] = bitarray ^ flip_array
-            continue
-        output[group] = np.vstack(output[group], bitarray ^ flip_array)
-    return output
+        if len(flip_array) == 0:
+            # happens when measuring identity.
+            # TODO: better way of handling identity measurement? (in _measure_bitstrings too)
+            output[group].append(bitarray)
+        else:
+            output[group].append(bitarray ^ flip_array)
+
+    return [np.vstack(output[group]) for group in sorted(list(set(groups)))]
 
 
 def estimate_observables(qc: QuantumComputer, obs_expt: ObservablesExperiment,
@@ -966,33 +1022,39 @@ def estimate_observables(qc: QuantumComputer, obs_expt: ObservablesExperiment,
     """
     Standard wrapper for estimating the observables in an ObservableExperiment.
 
-    Because of the use of standard _measure_bitstrings, this method assumes the program in
-    obs_expt can be compiled to native_quil using only basic_compile.
+    Because of the use of default parameters for _measure_bitstrings, this method assumes the
+    program in obs_expt can be compiled to native_quil using only basic_compile; the qc
+    object's compiler is only used to translate native quil to an executable.
 
     A symmetrization_method can be specified which will be used to generate the necessary
-    symmetrization results. This method should return a callable 'output_transform' which takes
-    in the full list of bitarrays from the symmetrization programs and consolidates the outputs
-    into the appropriate results for the initial un-symmetrized programs. For example,
-    in exhaustive_symmetrization the results of the symmetrization programs have appropriate bits
-    flipped and are re-grouped into bitarrays so that the final list of bitarrays corresponds to
-    the initial programs output by generate_experiment_programs.
+    symmetrization results. This method should match the api of exhaustive_symmetrization; there,
+    a list of symmetrized programs, the qubits to be measured for each program, the qubits that
+    were flipped for each program, and the original pre-symmetrized program index are returned
+    so that the bitarray results of the symmetrized programs and be processed via
+    consolidate_symmetrization_outputs which returns 'symmetrized' results for the original
+    pre-symmetrized programs.
 
-    :param qc:
-    :param obs_expt:
-    :param num_shots:
-    :param symmetrization_method:
-    :param active_reset:
-    :return:
+    :param qc: a quantum computer object on which to run the programs necessary to estimate each
+        observable of obs_expt.
+    :param obs_expt: a single ObservablesExperiment with settings pre-grouped as desired.
+    :param num_shots: the number of shots to run each program or each symmetrized program.
+    :param symmetrization_method: if not None, this can be used to symmetrize each program to
+        remove unwanted classical correlations in the qubit measurement readout.
+    :param active_reset: whether or not to begin the program by actively resetting. If true,
+        execution of each of the returned programs in a loop on the QPU will generally be faster.
+    :return: all of the ExperimentResults which hold an estimate of each observable of obs_expt
     """
     programs, meas_qubits = generate_experiment_programs(obs_expt, active_reset)
 
     if symmetrization_method is not None:
-        programs, flip_array, prog_groups = symmetrization_method(programs, meas_qubits)
-        symm_outputs = _measure_bitstrings(qc, programs, meas_qubits, num_shots)
-        results = consolidate_symmetrization_outputs(symm_outputs, flip_array, prog_groups)
+        programs, symm_qubits, flip_arrays, prog_groups = symmetrization_method(programs,
+                                                                                meas_qubits)
+        symm_outputs = _measure_bitstrings(qc, programs, symm_qubits, num_shots)
+        results = consolidate_symmetrization_outputs(symm_outputs, flip_arrays, prog_groups)
     else:
         results = _measure_bitstrings(qc, programs, meas_qubits, num_shots)
 
+    assert len(results) == len(meas_qubits) == len(obs_expt)
     for bitarray, meas_qs, settings in zip(results, meas_qubits, obs_expt):
 
         for setting in settings:
@@ -1034,7 +1096,7 @@ def get_calibration_program(observable: PauliTerm, noisy_program: Program = None
     for q, op in observable.operations_as_set():
         calibr_prog += _one_q_pauli_prep(label=op, index=0, qubit=q)
     # Measure the out operator in this state
-    for q, op in observable.observable.operations_as_set():
+    for q, op in observable.operations_as_set():
         calibr_prog += _local_pauli_eig_meas(op, q)
 
     return calibr_prog
@@ -1045,24 +1107,35 @@ def calibrate_observable_estimates(qc: QuantumComputer, expt_results: List[Exper
                                    num_shots: int = 500, noisy_program: Program = None) \
         -> Iterable[ExperimentResult]:
     """
-    Calibrates the expectation and std_err of the input expt_results.
+    Calibrates the expectation and std_err of the input expt_results and updates those estimates.
 
-    :param qc:
-    :param expt_results:
-    :param symmetrization_method:
-    :param num_shots:
-    :param noisy_program:
-    :return:
+    The old estimates are moved to raw_* and the calibration results themselves for the given
+    observable are recorded as calibration_*
+
+    Calibration is done by measuring expectation values of eigenstates of the obervable which
+    ideally should yield either +/- 1 but in practice will have magnitude less than 1.
+
+    :param qc: a quantum computer object on which to run the programs necessary to calibrate each
+        result.
+    :param expt_results: a list of results, each of which will be separately calibrated.
+    :param symmetrization_method: by default every eigenvector of each observable is measured.
+    :param num_shots: the number of shots to run for each eigenvector
+    :param noisy_program: an optional program from which to inherit a noise model; only relevant
+        for running on a QVM
+    :return: a copy of the input results with updated estimates and calibration results.
     """
+    # TODO: consider speeding up calibration by first collecting only distinct observables
+
     programs = [get_calibration_program(expt_result.setting.observable, noisy_program) for
                     expt_result in expt_results]
 
     meas_qubits = [expt_result.setting.observable.get_qubits() for expt_result in expt_results]
 
-    programs, flip_array, prog_groups = symmetrization_method(programs, meas_qubits)
-    symm_outputs = _measure_bitstrings(qc, programs, meas_qubits, num_shots)
+    symm_progs, symm_qubits, flip_array, prog_groups = symmetrization_method(programs, meas_qubits)
+    symm_outputs = _measure_bitstrings(qc, symm_progs, symm_qubits, num_shots)
     results = consolidate_symmetrization_outputs(symm_outputs, flip_array, prog_groups)
 
+    assert len(results) == len(meas_qubits) == len(expt_results)
     for bitarray, meas_qs, expt_result in zip(results, meas_qubits, expt_results):
 
         observable = expt_result.setting.observable

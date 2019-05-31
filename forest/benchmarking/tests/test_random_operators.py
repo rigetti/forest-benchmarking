@@ -264,9 +264,7 @@ def test_random_unitaries_second_moment():
     estimate = np.around(np.real(D2_var), 2)
 
     # are the estimated operator and the answer close?
-    print(truth)
-    print(estimate)
-    assert np.allclose(truth, estimate)
+    assert np.allclose(truth, estimate, atol=.01)
     # ^^ this test equation 5.17 in https://arxiv.org/pdf/0711.1017.pdf
 
 

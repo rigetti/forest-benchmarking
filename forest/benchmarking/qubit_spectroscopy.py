@@ -443,7 +443,7 @@ def plot_t2_estimate_over_data(df: pd.DataFrame,
                            f""f"T2={fit_params[1] / MICROSECOND:.2f}us")
 
     plt.xlabel("Time [µs]")
-    plt.ylabel("Pr(1)")
+    plt.ylabel(r"Pr($|1\rangle$)")
     if t2_type.lower() == 'star':
         plt.title("$T_2^*$ (Ramsey) decay")
     elif t2_type.lower() == 'echo':
@@ -633,7 +633,7 @@ def plot_rabi_estimate_over_data(df: pd.DataFrame,
                      label=f"qubit {q} fitted line")
 
     plt.xlabel("RX angle [rad]")
-    plt.ylabel("Pr($|1\langle)")
+    plt.ylabel(r"Pr($|1 \rangle$)")
     plt.title("Rabi flop")
     plt.legend(loc='best')
     plt.tight_layout()
@@ -864,7 +864,7 @@ def plot_cz_phase_estimate_over_data(df: pd.DataFrame,
                                              label=f"QC{qubit} max ESV={max_ESV:.3f}+/-{max_ESV_err:.3f} rad")
 
             axes[id_row, id_col].set_xlabel("Phase on second +X/2 gate [rad]")
-            axes[id_row, id_col].set_ylabel("Pr($|1\langle)")
+            axes[id_row, id_col].set_ylabel(r'Pr($ |1 \rangle $)')
             axes[id_row, id_col].set_title(f"CZ Phase Ramsey fringes on QC{qubit}\n"
                                            f"due to CZ_{edge[0]}_{edge[1]} application")
             axes[id_row, id_col].legend(loc='best')
