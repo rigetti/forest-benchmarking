@@ -3,13 +3,11 @@ import warnings
 from tqdm import tqdm
 import numpy as np
 from statistics import median
-import time
 from copy import copy
 
 from pyquil.api import QuantumComputer
 from pyquil.numpy_simulator import NumpyWavefunctionSimulator
 from pyquil.quil import DefGate, Program
-from pyquil.gates import RESET
 from rpcq.messages import TargetDevice
 from rpcq._utils import RPCErrorError
 
@@ -318,130 +316,16 @@ def measure_quantum_volume(qc: QuantumComputer, qubits: Sequence[int] = None,
     return results
 
 
-def generate_quantum_volume_abstract_circuits(depths: Sequence[int]) \
-        -> Iterator[Tuple[List[np.ndarray], np.ndarray]]:
-    """
-    Generate an abstract description of a model circuit for each given depth=width.
-
-    See generate_abstract_qv_circuit and the reference [QVol] for more on the structure of each
-    circuit and the representation used here.
-
-    To measure quantum volume the number of circuits for each depth should be at least 100,
-    per [QVol].
-
-    :param depths: The depths to measure. In order to properly lower bound the quantum volume of
-        a circuit, the depths should start at 2 and increase in increments of 1. Depths greater
-        than 4 will take several minutes for data collection. Further, the acquire_heavy_hitters
-        step involves a classical simulation that scales exponentially with depth.
-    :return: For each depth in depths a corresponding pair of SU(2) gate matrices and
-        permutations will be generated. This pair can be passed to a program_gnerator such as
-        _naive_program_generator to create a quil Program.
-    """
-    for d in depths:
-        yield generate_abstract_qv_circuit(d)
-
-
-def abstract_circuits_to_programs(qc: QuantumComputer,
-                              abstract_ckts: Iterator[Tuple[List[np.ndarray], np.ndarray]],
-                              qubits: Sequence[int] = None,
-                              program_generator: Callable[[QuantumComputer, Sequence[int],
-                                                           Sequence[np.ndarray], np.ndarray],
-                                                          Program] = _naive_program_generator) \
-        -> Iterator[Program]:
-    """
-    Yield a program implementing the abstract circuits that can be run on the given qubits on the
-    given qc resource.
-
-    :param qc: the quantum resource on which each output program will be run.
-    :param abstract_ckts: abstract descriptions of circuits that the generated programs implement.
-    :param qubits: the qubits of the qc available for use by each circuit. Default is all
-        qubits in the qc for each circuit. Any subset of these may actually be used by the program.
-    :param program_generator: a method which uses the given qc, its available qubits, and an
-        abstract description of the model circuit to produce a PyQuil program implementing the
-        circuit using only native gates and the given qubits. This program must respect the
-        topology of the qc induced by the given qubits. The default _naive_program_generator uses
-        the qc's compiler to achieve this result.
-    :return: native PyQuil programs that implement each abstract_circuit on the qc using
-        a subset of the qubits specified as available for the given depth. Note that although the
-        abstract circuit has depth=width, for the program width >= depth.
-    """
-    for idx, ckt in enumerate(abstract_ckts):
-        if qubits is None:
-            d_qubits = qc.qubits()  # by default the program can act on any qubit in the computer
-        else:
-            d_qubits = qubits[idx]
-
-        yield program_generator(qc, d_qubits, *ckt)
-
-
-def acquire_quantum_volume_data(qc: QuantumComputer, programs: Iterator[Program],
-                                num_shots: int = 1000,
-                                use_active_reset: bool = False) -> Iterator[Tuple[np.ndarray,
-                                                                                  float]]:
-    """
-    Runs each program in the dataframe df on the given qc and outputs a copy of df with results.
-
-    :param df: a dataframe populated with PyQuil programs that can be run natively on the given qc,
-        i.e. a df returned by a call to add_programs_to_dataframe(df, qc, etc.) with identical qc.
-    :param qc: the quantum resource on which to run each program.
-    :param num_shots: the number of times to sample the output of each program.
-    :param use_active_reset: if true, speeds up the overall computation (only on a real qpu) by
-        actively resetting at the start of each program.
-    :return: a copy of df with a new "Results" column populated with num_shots many depth-bit arrays
-        that can be compared to the Heavy Hitters with a call to bit_array_to_int. There is also
-        a column "Run Time" which records the time taken to acquire the data for each program.
-    """
-    for program in programs:
-        start = time.time()
-
-        if use_active_reset:
-            reset_measure_program = Program(RESET())
-            program = reset_measure_program + program
-
-        # run the program num_shots many times
-        program.wrap_in_numshots_loop(num_shots)
-        executable = qc.compiler.native_quil_to_executable(program)
-
-        results = qc.run(executable)
-
-        runtime = time.time() - start
-        yield results, runtime
-
-
-def acquire_heavy_hitters(abstract_circuits: Iterator[Tuple[List[np.ndarray], np.ndarray]]) \
-        -> Iterator[Tuple[List[int], float]]:
-    """
-    Runs a classical simulation of each circuit in the dataframe df and records which outputs
-    qualify as heavy hitters in a copied df with newly populated "Heavy Hitters" column.
-
-    An output is a heavy hitter if the ideal probability of measuring that output from the
-    circuit is greater than the median probability among all possible bitstrings of the same size.
-
-    :param df: a dataframe populated with abstract descriptions of model circuits, i.e. a df
-        returned by a call to generate_quantum_volume_experiments.
-    :return: a copy of df with a new "Heavy Hitters" column. There is also a column "Sim Time"
-        which records the time taken to simulate and collect the heavy hitters for each circuit.
-    """
-    for ckt in abstract_circuits:
-        perms, gates = ckt
-        depth = len(perms)
-        wfn_sim = NumpyWavefunctionSimulator(depth)
-
-        start = time.time()
-        heavy_outputs = collect_heavy_outputs(wfn_sim, perms, gates)
-        runtime = time.time() - start
-
-        yield heavy_outputs, runtime
-
-
 def count_heavy_hitters_sampled(qc_results: Iterator[np.ndarray],
                                 heavy_hitters: Iterator[List[int]]) -> Iterator[int]:
     """
-    Given a df populated with both sampled results and the actual heavy hitters, copies the df
-    and populates a new column with the number of samples which are heavy hitters.
+    Simple helper to count the number of heavy hitters sampled given the sampled results for a
+    number of circuits along with the the actual heavy hitters for each circuit.
 
-    :param df: a dataframe populated with sampled results and heavy hitters.
-    :return: a copy of df with a new "Num HH Sampled" column.
+    :param qc_results: results from running each circuit on a quantum computer.
+    :param heavy_hitters: the heavy hitters for each circuit (presumably calculated through
+        simulating the circuit classically)
+    :return: the number of samples which were heavy for each circuit.
     """
     for results, hh_list in zip(qc_results, heavy_hitters):
         num_heavy = 0
@@ -454,8 +338,8 @@ def count_heavy_hitters_sampled(qc_results: Iterator[np.ndarray],
         yield num_heavy
 
 
-def get_results_by_depth(depths: Iterator[int], num_hh_sampled: Iterator[int],
-                         num_shots: Iterator[int]) -> Dict[int, Tuple[float, float]]:
+def get_prob_sample_heavy_by_depth(depths: Iterator[int], num_hh_sampled: Iterator[int],
+                                   num_shots: Iterator[int]) -> Dict[int, Tuple[float, float]]:
     """
     Analyzes the given information for each circuit to determine [an estimate of the probability of
     outputting a heavy hitter at each depth, a lower bound on this estimate, and whether that
