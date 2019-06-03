@@ -26,62 +26,59 @@ def test_extraction():
 
 
 def test_qv_df_generation():
-    depths = [2, 3]
+    unique_depths = [2, 3]
     n_ckts = 100
+    depths = [d for d in unique_depths for _ in range(n_ckts)]
 
-    df = generate_quantum_volume_experiments(depths, n_ckts)
-    df_depths = df["Depth"].values
-    ckts = df["Abstract Ckt"].values
+    ckts = list(generate_quantum_volume_abstract_circuits(depths))
 
-    assert len(df_depths) == len(depths)*n_ckts
+    assert len(ckts) == len(unique_depths)*n_ckts
 
-    assert all([len(ckt[0]) == depth for ckt, depth in zip(ckts, df_depths)])
-    assert all([len(ckt[0][0]) == depth for ckt, depth in zip(ckts, df_depths)])
+    assert all([len(ckt[0]) == depth for ckt, depth in zip(ckts, depths)])
+    assert all([len(ckt[0][0]) == depth for ckt, depth in zip(ckts, depths)])
 
-    assert all([ckt[1].shape == (depth, depth//2, 4, 4) for ckt, depth in zip(ckts, df_depths)])
+    assert all([ckt[1].shape == (depth, depth//2, 4, 4) for ckt, depth in zip(ckts, depths)])
 
 
 def test_qv_data_acquisition(qvm):
-    depths = [2, 3]
+    unique_depths = [2, 3]
     n_ckts = 10
+    depths = [d for d in unique_depths for _ in range(n_ckts)]
     n_shots = 5
 
-    df = generate_quantum_volume_experiments(depths, n_ckts)
-    df = add_programs_to_dataframe(df, qvm)
-    df = acquire_quantum_volume_data(df, qvm, n_shots)
+    ckts = generate_quantum_volume_abstract_circuits(depths)
+    progs = abstract_circuits_to_programs(qvm, ckts)
+    results = [res[0] for res in acquire_quantum_volume_data(qvm, progs, n_shots)]
 
-    df_depths = df["Depth"].values
-    results = df["Results"].values
-
-    assert all([res.shape == (n_shots, depth) for res, depth in zip(results, df_depths)])
+    assert all([res.shape == (n_shots, depth) for res, depth in zip(results, depths)])
 
 
 def test_qv_count_heavy_hitters(qvm):
-    depths = [2, 3]
+    unique_depths = [2, 3]
     n_ckts = 10
+    depths = [d for d in unique_depths for _ in range(n_ckts)]
     n_shots = 5
 
-    df = generate_quantum_volume_experiments(depths, n_ckts)
-    df = add_programs_to_dataframe(df, qvm)
-    df = acquire_quantum_volume_data(df, qvm, n_shots)
-    df = acquire_heavy_hitters(df)
+    ckts = list(generate_quantum_volume_abstract_circuits(depths))
+    progs = abstract_circuits_to_programs(qvm, ckts)
+    results = [res[0] for res in acquire_quantum_volume_data(qvm, progs, n_shots)]
+    hhs = [res[0] for res in acquire_heavy_hitters(ckts)]
 
-    num_hhs = df["Num HH Sampled"].values
-
-    assert all([0 <= num_hh <= n_shots for num_hh in num_hhs])
+    assert all([0 <= num_hh <= n_shots for num_hh in count_heavy_hitters_sampled(results, hhs)])
 
 
 def test_qv_get_results_by_depth(qvm):
-
-    depths = [2, 3]
+    unique_depths = [2, 3]
     n_ckts = 10
+    depths = [d for d in unique_depths for _ in range(n_ckts)]
     n_shots = 5
 
-    df = generate_quantum_volume_experiments(depths, n_ckts)
-    df = add_programs_to_dataframe(df, qvm)
-    df = acquire_heavy_hitters(df)
-    df = acquire_quantum_volume_data(df, qvm, n_shots)
-    results = get_results_by_depth(df)
+    ckts = list(generate_quantum_volume_abstract_circuits(depths))
+    progs = abstract_circuits_to_programs(qvm, ckts)
+    results = [res[0] for res in acquire_quantum_volume_data(qvm, progs, n_shots)]
+    hhs = [res[0] for res in acquire_heavy_hitters(ckts)]
+    probs_by_depth = get_results_by_depth(depths, count_heavy_hitters_sampled(results, hhs),
+                                          [n_shots for _ in depths])
 
-    assert len(results.keys()) == len(depths)
-    assert [0 <= results[d][1] <= results[d][0] <= 1 for d in depths]
+    assert len(probs_by_depth.keys()) == len(unique_depths)
+    assert [0 <= probs_by_depth[d][1] <= probs_by_depth[d][0] <= 1 for d in depths]
