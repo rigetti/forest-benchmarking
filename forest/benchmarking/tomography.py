@@ -11,10 +11,12 @@ from scipy.linalg import logm, pinv, eigh
 import forest.benchmarking.distance_measures as dm
 from forest.benchmarking.superoperator_tools import vec, unvec, proj_choi_to_physical
 from forest.benchmarking.utils import n_qubit_pauli_basis
+from forest.benchmarking.compilation import basic_compile
 from pyquil import Program
 from pyquil.operator_estimation import ExperimentSetting, \
     TomographyExperiment as PyQuilTomographyExperiment, ExperimentResult, SIC0, SIC1, SIC2, SIC3, \
     plusX, minusX, plusY, minusY, plusZ, minusZ, TensorProductState, zeros_state
+from pyquil.operator_estimation import group_experiments
 from pyquil.paulis import sI, sX, sY, sZ, PauliSum, PauliTerm, is_identity
 from pyquil.unitary_tools import lifted_pauli as pauli2matrix, lifted_state_operator as state2matrix
 
