@@ -163,6 +163,45 @@ def linear_inv_state_estimate(results: List[ExperimentResult],
     rho = pinv(measurement_matrix) @ expectations
     return unvec(rho)
 
+def compressed_sensing_state_estimate(results: List[ExperimentResult],
+                              qubits: List[int]) -> np.ndarray:
+    """
+    Estimate a quantum state using compressed sensing
+
+    [FLAMMIA] Quantum Tomography via Compressed Sensing: Error Bounds, Sample Complexity, and Efficient Estimators
+           Steven T. Flammia et. al.
+           (2012).
+           https://arxiv.org/pdf/1205.2300.pdf
+
+    :param results: A tomographically complete list of results.
+    :param qubits: All qubits that were tomographized. This specifies the order in
+        which qubits will be kron'ed together.
+    :return: A point estimate of the quantum state rho.
+    """
+    pauli_num = len(results)
+    for i in range(pauli_num):
+        #Convert the Pauli term into a tensor
+        r = results[i]
+        p_tensor = lifted_pauli(r.setting.out_operator, qubits)
+        e = r.expectation
+        #A[i] = e * scale_factor
+        pauli_list.append(p_tensor)
+        expectation_list.append(e)
+
+    s = cp.Variable((d,d),complex = True)
+    obj = cp.Minimize(cp.norm(s, 'nuc'))
+    constraints = [cp.trace(s) == 1]
+
+    for i in range(len(pauli_list)):
+        trace_bool = cp.trace(cp.matmul(pauli_list[i], s)) - expectation_list[i] == 0
+        constraints.append(trace_bool)
+
+    # Form and solve problem.
+    prob = cp.Problem(obj, constraints)
+    prob.solve()
+    rho = s.value
+    return rho
+
 
 def iterative_mle_state_estimate(results: List[ExperimentResult], qubits: List[int], epsilon=.1,
                                  entropy_penalty=0.0, beta=0.0, tol=1e-9, maxiter=10_000) \
@@ -611,3 +650,4 @@ def _grad_cost(A, n, estimate, eps=1e-6):
     p = np.clip(p, a_min=eps, a_max=None)
     eta = n / p
     return unvec(-A.conj().T @ eta)
+
