@@ -735,7 +735,7 @@ def tomographize(qc, program: Program, qubits: List[int], num_shots=1000, t_type
     input_exp = PyQuilTomographyExperiment(settings=exp_list, program=program)
 
     #Group experiments if possible to minimize QPU runs
-    #experiment = group_experiments(experiment)
+    input_exp = group_experiments(input_exp)
 
     #NOTE: Change qvm depending on whether we are simulating qvm
     qc.compiler.quil_to_native_quil = basic_compile
