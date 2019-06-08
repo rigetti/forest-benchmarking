@@ -7,6 +7,7 @@ import random
 
 import numpy as np
 from scipy.linalg import logm, pinv, eigh
+import cvxpy as cp
 
 import forest.benchmarking.distance_measures as dm
 from forest.benchmarking.superoperator_tools import vec, unvec, proj_choi_to_physical
@@ -16,7 +17,7 @@ from pyquil import Program
 from pyquil.operator_estimation import ExperimentSetting, \
     TomographyExperiment as PyQuilTomographyExperiment, ExperimentResult, SIC0, SIC1, SIC2, SIC3, \
     plusX, minusX, plusY, minusY, plusZ, minusZ, TensorProductState, zeros_state
-from pyquil.operator_estimation import group_experiments
+from pyquil.operator_estimation import group_experiments, measure_observables
 from pyquil.paulis import sI, sX, sY, sZ, PauliSum, PauliTerm, is_identity
 from pyquil.unitary_tools import lifted_pauli as pauli2matrix, lifted_state_operator as state2matrix
 
@@ -191,7 +192,7 @@ def compressed_sensing_state_estimate(results: List[ExperimentResult],
     for i in range(pauli_num):
         #Convert the Pauli term into a tensor
         r = results[i]
-        p_tensor = lifted_pauli(r.setting.out_operator, qubits)
+        p_tensor = pauli2matrix(r.setting.out_operator, qubits)
         e = r.expectation
         #A[i] = e * scale_factor
         pauli_list.append(p_tensor)
@@ -238,7 +239,7 @@ def lasso_state_estimate(results: List[ExperimentResult],
     for i in range(m):
         #Convert the Pauli term into a tensor
         r = results[i]
-        p_tensor = lifted_pauli(r.setting.out_operator, qubits)
+        p_tensor = pauli2matrix(r.setting.out_operator, qubits)
         e = r.expectation
         y[i] = e
         pauli_list.append(p_tensor)
