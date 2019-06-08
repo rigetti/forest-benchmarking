@@ -77,6 +77,14 @@ Finally, we analyze our data with one of the analysis routines::
      [-0.1869-0.0077j -0.1794-0.0188j -0.169 -0.0169j  0.2202-0.j    ]]
     Purity =  (0.6889520199999999+4.597017211338539e-17j)
 
+Debugger
+~~~~~~~~~
+
+The above steps can be automated to create a basic debugger that can be used to 
+peek into the state of a program running on a qc. This can be done using the
+tomographize function::
+
+    rho = tomographize(qc, program, qubits, pauli_num=10, t_type="compressed_sensing")
 
 API Reference
 -------------
@@ -96,4 +104,5 @@ API Reference
     iterative_mle_state
     project_density_matrix
     estimate_variance
+    tomographize
 
