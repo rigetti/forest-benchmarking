@@ -1,8 +1,8 @@
 Changelog
 =========
 
-v0.5 (May XXX, 2018)
-------------------
+v0.5 (June 10, 2018)
+--------------------
 Improvements and Changes:
 
 - Moved bitstring prep/measure program creation helpers to utils (gh-118)
