@@ -8,6 +8,7 @@ import pandas as pd
 from scipy.spatial.distance import hamming
 from scipy.special import comb
 from dataclasses import dataclass
+from functools import partial
 
 from pyquil.quilbase import Pragma, Gate, DefGate
 from pyquil.quil import Program, address_qubits, merge_programs
@@ -61,6 +62,12 @@ class CircuitTemplate:
     #TODO: could allow CircuitTemplates, allow definition of depth, subunits...
     #TODO: add compilation?
 
+
+    # def create_unit(self):
+    #     return lambda qc, graph, width, depth, sequence: sum(gen(qc, graph, width, depth,
+    #                                                              sequence) for gen in
+    #                                                          self.generators)
+
     def append(self, other):
         self.generators += other.generators
 
@@ -83,16 +90,22 @@ class CircuitTemplate:
         self.append(other)
         return self
 
-    def sample(self, qc, graph, width, depth, sequence = None, index=0):
+    def sample(self, qc, graph, width, repetitions, sequence = None):
         if sequence is None:
             sequence = []
-        while index < depth:
+        for _ in range(repetitions):
             for generator in self.generators:
-                if index == depth:
-                    break
-                prog, index = generator(qc, graph, width, depth, sequence, index)
+                prog, index = generator(qc, graph, width, sequence)
                 sequence.append(prog)
         return sequence
+
+    # repetitions = [([1, 1, ([2,1], 2), 3], 4), 1]
+    # For four times do:
+    #   the first gen, second gen,
+    #   for two times do
+    #       two third gen, the fourth gen
+    #   the fifth gen 3 times
+    # do the final 6th gen once
 
     # def __str__(self):
     #     return f'Depth {self.depth}:\n' + '\n'.join([str(comp) for comp in self.components]) + '\n'
@@ -135,6 +148,13 @@ def random_single_qubit_gates(graph: nx.Graph, gates: Sequence[Gate]):
         gate = random.choice(gates)
         program += gate(q)
     return program
+
+
+def get_rand_1q_template(gates: Sequence[Gate]):
+    def func(qc, graph, width, sequence):
+        partial_func = partial(random_single_qubit_gates, gates = gates)
+        return partial_func(graph)
+    return CircuitTemplate([func])
 
 
 def random_two_qubit_gates(graph: nx.Graph, gates:  Sequence[Gate]):
