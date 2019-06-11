@@ -54,42 +54,6 @@ def int_to_bit_array(num: int, n_bits: int) -> Sequence[int]:
     return [num >> bit & 1 for bit in range(n_bits - 1, -1, -1)]
 
 
-def determine_simultaneous_grouping(experiments: Sequence[pd.DataFrame],
-                                    equivalent_column_label: str = None) -> List[Set[int]]:
-    """
-    Determines a grouping of experiments acting on disjoint sets of qubits that can be run
-    simultaneously.
-
-    :param experiments:
-    :return: a list of the simultaneous groups, each specified by a set of indices of each grouped
-        experiment in experiments
-    """
-    g = nx.Graph()
-    nodes = np.arange(len(experiments))
-    g.add_nodes_from(nodes)
-    qubits = [expt["Qubits"].values[0] for expt in experiments]
-
-    need_equiv = None
-    if equivalent_column_label is not None:
-        need_equiv = [expt[equivalent_column_label].values for expt in experiments]
-
-    for node1 in nodes:
-        qbs1 = qubits[node1]
-        for node2 in nodes[node1+1:]:
-            if len(qbs1.intersection(qubits[node2])) == 0:
-                # check that the requested columns are equivalent
-                if equivalent_column_label is not None:
-                    if not np.array_equal(need_equiv[node1], need_equiv[node2]):
-                        continue
-                # no shared qubits, and requested columns are identical, so add edge
-                g.add_edge(node1, node2)
-
-    # get the largest groups of nodes with shared edges, as each can be run simultaneously
-    _, cliqs = clique_removal(g)
-
-    return cliqs
-
-
 def bloch_vector_to_standard_basis(theta: float, phi: float) -> Tuple[complex, complex]:
     """
     Converts the Bloch vector representation of a 1q state given in spherical coordinates to the
@@ -163,51 +127,11 @@ def str_to_pauli_term(pauli_str: str, qubit_labels=None):
     :return: the corresponding PauliTerm
     :rtype: pyquil.paulis.PauliTerm
     """
-    # TODO: why was this reversed?
     if qubit_labels is None:
         qubit_labels = [qubit for qubit in range(len(pauli_str))]
 
     pauli_term = PauliTerm.from_list(list(zip(pauli_str, qubit_labels)))
     return pauli_term
-
-
-def local_sic_prep(label, qubit):
-    """
-    TODO: !
-    :param label:
-    :param qubit:
-    :return:
-    """
-    theta = 2*np.arccos(1/np.sqrt(3))
-    zx_plane_rotation = Program(RX(-pi/2, qubit)).inst(RZ(theta - pi, qubit)).inst(RX(-pi/2, qubit))
-    if label == 'SIC0':
-        gate = I(qubit)
-    elif label == 'SIC1':
-        gate = zx_plane_rotation
-    elif label == 'SIC2':
-        gate = zx_plane_rotation.inst(RZ(-2*pi/3, qubit))
-    elif label == 'SIC3':
-        gate = zx_plane_rotation.inst(RZ(2*pi/3, qubit))
-    else:
-        raise ValueError('Unknown gate operation')
-    return gate
-
-
-def prepare_prod_sic_state(ops):
-    prog = Program()
-    for op in ops:
-        label, qubit = op.split('_')
-        prog.inst(local_sic_prep(label, int(qubit)))
-    return prog
-
-
-def all_sic_terms(qubit_count: int, qubit_labels=None):
-    SICS = ['SIC' + str(j) for j in range(4)]
-    labels = [op for op in itertools.product(SICS, repeat=qubit_count)]
-    if qubit_labels is None:
-        qubit_labels = range(qubit_count)
-    qubit_labels = sorted(qubit_labels)[::-1]
-    return [tuple([op[q] + '_' + str(qubit) for q, qubit in enumerate(qubit_labels)]) for op in labels]
 
 
 def all_traceless_pauli_terms(qubits: Sequence[int]):

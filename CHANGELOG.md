@@ -1,6 +1,61 @@
 Changelog
 =========
 
+v0.6 (June 11, 2018)
+--------------------
+Breaking Changes:
+
+- `operator_estimation.py` is entirely replaced.
+
+- `pyquil.operator_estimation` dependencies replaced with `forest.benchmarking.operator_estimation`
+
+- `operator_estimation.TomographyExperiment.out_op` -> `operator_estimation.ObservablesExperiment.out_observable`
+
+- `operator_estimation.measure_observables` -> `operator_estimation.estimate_observables`
+
+- `operator_estimation.group_experiments` -> `operator_estimation.group_settings`
+
+- `utils.all_pauli_terms` -> `utils.all_traceless_pauli_terms` 
+
+- `DFEData` and `DFEEstimate` dataclasses removed in favor of `ExperimentResult` and tuple of results respectively.
+
+- plotting moved out of `qubit_spectroscopy`; instead, use `fit_*_results()` to get a `lmfit.model.ModelResult` and pass this into `analysis.fitting.make_figure()`
+
+- `pandas.DataFrame` is no longer used in `randomized_benchmarking`, `qubit_spectroscopy`, and `robust_phase_estimation`. These now make use of `operator_estimation.ObservablesExperiment`, and as such the API has changed substantially. Please refer to example notebooks for new usage.
+
+- `pandas.DataFrame` methods removed from `quantum_volume`. See examples notebook for alternative usage. 
+
+- `utils.determine_simultaneous_grouping()` removed in favor of similar functionality in `operator_estimation.group_settings`
+
+- SIC state helpers removed from `utils`
+
+- default `utils.str_to_pauli_term` now associates left-most character of input `pauli_str` with qubit 0. If `qubit_labels` are provided then the qubits label the characters in order.  
+
+- `utils.all_pauli_*_terms` -> `utils.all_traceless_pauli_*_terms` to reflect fact that identity term is not included.
+
+- `utils.pauli_basis_pauli_basis_measurements` removed
+
+Improvements and Changes:
+
+- `analysis.fitting` has been expanded to hold each fit model used in `qubit_spectroscopy` and `randomized_benchmarking`
+
+- `RX(angle)` for arbitrary angle now supported by `basic_compile`
+
+- `operator_estimation.estimate_observables` (formerly `pyquil.operator_estimation.measure_observables`) has been decomposed into separate steps:
+    - `generate_experiment_programs()`, which converts and experiment into a list of programs
+    - optional symmetrization, which expands each program into a group of programs that accomplish symmetrization
+    - data collection and optional `consolidate_symmetrization_outputs()` which collects data used for estimates
+    - `calibrate_observable_estimates()` which can be used to update estimates after collecting calibration data
+   
+- `plotting.state_process.plot_pauli_transfer_matrix()` now automatically casts input to `np.real_if_close` 
+
+- `_state_tomo_settings()` no longer includes all-Identity term.
+
+
+Bugfixes:
+
+- t2 experiments now implement correct echo sequence
+
 v0.5 (June 10, 2018)
 --------------------
 Improvements and Changes:
@@ -13,7 +68,6 @@ Improvements and Changes:
 - Resolve test warnings and doc string formatting issues (gh-124)
 - **Breaking change.** Bump version and delete `graph_state` and `bell_state` modules (gh-125)
 - Added the ability to check if the Kraus operators are valid (PR 128)
-
 
 
 v0.4 (May 6, 2018)
