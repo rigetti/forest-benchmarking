@@ -11,8 +11,8 @@ API Reference
 
     pack_shot_data
     str_to_pauli_term
-    all_pauli_terms
-    all_pauli_z_terms
+    all_traceless_pauli_terms
+    all_traceless_pauli_z_terms
     local_pauli_eig_prep
     local_pauli_eigs_prep
     random_local_pauli_eig_prep
