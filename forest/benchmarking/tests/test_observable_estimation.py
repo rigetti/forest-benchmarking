@@ -12,7 +12,7 @@ from pyquil import Program, get_qc
 from pyquil.gates import *
 from pyquil.api import WavefunctionSimulator, QVMConnection
 from pyquil.paulis import sI, sX, sY, sZ, PauliSum, PauliTerm
-from forest.benchmarking.operator_estimation import ExperimentSetting, ObservablesExperiment, \
+from forest.benchmarking.observable_estimation import ExperimentSetting, ObservablesExperiment, \
     to_json, read_json, \
     SIC0, SIC1, SIC2, SIC3, \
     plusX, minusX, plusY, minusY, plusZ, minusZ, _one_q_sic_prep, _OneQState,\

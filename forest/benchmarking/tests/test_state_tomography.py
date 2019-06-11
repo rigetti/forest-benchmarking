@@ -14,7 +14,7 @@ from pyquil.api._qac import AbstractCompiler
 from pyquil.device import NxDevice
 from pyquil.gates import I, H, CZ
 from pyquil.numpy_simulator import NumpyWavefunctionSimulator
-from forest.benchmarking.operator_estimation import estimate_observables, ExperimentResult, \
+from forest.benchmarking.observable_estimation import estimate_observables, ExperimentResult, \
     ExperimentSetting, zeros_state, exhaustive_symmetrization, calibrate_observable_estimates
 from pyquil.paulis import sI, sZ, sX
 from pyquil.quil import Program

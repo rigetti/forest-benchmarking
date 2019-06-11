@@ -9,7 +9,7 @@ from forest.benchmarking.random_operators import haar_rand_unitary
 from forest.benchmarking.superoperator_tools import kraus2choi
 from forest.benchmarking.tomography import generate_process_tomography_experiment, \
     pgdb_process_estimate
-from forest.benchmarking.operator_estimation import estimate_observables, ExperimentResult, \
+from forest.benchmarking.observable_estimation import estimate_observables, ExperimentResult, \
     ObservablesExperiment, \
     _one_q_state_prep
 from pyquil import Program

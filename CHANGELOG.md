@@ -7,13 +7,15 @@ Breaking Changes:
 
 - `operator_estimation.py` is entirely replaced. All changes from (gh-135) except where stated otherwise.
 
-- `pyquil.operator_estimation` dependencies replaced with `forest.benchmarking.operator_estimation` (gh-129,132,133,134,135)
+- `operator_estimation.py` -> `observable_estimation.py` (gh-138)
 
-- `operator_estimation.TomographyExperiment.out_op` -> `operator_estimation.ObservablesExperiment.out_observable`
+- `pyquil.operator_estimation` dependencies replaced with `forest.benchmarking.observable_estimation` (gh-129,132,133,134,135)
 
-- `operator_estimation.measure_observables` -> `operator_estimation.estimate_observables`
+- `operator_estimation.TomographyExperiment.out_op` -> `observable_estimation.ObservablesExperiment.out_observable`
 
-- `operator_estimation.group_experiments` -> `operator_estimation.group_settings`
+- `operator_estimation.measure_observables` -> `observable_estimation.estimate_observables`
+
+- `operator_estimation.group_experiments` -> `observable_estimation.group_settings`
 
 - `utils.all_pauli_terms` -> `utils.all_traceless_pauli_terms` 
 
@@ -21,11 +23,11 @@ Breaking Changes:
 
 - plotting moved out of `qubit_spectroscopy`; instead, use `fit_*_results()` to get a `lmfit.model.ModelResult` and pass this into `analysis.fitting.make_figure()`
 
-- `pandas.DataFrame` is no longer used in `randomized_benchmarking` (gh-133), `qubit_spectroscopy` (gh-129), and `robust_phase_estimation` (gh-135). These now make use of `operator_estimation.ObservablesExperiment`, and as such the API has changed substantially. Please refer to example notebooks for new usage.
+- `pandas.DataFrame` is no longer used in `randomized_benchmarking` (gh-133), `qubit_spectroscopy` (gh-129), and `robust_phase_estimation` (gh-135). These now make use of `observable_estimation.ObservablesExperiment`, and as such the API has changed substantially. Please refer to example notebooks for new usage.
 
 - `pandas.DataFrame` methods removed from `quantum_volume`. See examples notebook for alternative usage (gh-136). 
 
-- `utils.determine_simultaneous_grouping()` removed in favor of similar functionality in `operator_estimation.group_settings`
+- `utils.determine_simultaneous_grouping()` removed in favor of similar functionality in `observable_estimation.group_settings`
 
 - SIC state helpers removed from `utils`
 
@@ -41,7 +43,7 @@ Improvements and Changes:
 
 - `RX(angle)` for arbitrary angle now supported by `basic_compile`
 
-- `operator_estimation.estimate_observables` (formerly `pyquil.operator_estimation.measure_observables`) has been decomposed into separate steps:
+- `observable_estimation.estimate_observables` (formerly `pyquil.operator_estimation.measure_observables`) has been decomposed into separate steps:
     - `generate_experiment_programs()`, which converts and experiment into a list of programs
     - optional symmetrization, which expands each program into a group of programs that accomplish symmetrization
     - data collection and optional `consolidate_symmetrization_outputs()` which collects data used for estimates

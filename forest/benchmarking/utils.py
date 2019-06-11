@@ -6,8 +6,6 @@ from datetime import date, datetime
 from git import Repo
 import numpy as np
 from numpy import pi
-import networkx as nx
-from networkx.algorithms.approximation.clique import clique_removal
 import pandas as pd
 
 from pyquil.gates import I, RX, RY, RZ, H, MEASURE

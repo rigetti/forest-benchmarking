@@ -6,7 +6,7 @@ from pyquil.quil import Program
 from pyquil.quilbase import Measurement
 
 import forest.benchmarking.robust_phase_estimation as rpe
-from forest.benchmarking.operator_estimation import ObservablesExperiment, estimate_observables
+from forest.benchmarking.observable_estimation import ObservablesExperiment, estimate_observables
 
 
 def test_expectations_at_depth(qvm):
