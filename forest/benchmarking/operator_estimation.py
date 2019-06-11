@@ -8,6 +8,7 @@ import warnings
 from json import JSONEncoder
 from operator import mul
 from typing import List, Union, Iterable, Tuple, Dict, Callable
+from copy import copy
 
 import numpy as np
 from math import pi
@@ -1123,24 +1124,29 @@ def calibrate_observable_estimates(qc: QuantumComputer, expt_results: List[Exper
         for running on a QVM
     :return: a copy of the input results with updated estimates and calibration results.
     """
-    # TODO: consider speeding up calibration by first collecting only distinct observables
+    observables = [copy(res.setting.observable) for res in expt_results]
+    for obs in observables:
+        obs.coefficient = 1.
+    observables = list(set(observables))  # get unique observables that will need to be calibrated
 
-    programs = [get_calibration_program(expt_result.setting.observable, noisy_program) for
-                    expt_result in expt_results]
-
-    meas_qubits = [expt_result.setting.observable.get_qubits() for expt_result in expt_results]
+    programs = [get_calibration_program(obs, noisy_program) for obs in observables]
+    meas_qubits = [obs.get_qubits() for obs in observables]
 
     symm_progs, symm_qubits, flip_array, prog_groups = symmetrization_method(programs, meas_qubits)
     symm_outputs = _measure_bitstrings(qc, symm_progs, symm_qubits, num_shots)
     results = consolidate_symmetrization_outputs(symm_outputs, flip_array, prog_groups)
 
-    assert len(results) == len(meas_qubits) == len(expt_results)
-    for bitarray, meas_qs, expt_result in zip(results, meas_qubits, expt_results):
-
-        observable = expt_result.setting.observable
-
+    assert len(results) == len(meas_qubits) == len(observables)
+    calibrations = {}
+    for bitarray, meas_qs, obs in zip(results, meas_qubits, observables):
         # Obtain statistics from result of experiment
-        obs_mean, obs_var = shots_to_obs_moments(bitarray, meas_qs, observable)
+        obs_mean, obs_var = shots_to_obs_moments(bitarray, meas_qs, obs)
+        calibrations[obs.operations_as_set()] = (obs_mean, obs_var, len(bitarray))
+
+    for expt_result in expt_results:
+        # get the calibration data for this observable
+        cal_data = calibrations[expt_result.setting.observable.operations_as_set()]
+        obs_mean, obs_var, counts = cal_data
 
         # Use the calibration to correct the mean and var
         result_mean = expt_result.expectation
@@ -1157,7 +1163,7 @@ def calibrate_observable_estimates(qc: QuantumComputer, expt_results: List[Exper
             raw_std_err=expt_result.std_err,
             calibration_expectation=obs_mean,
             calibration_std_err=np.sqrt(obs_var),
-            calibration_counts=len(bitarray)
+            calibration_counts=counts
         )
 
 
