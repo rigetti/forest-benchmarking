@@ -1,6 +1,148 @@
+import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
+from lmfit import Model
 from lmfit.model import ModelResult
+
+
+def _check_data(x, y, weights):
+    if not len(x) == len(y):
+        raise ValueError("Lengths of x and y arrays must be equal.")
+    if weights is not None and not len(x) == len(weights):
+        raise ValueError("Lengths of x and weights arrays must be equal if weights is not None.")
+
+
+def base_param_decay(x: np.ndarray, amplitude: float, decay: float, baseline: float):
+    """
+    Model an exponential decay parameterized by a base parameter raised to the power of the
+    independent variable x.
+
+    :param numpy.ndarray x: Independent variable
+    :param float baseline: Offset value
+    :param float amplitude: Amplitude of exponential decay
+    :param float decay: Decay parameter
+    :return: Exponential decay fit function
+    """
+    return np.asarray(baseline + amplitude * decay ** x)
+
+
+def fit_base_param_decay(x: np.ndarray, y: np.ndarray, weights: np.ndarray = None,
+                         param_guesses: tuple = (1., .9, 0.)) -> ModelResult:
+    """
+    Fit experimental data x, y to an exponential decay parameterized by a base decay parameter.
+
+    :param x: The independent variable, e.g. depth or time
+    :param y: The dependent variable, e.g. survival probability
+    :param weights: Optional weightings of each point to use when fitting.
+    :param param_guesses: initial guesses for the parameters
+    :return: a lmfit Model
+    """
+    _check_data(x, y, weights)
+    decay_model = Model(base_param_decay)
+    params = decay_model.make_params(amplitude=param_guesses[0], decay=param_guesses[1],
+                                     baseline=param_guesses[2])
+    return decay_model.fit(y, x=x, params=params, weights=weights)
+
+
+def decay_constant_param_decay(x: np.ndarray,  amplitude: float, decay_constant: float,
+                               offset: float = 0.0) -> np.ndarray:
+    """
+    Model an exponential decay parameterized by a decay constant with constant e as the base.
+
+    :param x: The independent variable with respect to which decay is calculated.
+    :param amplitude: The amplitude of the decay curve.
+    :param decay_constant: The decay constant - e.g. T1 - of the decay curve.
+    :param offset: The offset of the curve, (typically take to be 0.0).
+    :return: Exponential decay fit function, parameterized with a decay constant
+    """
+    return np.asarray(amplitude * np.exp(-1 * (x - offset) / decay_constant))
+
+
+def fit_decay_constant_param_decay(x: np.ndarray, y: np.ndarray, weights: np.ndarray = None,
+                                   param_guesses: tuple = (1., 10, 0)) -> ModelResult:
+    """
+    Fit experimental data x, y to an exponential decay parameterized by a decay constant.
+
+    :param x: The independent variable, e.g. depth or time
+    :param y: The dependent variable, e.g. survival probability
+    :param weights: Optional weightings of each point to use when fitting.
+    :param param_guesses: initial guesses for the parameters
+    :return: a lmfit Model
+    """
+    _check_data(x, y, weights)
+    decay_model = Model(decay_constant_param_decay)
+    params = decay_model.make_params(amplitude=param_guesses[0], decay_constant=param_guesses[1],
+                                     offset=param_guesses[2])
+    return decay_model.fit(y, x=x, params=params, weights=weights)
+
+
+def decaying_cosine(x: np.ndarray, amplitude: float, decay_constant: float, offset: float,
+                    baseline: float, frequency: float) -> np.ndarray:
+    """
+    Calculate exponentially decaying sinusoid at a series of points.
+
+    :param x: The independent variable with respect to which decay is calculated.
+    :param amplitude: The amplitude of the decaying sinusoid.
+    :param decay_constant: The decay constant - e.g. T2 - of the decay curve.
+    :param offset: The argument offset of the sinusoidal curve, o for sin(x - o)
+    :param baseline: The baseline of the sinusoid, e.g. b for sin(x) + b
+    :param frequency: The frequency of the sinusoid, e.g. f for sin(f x)
+    :return: The exponentially decaying sinusoid evaluated at the point(s) x
+    """
+    return amplitude * np.exp(-1 * x / decay_constant) * np.cos(frequency * (x - offset)) + baseline
+
+
+def fit_decaying_cosine(x: np.ndarray, y: np.ndarray, weights: np.ndarray = None,
+                        param_guesses: tuple = (.5, 10, 0.0, 0.5, 5)) -> ModelResult:
+    """
+    Fit experimental data x, y to an exponentially decaying sinusoid.
+
+    :param x: The independent variable, e.g. depth or time
+    :param y: The dependent variable, e.g. probability of measuring 1
+    :param weights: Optional weightings of each point to use when fitting.
+    :param param_guesses: initial guesses for the parameters
+    :return: a lmfit Model
+    """
+    _check_data(x, y, weights)
+    decay_model = Model(decaying_cosine)
+    params = decay_model.make_params(amplitude=param_guesses[0], decay_constant=param_guesses[1],
+                                     offset=param_guesses[2], baseline=param_guesses[3],
+                                     frequency=param_guesses[4])
+    return decay_model.fit(y, x=x, params=params, weights=weights)
+
+
+def shifted_cosine(x: np.ndarray, amplitude: float, offset: float, baseline: float,
+                   frequency: float) -> np.ndarray:
+    """
+    Model for a cosine shifted vertically by the amount baseline.
+
+    :param x: The independent variable;
+    :param amplitude: The amplitude of the cosine.
+    :param offset: The argument offset of the sinusoidal curve, o for sin(x - o)
+    :param baseline: The baseline of the sinusoid, e.g. b for sin(x) + b
+    :param frequency: The frequency of the sinusoid, e.g. f for sin(f x)
+    :return: The sinusoidal response at the given phases(s).
+    """
+    return amplitude * np.cos(frequency * x + offset) + baseline
+
+
+def fit_shifted_cosine(x: np.ndarray, y: np.ndarray, weights: np.ndarray = None,
+                       param_guesses: tuple = (.5, 0, .5, 1.)) -> ModelResult:
+    """
+    Fit experimental data x, y to a cosine shifted vertically by amount baseline.
+
+    :param x: The independent variable, e.g. depth or time
+    :param y: The dependent variable, e.g. probability of measuring 1
+    :param weights: Optional weightings of each point to use when fitting.
+    :param param_guesses: initial guesses for the parameters
+    :return: a lmfit Model
+    """
+    _check_data(x, y, weights)
+    decay_model = Model(shifted_cosine)
+    params = decay_model.make_params(amplitude=param_guesses[0], offset=param_guesses[1],
+                                     baseline=param_guesses[2],
+                                     frequency=param_guesses[3])
+    return decay_model.fit(y, x=x, params=params, weights=weights)
 
 
 def fit_result_to_json(fit_result):
@@ -10,7 +152,7 @@ def fit_result_to_json(fit_result):
     :param fit_result: (ModelResult) the result to serialize.
     :return: (dict)
     """
-    # annoyingly, Parameters has a handy method to dump itself as a json string, but not as a JSON
+    # Parameters has a handy method to dump itself as a json string, but not as a JSON
     # dictionary.  We insert the string directly into the JSON dictionary because
     # 1) Parameters also has a loads() method that operates on this string, so we can recover the
     #    original parameters in this way
@@ -51,24 +193,24 @@ DEFAULT_AXIS_FONT_SIZE = 14
 DEFAULT_REPORT_FONT_SIZE = 11
 
 
-def make_figure(fit_result: ModelResult, xlabel='x', ylabel='y', xscale=1.0, yscale=1.0, title='',
-                figsize=DEFAULT_FIG_SIZE, axis_fontsize=DEFAULT_AXIS_FONT_SIZE,
-                report_fontsize=DEFAULT_REPORT_FONT_SIZE):
+def make_figure(fit_result: ModelResult, xlabel: str = 'x', ylabel: str = 'y', xscale: float = 1.0,
+                yscale: float = 1.0, title: str = '', figsize=DEFAULT_FIG_SIZE,
+                axis_fontsize: tuple = DEFAULT_AXIS_FONT_SIZE,
+                report_fontsize: float = DEFAULT_REPORT_FONT_SIZE) -> plt.figure:
     """
     Plots fit and residuals from lmfit with residuals *below* fit.
     Also shows fit result text below.
 
-    :param lmfit.ModelResult fit_result: lmfit fit result object
-    :param string xlabel: label for the shared x axis
-    :param string ylabel: ylabel for fit plot
-    :param float xscale: xaxis will be divided by xscale
-    :param float yscale: yaxis will be divided by yscale
-    :param str title: title of the plot
-    :param tuple figsize: size of the plot
-    :param float fontsize: size of the font
+    :param fit_result: lmfit fit result object
+    :param xlabel: label for the shared x axis
+    :param ylabel: ylabel for fit plot
+    :param xscale: xaxis will be divided by xscale
+    :param yscale: yaxis will be divided by yscale
+    :param title: title of the plot
+    :param figsize: size of the plot
+    :param axis_fontsize: size of the font
 
     :return: matplotlib figure
-    :rtype: matplotlib.pyplot.figure
     """
 
     # layout subplots for fit plot and residuals
