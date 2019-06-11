@@ -1,3 +1,4 @@
+import pytest
 import numpy.random
 numpy.random.seed(1)  # seed random number generation for all calls to rand_ops
 
@@ -5,9 +6,9 @@ import numpy as np
 from sympy.combinatorics import Permutation
 from numpy import linalg as la
 import forest.benchmarking.distance_measures as dm
-import forest.benchmarking.random_operators as rand_ops
-from forest.benchmarking.superoperator_tools import choi_is_trace_preserving, \
-    choi_is_completely_positive
+import forest.benchmarking.operator_tools.random_operators as rand_ops
+from forest.benchmarking.operator_tools.superoperator_tools import (
+    choi_is_trace_preserving,choi_is_completely_positive)
 
 D2_SWAP = np.array([[1, 0, 0, 0],
                     [0, 0, 1, 0],
@@ -168,7 +169,7 @@ def test_random_unitaries_are_unitary():
     assert np.allclose(avg_trace3, 3.0)
     assert np.allclose(avg_det3, 1.0)
 
-
+# ~ 11 sec; passed 2019/06/11
 def test_random_unitaries_first_moment():
     # the first moment should be proportional to P_21/D
     N_avg = 50000
@@ -203,6 +204,8 @@ def test_random_unitaries_first_moment():
     #   for dimensions 2 and 3
 
 
+# ~ 12 sec; passed 2019/06/11
+@pytest.mark.slow
 def test_random_unitaries_second_moment():
     # the second moment should be proportional to
     #
