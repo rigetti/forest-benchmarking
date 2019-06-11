@@ -1,17 +1,13 @@
-from typing import List, Sequence, Tuple, Callable, Dict
+from typing import List, Sequence, Tuple, Callable, Dict, Iterator
 import warnings
 from tqdm import tqdm
 import numpy as np
 from statistics import median
-from collections import OrderedDict
-from pandas import DataFrame, Series
-import time
 from copy import copy
 
 from pyquil.api import QuantumComputer
 from pyquil.numpy_simulator import NumpyWavefunctionSimulator
 from pyquil.quil import DefGate, Program
-from pyquil.gates import RESET
 from rpcq.messages import TargetDevice
 from rpcq._utils import RPCErrorError
 
@@ -21,8 +17,8 @@ import logging
 log = logging.getLogger(__name__)
 
 
-def _naive_program_generator(qc: QuantumComputer, qubits: Sequence[int], permutations: np.ndarray,
-                             gates: np.ndarray) -> Program:
+def _naive_program_generator(qc: QuantumComputer, qubits: Sequence[int],
+                             permutations: Sequence[np.ndarray], gates: np.ndarray) -> Program:
     """
     Naively generates a native quil program to implement the circuit which is comprised of the given
     permutations and gates.
@@ -157,8 +153,8 @@ def generate_abstract_qv_circuit(depth: int) -> Tuple[List[np.ndarray], np.ndarr
 def sample_rand_circuits_for_heavy_out(qc: QuantumComputer,
                                        qubits: Sequence[int], depth: int,
                                        program_generator: Callable[[QuantumComputer, Sequence[int],
-                                                                    np.ndarray, np.ndarray],
-                                                                   Program],
+                                                                    Sequence[np.ndarray],
+                                                                    np.ndarray], Program],
                                        num_circuits: int = 100, num_shots: int = 1000,
                                        show_progress_bar: bool = False) -> int:
     """
@@ -236,8 +232,9 @@ def calculate_prob_est_and_err(num_heavy: int, num_circuits: int, num_shots: int
 
 def measure_quantum_volume(qc: QuantumComputer, qubits: Sequence[int] = None,
                            program_generator: Callable[[QuantumComputer, Sequence[int],
-                                                        np.ndarray, np.ndarray], Program] =
-                           _naive_program_generator, num_circuits: int = 100, num_shots: int = 1000,
+                                                        Sequence[np.ndarray], np.ndarray],
+                                                       Program] = _naive_program_generator,
+                           num_circuits: int = 100, num_shots: int = 1000,
                            depths: np.ndarray = None, achievable_threshold: float = 2/3,
                            stop_when_fail: bool = True, show_progress_bar: bool = False) \
         -> Dict[int, Tuple[float, float]]:
@@ -265,7 +262,7 @@ def measure_quantum_volume(qc: QuantumComputer, qubits: Sequence[int] = None,
     :param qubits: available qubits on which to act during measurement. Default all qubits in qc.
     :param program_generator: a method which
         1) takes in a quantum computer, the qubits on that
-            computer available for use, an array of sequences representing the qubit permutations
+            computer available for use, a series of sequences representing the qubit permutations
             in a model circuit, an array of matrices representing the 2q gates in the model circuit
         2) outputs a native quil program that implements the circuit and measures the appropriate
             qubits in the order implicitly dictated by the model circuit representation created in
@@ -319,225 +316,61 @@ def measure_quantum_volume(qc: QuantumComputer, qubits: Sequence[int] = None,
     return results
 
 
-def generate_quantum_volume_experiments(depths: Sequence[int], num_circuits: int) -> DataFrame:
+def count_heavy_hitters_sampled(qc_results: Iterator[np.ndarray],
+                                heavy_hitters: Iterator[List[int]]) -> Iterator[int]:
     """
-    Generate a dataframe with (depth * num_circuits) many rows each populated with an abstract
-    description of a model circuit of given depth=width necessary to measure quantum volume.
+    Simple helper to count the number of heavy hitters sampled given the sampled results for a
+    number of circuits along with the the actual heavy hitters for each circuit.
 
-    See generate_abstract_qv_circuit and the reference [QVol] for more on the structure of each
-    circuit and the representation used here.
-
-    :param num_circuits: The number of circuits to run for each depth. Should be > 100
-    :param depths: The depths to measure. In order to properly lower bound the quantum volume of
-        a circuit, the depths should start at 2 and increase in increments of 1. Depths greater
-        than 4 will take several minutes for data collection. Further, the acquire_heavy_hitters
-        step involves a classical simulation that scales exponentially with depth.
-    :return: a dataframe with columns "Depth" and "Abstract Ckt" populated with the depth and an
-        abstract representation of a model circuit with that depth and width.
+    :param qc_results: results from running each circuit on a quantum computer.
+    :param heavy_hitters: the heavy hitters for each circuit (presumably calculated through
+        simulating the circuit classically)
+    :return: the number of samples which were heavy for each circuit.
     """
-    def df_dict():
-        for d in depths:
-            for _ in range(num_circuits):
-                yield OrderedDict({"Depth": d,
-                                   "Abstract Ckt": generate_abstract_qv_circuit(d)})
-    return DataFrame(df_dict())
-
-
-def add_programs_to_dataframe(df: DataFrame, qc: QuantumComputer,
-                              qubits_at_depth: Dict[int, Sequence[int]] = None,
-                              program_generator: Callable[[QuantumComputer, Sequence[int],
-                                                           np.ndarray, np.ndarray], Program] =
-                              _naive_program_generator) -> DataFrame:
-    """
-    Passes the abstract circuit description in each row of the dataframe df along to the supplied
-    program_generator which yields a program that can be run on the available
-    qubits_at_depth[depth] on the given qc resource.
-
-    :param df: a dataframe populated with abstract descriptions of model circuits, i.e. a df
-        returned by a call to generate_quantum_volume_experiments.
-    :param qc: the quantum resource on which each output program will be run.
-    :param qubits_at_depth: the qubits of the qc available for use at each depth, default all
-        qubits in the qc for each depth. Any subset of these may actually be used by the program.
-    :param program_generator: a method which uses the given qc, its available qubits, and an
-        abstract description of the model circuit to produce a PyQuil program implementing the
-        circuit using only native gates and the given qubits. This program must respect the
-        topology of the qc induced by the given qubits. The default _naive_program_generator uses
-        the qc's compiler to achieve this result.
-    :return: a copy of df with a new "Program" column populated with native PyQuil programs that
-        implement the circuit in "Abstract Ckt" on the qc using a subset of the qubits specified
-        as available for the given depth. The used qubits are also recorded in a "Qubits" column.
-        Note that although the abstract circuit has depth=width, for the program width >= depth.
-    """
-    new_df = df.copy()
-
-    depths = new_df["Depth"].values
-    circuits = new_df["Abstract Ckt"].values
-
-    if qubits_at_depth is None:
-        all_qubits = qc.qubits()  # by default the program can act on any qubit in the computer
-        qubits = [all_qubits for _ in circuits]
-    else:
-        qubits = [qubits_at_depth[depth] for depth in depths]
-
-    programs = [program_generator(qc, qbits, *ckt) for qbits, ckt in zip(qubits, circuits)]
-    new_df["Program"] = Series(programs)
-
-    # these are the qubits actually used in the program, a subset of qubits_at_depth[depth]
-    new_df["Qubits"] = Series([program.get_qubits() for program in programs])
-
-    return new_df
-
-
-def acquire_quantum_volume_data(df: DataFrame, qc: QuantumComputer, num_shots: int = 1000,
-                                use_active_reset: bool = False) -> DataFrame:
-    """
-    Runs each program in the dataframe df on the given qc and outputs a copy of df with results.
-
-    :param df: a dataframe populated with PyQuil programs that can be run natively on the given qc,
-        i.e. a df returned by a call to add_programs_to_dataframe(df, qc, etc.) with identical qc.
-    :param qc: the quantum resource on which to run each program.
-    :param num_shots: the number of times to sample the output of each program.
-    :param use_active_reset: if true, speeds up the overall computation (only on a real qpu) by
-        actively resetting at the start of each program.
-    :return: a copy of df with a new "Results" column populated with num_shots many depth-bit arrays
-        that can be compared to the Heavy Hitters with a call to bit_array_to_int. There is also
-        a column "Run Time" which records the time taken to acquire the data for each program.
-    """
-    new_df = df.copy()
-
-    def run(q_comp, program, n_shots):
-        start = time.time()
-
-        if use_active_reset:
-            reset_measure_program = Program(RESET())
-            program = reset_measure_program + program
-
-        # run the program num_shots many times
-        program.wrap_in_numshots_loop(n_shots)
-        executable = q_comp.compiler.native_quil_to_executable(program)
-
-        res = q_comp.run(executable)
-
-        end = time.time()
-        return res, end - start
-
-    programs = new_df["Program"].values
-    data = [run(qc, program, num_shots) for program in programs]
-
-    results = [datum[0] for datum in data]
-    times = [datum[1] for datum in data]
-
-    new_df["Results"] = Series(results)
-    new_df["Run Time"] = Series(times)
-
-    # supply the count of heavy hitters sampled if heavy hitters are known.
-    if "Heavy Hitters" in new_df.columns.values:
-        new_df = count_heavy_hitters_sampled(new_df)
-
-    return new_df
-
-
-def acquire_heavy_hitters(df: DataFrame) -> DataFrame:
-    """
-    Runs a classical simulation of each circuit in the dataframe df and records which outputs
-    qualify as heavy hitters in a copied df with newly populated "Heavy Hitters" column.
-
-    An output is a heavy hitter if the ideal probability of measuring that output from the
-    circuit is greater than the median probability among all possible bitstrings of the same size.
-
-    :param df: a dataframe populated with abstract descriptions of model circuits, i.e. a df
-        returned by a call to generate_quantum_volume_experiments.
-    :return: a copy of df with a new "Heavy Hitters" column. There is also a column "Sim Time"
-        which records the time taken to simulate and collect the heavy hitters for each circuit.
-    """
-    new_df = df.copy()
-
-    def run(depth, circuit):
-        wfn_sim = NumpyWavefunctionSimulator(depth)
-
-        start = time.time()
-        heavy_outputs = collect_heavy_outputs(wfn_sim, *circuit)
-        end = time.time()
-
-        return heavy_outputs, end - start
-
-    circuits = new_df["Abstract Ckt"].values
-    depths = new_df["Depth"].values
-
-    data = [run(d, ckt) for d, ckt in zip(depths, circuits)]
-
-    heavy_hitters = [datum[0] for datum in data]
-    times = [datum[1] for datum in data]
-
-    new_df["Heavy Hitters"] = Series(heavy_hitters)
-    new_df["Sim Time"] = Series(times)
-
-    # supply the count of heavy hitters sampled if sampling results are known.
-    if "Results" in new_df.columns.values:
-        new_df = count_heavy_hitters_sampled(new_df)
-
-    return new_df
-
-
-def count_heavy_hitters_sampled(df: DataFrame) -> DataFrame:
-    """
-    Given a df populated with both sampled results and the actual heavy hitters, copies the df
-    and populates a new column with the number of samples which are heavy hitters.
-
-    :param df: a dataframe populated with sampled results and heavy hitters.
-    :return: a copy of df with a new "Num HH Sampled" column.
-    """
-    new_df = df.copy()
-
-    def count(hh, res):
+    for results, hh_list in zip(qc_results, heavy_hitters):
         num_heavy = 0
         # determine if each result bitstring is a heavy output, as determined from simulation
-        for result in res:
+        for result in results:
             # convert result to int for comparison with heavy outputs.
             output = bit_array_to_int(result)
-            if output in hh:
+            if output in hh_list:
                 num_heavy += 1
-        return num_heavy
-
-    exp_results = new_df["Results"].values
-    heavy_hitters = new_df["Heavy Hitters"].values
-
-    new_df["Num HH Sampled"] = Series([count(hh, exp_res) for hh, exp_res in zip(heavy_hitters,
-                                                                                 exp_results)])
-
-    return new_df
+        yield num_heavy
 
 
-def get_results_by_depth(df: DataFrame) -> Dict[int, Tuple[float, float]]:
+def get_prob_sample_heavy_by_depth(depths: Iterator[int], num_hh_sampled: Iterator[int],
+                                   num_shots: Iterator[int]) -> Dict[int, Tuple[float, float]]:
     """
-    Analyzes a dataframe df to determine an estimate of the probability of outputting a heavy
-    hitter at each depth in the df, a lower bound on this estimate, and whether that depth was
-    achieved.
+    Analyzes the given information for each circuit to determine [an estimate of the probability of
+    outputting a heavy hitter at each depth, a lower bound on this estimate, and whether that
+    depth was achieved]
 
     The output of this method can be fed directly into extract_quantum_volume_from_results to
     obtain the quantum volume measured.
 
-    :param df: a dataframe populated with results, num hh sampled, and circuits for some number
-        of depths.
+    :param depths: the depth of each circuit
+    :param num_hh_sampled: the number of heavy hitters sampled from each circuit
+    :param num_shots: the number of shots / total number of samples from each circuit
     :return: for each depth key, provides a tuple of (estimate of probability of outputting hh for
         that depth=width, 2-sigma confidence interval (lower bound) on that estimate). The lower
         bound on the estimate is used to judge whether a depth is considered "achieved" in the
         context of the quantum volume.
     """
-    depths = df["Depth"].values
+    nheavy_by_depth = {}
+    for depth, num_heavy, n_shots in zip(depths, num_hh_sampled, num_shots):
+        if depth not in nheavy_by_depth.keys():
+            nheavy_by_depth[depth] = ([num_heavy], n_shots)
+        else:
+            nheavy_by_depth[depth][0].append(num_heavy)
+            assert n_shots == nheavy_by_depth[depth][1], 'The number of shots should be the same ' \
+                                                         'for each circuit of a given depth.'
 
-    results = {}
-    for depth in depths:
-        single_depth = df.loc[df["Depth"] == depth]
-        num_shots = len(single_depth["Results"].values[0])
-        num_heavy = sum(single_depth["Num HH Sampled"].values)
-        num_circuits = len(single_depth["Abstract Ckt"].values)
+    results_by_depth = {}
+    for depth, (n_heavy, n_shots) in nheavy_by_depth.items():
+        prob_est, conf_intrvl = calculate_prob_est_and_err(sum(n_heavy), len(n_heavy), n_shots)
+        results_by_depth[depth] = (prob_est, conf_intrvl)
 
-        prob_est, conf_intrvl = calculate_prob_est_and_err(num_heavy, num_circuits, num_shots)
-
-        results[depth] = (prob_est, conf_intrvl)
-
-    return results
+    return results_by_depth
 
 
 def extract_quantum_volume_from_results(results: Dict[int, Tuple[float, float]]) -> int:
