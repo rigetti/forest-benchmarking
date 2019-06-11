@@ -14,7 +14,7 @@ from pyquil import Program
 from forest.benchmarking.tomography import _state_tomo_settings
 from forest.benchmarking.utils import all_traceless_pauli_z_terms, is_pos_pow_two
 from forest.benchmarking.analysis.fitting import fit_base_param_decay
-from forest.benchmarking.operator_estimation import ExperimentSetting, ExperimentResult, \
+from forest.benchmarking.observable_estimation import ExperimentSetting, ExperimentResult, \
     zeros_state, estimate_observables, ObservablesExperiment, group_settings
 
 

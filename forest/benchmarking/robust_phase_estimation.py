@@ -11,7 +11,7 @@ from pyquil.quilbase import Gate
 from pyquil.api import QuantumComputer
 from pyquil.paulis import PauliTerm
 from forest.benchmarking.utils import bloch_vector_to_standard_basis, is_pos_pow_two
-from forest.benchmarking.operator_estimation import ExperimentSetting, plusZ, minusZ, \
+from forest.benchmarking.observable_estimation import ExperimentSetting, plusZ, minusZ, \
     ObservablesExperiment, ExperimentResult, estimate_observables, plusX, _OneQState, \
     TensorProductState, group_settings
 

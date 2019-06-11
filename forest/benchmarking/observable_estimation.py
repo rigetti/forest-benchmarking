@@ -343,7 +343,7 @@ class OperatorEncoder(JSONEncoder):
 
 
 def to_json(fn, obj):
-    """Convenience method to save pyquil.operator_estimation objects as a JSON file.
+    """Convenience method to save forest.benchmarking.observable_estimation objects as a JSON file.
     See :py:func:`read_json`.
     """
     with open(fn, 'w') as f:
@@ -360,7 +360,7 @@ def _operator_object_hook(obj):
 
 
 def read_json(fn):
-    """Convenience method to read pyquil.operator_estimation objects from a JSON file.
+    """Convenience method to read forest.benchmarking.observable_estimation objects from a JSON file.
     See :py:func:`to_json`.
     """
     with open(fn) as f:

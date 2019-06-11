@@ -1,6 +1,6 @@
 import numpy as np
 from pyquil.noise import pauli_kraus_map
-from forest.benchmarking.operator_estimation import ExperimentSetting, ExperimentResult, zeros_state
+from forest.benchmarking.observable_estimation import ExperimentSetting, ExperimentResult, zeros_state
 from forest.benchmarking.randomized_benchmarking import *
 from forest.benchmarking.utils import all_traceless_pauli_z_terms
 

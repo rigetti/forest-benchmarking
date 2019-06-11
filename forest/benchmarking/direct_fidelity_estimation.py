@@ -7,7 +7,7 @@ import numpy as np
 
 from pyquil import Program
 from pyquil.api import BenchmarkConnection, QuantumComputer
-from forest.benchmarking.operator_estimation import ExperimentResult, ExperimentSetting, \
+from forest.benchmarking.observable_estimation import ExperimentResult, ExperimentSetting, \
     ObservablesExperiment, TensorProductState, estimate_observables, plusX, minusX, plusY, minusY,\
     plusZ, minusZ, exhaustive_symmetrization, calibrate_observable_estimates
 from pyquil.paulis import PauliTerm, sI, sX, sY, sZ

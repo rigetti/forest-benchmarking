@@ -13,7 +13,7 @@ from pyquil.paulis import PauliTerm
 from forest.benchmarking.utils import transform_pauli_moments_to_bit
 from forest.benchmarking.analysis.fitting import fit_decay_constant_param_decay, \
     fit_decaying_cosine, fit_shifted_cosine
-from forest.benchmarking.operator_estimation import ObservablesExperiment, ExperimentResult, \
+from forest.benchmarking.observable_estimation import ObservablesExperiment, ExperimentResult, \
     ExperimentSetting, estimate_observables, minusZ, plusZ, minusY
 
 MICROSECOND = 1e-6  # A microsecond (us) is an SI unit of time
