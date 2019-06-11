@@ -5,9 +5,9 @@ v0.6 (June 11, 2018)
 --------------------
 Breaking Changes:
 
-- `operator_estimation.py` is entirely replaced.
+- `operator_estimation.py` is entirely replaced. All changes from (gh-135) except where stated otherwise.
 
-- `pyquil.operator_estimation` dependencies replaced with `forest.benchmarking.operator_estimation`
+- `pyquil.operator_estimation` dependencies replaced with `forest.benchmarking.operator_estimation` (gh-129,132,133,134,135)
 
 - `operator_estimation.TomographyExperiment.out_op` -> `operator_estimation.ObservablesExperiment.out_observable`
 
@@ -17,13 +17,13 @@ Breaking Changes:
 
 - `utils.all_pauli_terms` -> `utils.all_traceless_pauli_terms` 
 
-- `DFEData` and `DFEEstimate` dataclasses removed in favor of `ExperimentResult` and tuple of results respectively.
+- `DFEData` and `DFEEstimate` dataclasses removed in favor of `ExperimentResult` and tuple of results respectively (gh-134).
 
 - plotting moved out of `qubit_spectroscopy`; instead, use `fit_*_results()` to get a `lmfit.model.ModelResult` and pass this into `analysis.fitting.make_figure()`
 
-- `pandas.DataFrame` is no longer used in `randomized_benchmarking`, `qubit_spectroscopy`, and `robust_phase_estimation`. These now make use of `operator_estimation.ObservablesExperiment`, and as such the API has changed substantially. Please refer to example notebooks for new usage.
+- `pandas.DataFrame` is no longer used in `randomized_benchmarking` (gh-133), `qubit_spectroscopy` (gh-129), and `robust_phase_estimation` (gh-135). These now make use of `operator_estimation.ObservablesExperiment`, and as such the API has changed substantially. Please refer to example notebooks for new usage.
 
-- `pandas.DataFrame` methods removed from `quantum_volume`. See examples notebook for alternative usage. 
+- `pandas.DataFrame` methods removed from `quantum_volume`. See examples notebook for alternative usage (gh-136). 
 
 - `utils.determine_simultaneous_grouping()` removed in favor of similar functionality in `operator_estimation.group_settings`
 
