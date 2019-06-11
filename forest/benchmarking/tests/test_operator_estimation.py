@@ -1,6 +1,7 @@
 import functools
 import itertools
 import random
+random.seed(1)  # seed random number generation for all calls to rand_ops
 from math import pi
 import numpy as np
 from operator import mul
@@ -184,7 +185,7 @@ def test_experiment_result():
     assert str(er) == 'X0_0→(1+0j)*Z0: 0.9 +- 0.05'
 
 
-def test_estimate_observables(forest):
+def test_estimate_observables():
     expts = [
         ExperimentSetting(TensorProductState(), o1 * o2)
         for o1, o2 in itertools.product([sI(0), sX(0), sY(0), sZ(0)], [sI(1), sX(1), sY(1), sZ(1)])
@@ -195,6 +196,7 @@ def test_estimate_observables(forest):
     assert len(gsuite) == 3 * 3  # can get all the terms with I for free in this case
 
     qc = get_qc('2q-qvm')
+    qc.qam.random_seed = 1
     for res in estimate_observables(qc, gsuite, num_shots=1000):
         if res.setting.observable in [sI(), sZ(0), sZ(1), sZ(0) * sZ(1)]:
             assert np.abs(res.expectation) > 0.9
@@ -232,6 +234,7 @@ def test_estimate_observables_many_progs(forest):
     ]
 
     qc = get_qc('2q-qvm')
+    qc.qam.random_seed = 1
     qc.qam.random_seed = 0
     for prog in _random_2q_programs():
         suite = ObservablesExperiment(expts, program=prog)
@@ -263,6 +266,7 @@ def test_append():
 
 def test_no_complex_coeffs(forest):
     qc = get_qc('2q-qvm')
+    qc.qam.random_seed = 1
     suite = ObservablesExperiment([ExperimentSetting(TensorProductState(), 1.j * sY(0))], program=Program(X(0)))
     with pytest.raises(ValueError):
         res = list(estimate_observables(qc, suite, num_shots=1000))
@@ -440,6 +444,7 @@ def test_expt_settings_diagonal_in_tpb():
 
 def test_identity(forest):
     qc = get_qc('2q-qvm')
+    qc.qam.random_seed = 1
     suite = ObservablesExperiment([ExperimentSetting(plusZ(0), 0.123 * sI(0))],
                                  program=Program(X(0)))
     result = list(estimate_observables(qc, suite))[0]
@@ -448,6 +453,7 @@ def test_identity(forest):
 
 def test_sic_process_tomo(forest):
     qc = get_qc('2q-qvm')
+    qc.qam.random_seed = 1
     process = Program(X(0))
     settings = []
     for in_state in [SIC0, SIC1, SIC2, SIC3]:
@@ -476,6 +482,7 @@ def test_estimate_observables_symmetrize(forest):
     assert len(gsuite) == 3 * 3  # can get all the terms with I for free in this case
 
     qc = get_qc('2q-qvm')
+    qc.qam.random_seed = 1
     for res in estimate_observables(qc, gsuite, symmetrization_method=exhaustive_symmetrization):
         if res.setting.observable in [sI(), sZ(0), sZ(1), sZ(0) * sZ(1)]:
             assert np.abs(res.expectation) > 0.9
@@ -497,6 +504,7 @@ def test_estimate_observables_symmetrize_calibrate(forest):
     assert len(gsuite) == 3 * 3  # can get all the terms with I for free in this case
 
     qc = get_qc('2q-qvm')
+    qc.qam.random_seed = 1
     results = list(estimate_observables(qc, gsuite,
                                         symmetrization_method=exhaustive_symmetrization))
     for res in calibrate_observable_estimates(qc, results):
@@ -511,6 +519,7 @@ def test_estimate_observables_zero_expectation(forest):
     Testing case when expectation value of observable should be close to zero
     """
     qc = get_qc('2q-qvm')
+    qc.qam.random_seed = 1
     exptsetting = ExperimentSetting(plusZ(0), sX(0))
     suite = ObservablesExperiment([exptsetting],
                                  program=Program(I(0)))
@@ -566,6 +575,7 @@ def test_ratio_variance_array():
 
 def test_estimate_observables_uncalibrated_asymmetric_readout(forest):
     qc = get_qc('1q-qvm')
+    qc.qam.random_seed = 1
     expt1 = ExperimentSetting(TensorProductState(plusX(0)), sX(0))
     expt2 = ExperimentSetting(TensorProductState(plusY(0)), sY(0))
     expt3 = ExperimentSetting(TensorProductState(plusZ(0)), sZ(0))
@@ -582,13 +592,14 @@ def test_estimate_observables_uncalibrated_asymmetric_readout(forest):
     for idx, res in enumerate(estimate_observables(qc, obs_expt, num_shots=1000)):
         expect_arr[idx] = res.expectation
 
-    assert np.isclose(np.mean(expect_arr[::3]), expected_expectation_z_basis, atol=2e-2)
-    assert np.isclose(np.mean(expect_arr[1::3]), expected_expectation_z_basis, atol=2e-2)
-    assert np.isclose(np.mean(expect_arr[2::3]), expected_expectation_z_basis, atol=2e-2)
+    assert np.isclose(np.mean(expect_arr[::3]), expected_expectation_z_basis, atol=3e-2)
+    assert np.isclose(np.mean(expect_arr[1::3]), expected_expectation_z_basis, atol=3e-2)
+    assert np.isclose(np.mean(expect_arr[2::3]), expected_expectation_z_basis, atol=3e-2)
 
 
 def test_estimate_observables_uncalibrated_symmetric_readout(forest):
     qc = get_qc('1q-qvm')
+    qc.qam.random_seed = 1
     expt1 = ExperimentSetting(TensorProductState(plusX(0)), sX(0))
     expt2 = ExperimentSetting(TensorProductState(plusY(0)), sY(0))
     expt3 = ExperimentSetting(TensorProductState(plusZ(0)), sZ(0))
@@ -607,9 +618,9 @@ def test_estimate_observables_uncalibrated_symmetric_readout(forest):
                                                    symmetrization_method=exhaustive_symmetrization)):
         uncalibr_e[idx] = res.expectation
 
-    assert np.isclose(np.mean(uncalibr_e[::3]), expected_expectation_z_basis, atol=2e-2)
-    assert np.isclose(np.mean(uncalibr_e[1::3]), expected_expectation_z_basis, atol=2e-2)
-    assert np.isclose(np.mean(uncalibr_e[2::3]), expected_expectation_z_basis, atol=2e-2)
+    assert np.isclose(np.mean(uncalibr_e[::3]), expected_expectation_z_basis, atol=3e-2)
+    assert np.isclose(np.mean(uncalibr_e[1::3]), expected_expectation_z_basis, atol=3e-2)
+    assert np.isclose(np.mean(uncalibr_e[2::3]), expected_expectation_z_basis, atol=3e-2)
 
 
 def test_estimate_observables_calibrated_symmetric_readout(forest):
@@ -622,17 +633,18 @@ def test_estimate_observables_calibrated_symmetric_readout(forest):
     p.define_noisy_readout(0, p00=0.99, p11=0.80)
     obs_expt = ObservablesExperiment(settings=[expt1, expt2, expt3], program=p)
 
-    num_simulations = 25
+    num_simulations = 10
 
     expectations = []
-    for _ in range(num_simulations):
+    for sim_num in range(num_simulations):
+        qc.qam.random_seed = sim_num+1
         expt_results = list(estimate_observables(qc, obs_expt, num_shots=1000,
                                                  symmetrization_method=exhaustive_symmetrization))
         expt_results = list(calibrate_observable_estimates(qc, expt_results, noisy_program=p))
         expectations.append([res.expectation for res in expt_results])
     expectations = np.array(expectations)
     results = np.mean(expectations, axis=0)
-    np.testing.assert_allclose(results, 1.0, atol=2e-2)
+    np.testing.assert_allclose(results, 1.0, atol=3e-2)
 
 
 def test_estimate_observables_result_zero_symmetrization_calibration(forest):
@@ -647,11 +659,12 @@ def test_estimate_observables_result_zero_symmetrization_calibration(forest):
     p.define_noisy_readout(0, p00=p00, p11=p11)
     obs_expt = ObservablesExperiment(settings=expt_settings, program=p)
 
-    num_simulations = 25
+    num_simulations = 10
 
     expectations = []
     raw_expectations = []
-    for _ in range(num_simulations):
+    for sim_num in range(num_simulations):
+        qc.qam.random_seed = sim_num+1
         expt_results = list(estimate_observables(qc, obs_expt, num_shots=1000,
                                                  symmetrization_method=exhaustive_symmetrization))
         expt_results = list(calibrate_observable_estimates(qc, expt_results, noisy_program=p))
@@ -661,8 +674,8 @@ def test_estimate_observables_result_zero_symmetrization_calibration(forest):
     raw_expectations = np.array(raw_expectations)
     results = np.mean(expectations, axis=0)
     raw_results = np.mean(raw_expectations)
-    np.testing.assert_allclose(results, 0.0, atol=2e-2)
-    np.testing.assert_allclose(raw_results, 0.0, atol=2e-2)
+    np.testing.assert_allclose(results, 0.0, atol=3e-2)
+    np.testing.assert_allclose(raw_results, 0.0, atol=3e-2)
 
 
 def test_estimate_observables_result_zero_no_noisy_readout(forest):
@@ -676,20 +689,22 @@ def test_estimate_observables_result_zero_no_noisy_readout(forest):
     p = Program()
     obs_expt = ObservablesExperiment(settings=expt_settings, program=p)
 
-    num_simulations = 25
+    num_simulations = 10
 
     expectations = []
-    for _ in range(num_simulations):
+    for sim_num in range(num_simulations):
+        qc.qam.random_seed = sim_num+1
         expt_results = list(estimate_observables(qc, obs_expt, num_shots=1000))
         expectations.append([res.expectation for res in expt_results])
     expectations = np.array(expectations)
     results = np.mean(expectations, axis=0)
-    np.testing.assert_allclose(results, 0.0, atol=2e-2)
+    np.testing.assert_allclose(results, 0.0, atol=3e-2)
 
 
 def test_estimate_observables_result_zero_no_symm_calibr(forest):
     # expecting expectation value to be nonzero with symmetrization/calibration
     qc = get_qc('9q-qvm')
+    qc.qam.random_seed = 1
     expt1 = ExperimentSetting(TensorProductState(plusX(0)), sZ(0))
     expt2 = ExperimentSetting(TensorProductState(minusZ(0)), sY(0))
     expt3 = ExperimentSetting(TensorProductState(minusY(0)), sX(0))
@@ -699,21 +714,23 @@ def test_estimate_observables_result_zero_no_symm_calibr(forest):
     p.define_noisy_readout(0, p00=p00, p11=p11)
     obs_expt = ObservablesExperiment(settings=expt_settings, program=p)
 
-    num_simulations = 25
+    num_simulations = 10
 
     expectations = []
     expected_result = (p00 * 0.5 + (1 - p11) * 0.5) - ((1 - p00) * 0.5 + p11 * 0.5)
-    for _ in range(num_simulations):
+    for sim_num in range(num_simulations):
+        qc.qam.random_seed = sim_num+1
         expt_results = list(estimate_observables(qc, obs_expt, num_shots=1000))
         expectations.append([res.expectation for res in expt_results])
     expectations = np.array(expectations)
     results = np.mean(expectations, axis=0)
-    np.testing.assert_allclose(results, expected_result, atol=2e-2)
+    np.testing.assert_allclose(results, expected_result, atol=3e-2)
 
 
 def test_estimate_observables_2q_readout_error_one_measured(forest):
     # 2q readout errors, but only 1 qubit measured
     qc = get_qc('9q-qvm')
+    qc.qam.random_seed = 1
     runs = 25
     qubs = [0, 1]
     setting = ExperimentSetting(TensorProductState(plusZ(qubs[0]) * plusZ(qubs[1])), sZ(qubs[0]))
@@ -728,19 +745,20 @@ def test_estimate_observables_2q_readout_error_one_measured(forest):
 
     results = calibrate_observable_estimates(qc, list(estimate_observables(qc, expt, num_shots=500,
                                                   symmetrization_method=exhaustive_symmetrization)),
-                                             num_shots=500, noisy_program=p)
+                                             num_shots=500*runs, noisy_program=p)
     for idx, res in enumerate(results):
         raw_e[idx] = res.raw_expectation
         obs_e[idx] = res.expectation
         cal_e[idx] = res.calibration_expectation
 
-    assert np.isclose(np.mean(raw_e), 0.849, atol=2e-2)
-    assert np.isclose(np.mean(obs_e), 1.0, atol=2e-2)
-    assert np.isclose(np.mean(cal_e), 0.849, atol=2e-2)
+    assert np.isclose(np.mean(raw_e), 0.849, atol=3e-2)
+    assert np.isclose(np.mean(obs_e), 1.0, atol=3e-2)
+    assert np.isclose(np.mean(cal_e), 0.849, atol=3e-2)
 
 
 def test_exhaustive_symmetrization_1q(forest):
     qc = get_qc('9q-qvm')
+    qc.qam.random_seed = 1
     qubs = [5]
     num_shots = 1000
     p = Program()
@@ -759,11 +777,12 @@ def test_exhaustive_symmetrization_1q(forest):
     expected_frac0 = (p00 + p11) / 2
 
     assert symm_prog_qs == [[5]] * 2
-    assert np.isclose(frac0, expected_frac0, 2e-2)
+    assert np.isclose(frac0, expected_frac0, atol=3e-2)
 
 
 def test_exhaustive_symmetrization_2q(forest):
     qc = get_qc('9q-qvm')
+    qc.qam.random_seed = 1
     qubs = [5, 7]
     num_shots = 1000
     p = Program()
@@ -788,12 +807,13 @@ def test_exhaustive_symmetrization_2q(forest):
     expected_frac5_0 = (p5_00 + p5_11) / 2
     expected_frac7_0 = (p7_00 + p7_11) / 2
 
-    assert np.isclose(frac5_0, expected_frac5_0, 2e-2)
-    assert np.isclose(frac7_0, expected_frac7_0, 2e-2)
+    assert np.isclose(frac5_0, expected_frac5_0, atol=3e-2)
+    assert np.isclose(frac7_0, expected_frac7_0, atol=3e-2)
 
 
 def test_estimate_observables_inherit_noise_errors(forest):
     qc = get_qc('3q-qvm')
+    qc.qam.random_seed = 1
     # specify simplest experiments
     expt1 = ExperimentSetting(TensorProductState(), sZ(0))
     expt2 = ExperimentSetting(TensorProductState(), sZ(1))
@@ -815,8 +835,6 @@ def test_estimate_observables_inherit_noise_errors(forest):
     p.define_noisy_readout(0, 0.99, 0.80)
     p.define_noisy_readout(1, 0.95, 0.85)
     p.define_noisy_readout(2, 0.97, 0.78)
-
-    obs_expt = ObservablesExperiment(settings=[expt1, expt2, expt3], program=p)
 
     calibr_prog1 = get_calibration_program(expt1.observable, p)
     calibr_prog2 = get_calibration_program(expt2.observable, p)
@@ -843,9 +861,10 @@ def test_expectations_sic0(forest):
     expt3 = ExperimentSetting(SIC0(0), sZ(0))
     obs_expt = ObservablesExperiment(settings=[expt1, expt2, expt3], program=Program())
 
-    num_simulations = 25
+    num_simulations = 10
     results_unavged = []
-    for _ in range(num_simulations):
+    for sim_num in range(num_simulations):
+        qc.qam.random_seed = sim_num+1
         measured_results = []
         for res in estimate_observables(qc, obs_expt, num_shots=1000):
             measured_results.append(res.expectation)
@@ -854,7 +873,7 @@ def test_expectations_sic0(forest):
     results_unavged = np.array(results_unavged)
     results = np.mean(results_unavged, axis=0)
     expected_results = np.array([0, 0, 1])
-    np.testing.assert_allclose(results, expected_results, atol=2e-2)
+    np.testing.assert_allclose(results, expected_results, atol=3e-2)
 
 
 def test_expectations_sic1(forest):
@@ -864,9 +883,10 @@ def test_expectations_sic1(forest):
     expt3 = ExperimentSetting(SIC1(0), sZ(0))
     obs_expt = ObservablesExperiment(settings=[expt1, expt2, expt3], program=Program())
 
-    num_simulations = 25
+    num_simulations = 10
     results_unavged = []
-    for _ in range(num_simulations):
+    for sim_num in range(num_simulations):
+        qc.qam.random_seed = sim_num+1
         measured_results = []
         for res in estimate_observables(qc, obs_expt, num_shots=1000):
             measured_results.append(res.expectation)
@@ -875,7 +895,7 @@ def test_expectations_sic1(forest):
     results_unavged = np.array(results_unavged)
     results = np.mean(results_unavged, axis=0)
     expected_results = np.array([2 * np.sqrt(2) / 3, 0, -1 / 3])
-    np.testing.assert_allclose(results, expected_results, atol=2e-2)
+    np.testing.assert_allclose(results, expected_results, atol=3e-2)
 
 
 def test_expectations_sic2(forest):
@@ -885,9 +905,10 @@ def test_expectations_sic2(forest):
     expt3 = ExperimentSetting(SIC2(0), sZ(0))
     obs_expt = ObservablesExperiment(settings=[expt1, expt2, expt3], program=Program())
 
-    num_simulations = 25
+    num_simulations = 10
     results_unavged = []
-    for _ in range(num_simulations):
+    for sim_num in range(num_simulations):
+        qc.qam.random_seed = sim_num+1
         measured_results = []
         for res in estimate_observables(qc, obs_expt, num_shots=1000):
             measured_results.append(res.expectation)
@@ -898,7 +919,7 @@ def test_expectations_sic2(forest):
     expected_results = np.array([(2 * np.sqrt(2) / 3) * np.cos(2 * np.pi / 3),
                                  -(2 * np.sqrt(2) / 3) * np.sin(2 * np.pi / 3),
                                  -1 / 3])
-    np.testing.assert_allclose(results, expected_results, atol=2e-2)
+    np.testing.assert_allclose(results, expected_results, atol=3e-2)
 
 
 def test_expectations_sic3(forest):
@@ -908,9 +929,10 @@ def test_expectations_sic3(forest):
     expt3 = ExperimentSetting(SIC3(0), sZ(0))
     obs_expt = ObservablesExperiment(settings=[expt1, expt2, expt3], program=Program())
 
-    num_simulations = 25
+    num_simulations = 10
     results_unavged = []
-    for _ in range(num_simulations):
+    for sim_num in range(num_simulations):
+        qc.qam.random_seed = sim_num+1
         measured_results = []
         for res in estimate_observables(qc, obs_expt, num_shots=1000):
             measured_results.append(res.expectation)
@@ -921,7 +943,7 @@ def test_expectations_sic3(forest):
     expected_results = np.array([(2 * np.sqrt(2) / 3) * np.cos(2 * np.pi / 3),
                                  (2 * np.sqrt(2) / 3) * np.sin(2 * np.pi / 3),
                                  -1 / 3])
-    np.testing.assert_allclose(results, expected_results, atol=2e-2)
+    np.testing.assert_allclose(results, expected_results, atol=3e-2)
 
 
 def test_sic_conditions(forest):
@@ -942,7 +964,7 @@ def test_sic_conditions(forest):
             amps = wfn.amplitudes
         proj = np.outer(amps, amps.conj())
         result = np.add(result, proj)
-    np.testing.assert_allclose(result / 2, np.eye(2), atol=2e-2)
+    np.testing.assert_allclose(result / 2, np.eye(2), atol=3e-2)
 
     # condition (ii) -- tr(proj_a . proj_b) = 1 / 3, for a != b
     for comb in itertools.combinations([0, 1, 2, 3], 2):
@@ -981,9 +1003,10 @@ def test_estimate_observables_grouped_expts(forest):
     # and use this to create a ObservablesExperiment suite
     obs_expt = ObservablesExperiment(settings=expt_settings, program=Program())
 
-    num_simulations = 25
+    num_simulations = 10
     results_unavged = []
-    for _ in range(num_simulations):
+    for sim_num in range(num_simulations):
+        qc.qam.random_seed = sim_num+1
         measured_results = []
         for res in estimate_observables(qc, obs_expt, num_shots=1000):
             measured_results.append(res.expectation)
@@ -992,7 +1015,7 @@ def test_estimate_observables_grouped_expts(forest):
     results_unavged = np.array(results_unavged)
     results = np.mean(results_unavged, axis=0)
     expected_results = np.array([-1 / 3, -1, 1, -1, -1])
-    np.testing.assert_allclose(results, expected_results, atol=2e-2)
+    np.testing.assert_allclose(results, expected_results, atol=3e-2)
 
 
 def _point_channel_fidelity_estimate(v, dim=2):
@@ -1024,9 +1047,10 @@ def test_bit_flip_channel_fidelity(forest):
     # prepare ObservablesExperiment
     process_exp = ObservablesExperiment(settings=expt_list, program=p)
     # list to store experiment results
-    num_expts = 25
+    num_simulations = 10
     expts = []
-    for _ in range(num_expts):
+    for sim_num in range(num_simulations):
+        qc.qam.random_seed = sim_num+1
         expt_results = []
         for res in estimate_observables(qc, process_exp, num_shots=1000):
             expt_results.append(res.expectation)
@@ -1037,7 +1061,7 @@ def test_bit_flip_channel_fidelity(forest):
     estimated_fidelity = _point_channel_fidelity_estimate(results)
     # how close is this channel to the identity operator
     expected_fidelity = 1 - (2 / 3) * prob
-    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=2e-2)
+    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
 
 
 def test_dephasing_channel_fidelity(forest):
@@ -1062,9 +1086,10 @@ def test_dephasing_channel_fidelity(forest):
     # prepare ObservablesExperiment
     process_exp = ObservablesExperiment(settings=expt_list, program=p)
     # list to store experiment results
-    num_expts = 25
+    num_simulations = 10
     expts = []
-    for _ in range(num_expts):
+    for sim_num in range(num_simulations):
+        qc.qam.random_seed = sim_num+1
         expt_results = []
         for res in estimate_observables(qc, process_exp, num_shots=1000):
             expt_results.append(res.expectation)
@@ -1075,7 +1100,7 @@ def test_dephasing_channel_fidelity(forest):
     estimated_fidelity = _point_channel_fidelity_estimate(results)
     # how close is this channel to the identity operator
     expected_fidelity = 1 - (2 / 3) * prob
-    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=2e-2)
+    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
 
 
 def test_depolarizing_channel_fidelity(forest):
@@ -1102,9 +1127,10 @@ def test_depolarizing_channel_fidelity(forest):
     # prepare ObservablesExperiment
     process_exp = ObservablesExperiment(settings=expt_list, program=p)
     # list to store experiment results
-    num_expts = 25
+    num_simulations = 10
     expts = []
-    for _ in range(num_expts):
+    for sim_num in range(num_simulations):
+        qc.qam.random_seed = sim_num+1
         expt_results = []
         for res in estimate_observables(qc, process_exp, num_shots=1000):
             expt_results.append(res.expectation)
@@ -1115,7 +1141,7 @@ def test_depolarizing_channel_fidelity(forest):
     estimated_fidelity = _point_channel_fidelity_estimate(results)
     # how close is this channel to the identity operator
     expected_fidelity = (1 + prob) / 2
-    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=2e-2)
+    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
 
 
 def test_unitary_channel_fidelity(forest):
@@ -1136,9 +1162,10 @@ def test_unitary_channel_fidelity(forest):
     # prepare ObservablesExperiment
     process_exp = ObservablesExperiment(settings=expt_list, program=p)
     # list to store experiment results
-    num_expts = 25
+    num_simulations = 10
     expts = []
-    for _ in range(num_expts):
+    for sim_num in range(num_simulations):
+        qc.qam.random_seed = sim_num+1
         expt_results = []
         for res in estimate_observables(qc, process_exp, num_shots=1000):
             expt_results.append(res.expectation)
@@ -1149,7 +1176,7 @@ def test_unitary_channel_fidelity(forest):
     estimated_fidelity = _point_channel_fidelity_estimate(results)
     # how close is this channel to the identity operator
     expected_fidelity = (1 / 6) * ((2 * np.cos(theta / 2)) ** 2 + 2)
-    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=2e-2)
+    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
 
 
 def test_bit_flip_channel_fidelity_readout_error(forest):
@@ -1177,9 +1204,10 @@ def test_bit_flip_channel_fidelity_readout_error(forest):
     # prepare ObservablesExperiment
     process_exp = ObservablesExperiment(settings=expt_list, program=p)
     # list to store experiment results
-    num_expts = 25
+    num_simulations = 10
     expts = []
-    for _ in range(num_expts):
+    for sim_num in range(num_simulations):
+        qc.qam.random_seed = sim_num+1
         expt_results = []
         results = estimate_observables(qc, process_exp,
                                        symmetrization_method=exhaustive_symmetrization)
@@ -1192,7 +1220,7 @@ def test_bit_flip_channel_fidelity_readout_error(forest):
     estimated_fidelity = _point_channel_fidelity_estimate(results)
     # how close is this channel to the identity operator
     expected_fidelity = 1 - (2 / 3) * prob
-    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=2e-2)
+    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
 
 
 def test_dephasing_channel_fidelity_readout_error(forest):
@@ -1219,9 +1247,10 @@ def test_dephasing_channel_fidelity_readout_error(forest):
     # prepare ObservablesExperiment
     process_exp = ObservablesExperiment(settings=expt_list, program=p)
     # list to store experiment results
-    num_expts = 25
+    num_simulations = 10
     expts = []
-    for _ in range(num_expts):
+    for sim_num in range(num_simulations):
+        qc.qam.random_seed = sim_num+1
         expt_results = []
         results = estimate_observables(qc, process_exp,
                                        symmetrization_method=exhaustive_symmetrization)
@@ -1234,7 +1263,7 @@ def test_dephasing_channel_fidelity_readout_error(forest):
     estimated_fidelity = _point_channel_fidelity_estimate(results)
     # how close is this channel to the identity operator
     expected_fidelity = 1 - (2 / 3) * prob
-    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=2e-2)
+    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
 
 
 def test_depolarizing_channel_fidelity_readout_error(forest):
@@ -1263,9 +1292,10 @@ def test_depolarizing_channel_fidelity_readout_error(forest):
     # prepare ObservablesExperiment
     process_exp = ObservablesExperiment(settings=expt_list, program=p)
     # list to store experiment results
-    num_expts = 25
+    num_simulations = 10
     expts = []
-    for _ in range(num_expts):
+    for sim_num in range(num_simulations):
+        qc.qam.random_seed = sim_num+1
         expt_results = []
         results = estimate_observables(qc, process_exp,
                                        symmetrization_method=exhaustive_symmetrization)
@@ -1278,7 +1308,7 @@ def test_depolarizing_channel_fidelity_readout_error(forest):
     estimated_fidelity = _point_channel_fidelity_estimate(results)
     # how close is this channel to the identity operator
     expected_fidelity = (1 + prob) / 2
-    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=2e-2)
+    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
 
 
 def test_unitary_channel_fidelity_readout_error(forest):
@@ -1301,9 +1331,10 @@ def test_unitary_channel_fidelity_readout_error(forest):
     # prepare ObservablesExperiment
     process_exp = ObservablesExperiment(settings=expt_list, program=p)
     # list to store experiment results
-    num_expts = 25
+    num_simulations = 10
     expts = []
-    for _ in range(num_expts):
+    for sim_num in range(num_simulations):
+        qc.qam.random_seed = sim_num+1
         expt_results = []
         results = estimate_observables(qc, process_exp,
                                        symmetrization_method=exhaustive_symmetrization)
@@ -1316,7 +1347,7 @@ def test_unitary_channel_fidelity_readout_error(forest):
     estimated_fidelity = _point_channel_fidelity_estimate(results)
     # how close is this channel to the identity operator
     expected_fidelity = (1 / 6) * ((2 * np.cos(theta / 2)) ** 2 + 2)
-    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=2e-2)
+    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
 
 
 def test_2q_unitary_channel_fidelity_readout_error(forest):
@@ -1360,9 +1391,10 @@ def test_2q_unitary_channel_fidelity_readout_error(forest):
     # prepare ObservablesExperiment
     process_exp = ObservablesExperiment(settings=expt_list, program=p)
     # list to store experiment results
-    num_expts = 25
+    num_simulations = 10
     expts = []
-    for _ in range(num_expts):
+    for sim_num in range(num_simulations):
+        qc.qam.random_seed = sim_num+1
         expt_results = []
         results = estimate_observables(qc, process_exp,
                                        symmetrization_method=exhaustive_symmetrization)
@@ -1375,7 +1407,7 @@ def test_2q_unitary_channel_fidelity_readout_error(forest):
     estimated_fidelity = _point_channel_fidelity_estimate(results, dim=4)
     # how close is this channel to the identity operator
     expected_fidelity = (1 / 5) * ((2 * np.cos(theta1 / 2) * np.cos(theta2 / 2)) ** 2 + 1)
-    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=2e-2)
+    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
 
 
 def test_measure_1q_observable_raw_expectation(forest):
@@ -1387,10 +1419,11 @@ def test_measure_1q_observable_raw_expectation(forest):
     p.define_noisy_readout(0, p00=p00, p11=p11)
     obs_expt = ObservablesExperiment(settings=[expt], program=p)
 
-    num_simulations = 25
+    num_simulations = 10
 
     raw_expectations = []
-    for _ in range(num_simulations):
+    for sim_num in range(num_simulations):
+        qc.qam.random_seed = sim_num+1
         expt_results = list(estimate_observables(qc, obs_expt, num_shots=1000,
                                                  symmetrization_method=exhaustive_symmetrization))
         expt_results = list(calibrate_observable_estimates(qc, expt_results, noisy_program=p))
@@ -1402,7 +1435,7 @@ def test_measure_1q_observable_raw_expectation(forest):
     eps_not = (p00 + p11) / 2
     eps = 1 - eps_not
     expected_result = 1 - 2 * eps
-    np.testing.assert_allclose(result, expected_result, atol=2e-2)
+    np.testing.assert_allclose(result, expected_result, atol=3e-2)
 
 
 def test_measure_1q_observable_raw_variance(forest):
@@ -1414,11 +1447,12 @@ def test_measure_1q_observable_raw_variance(forest):
     p.define_noisy_readout(0, p00=p00, p11=p11)
     obs_expt = ObservablesExperiment(settings=[expt], program=p)
 
-    num_simulations = 25
+    num_simulations = 10
     num_shots = 1000
 
     raw_std_errs = []
-    for _ in range(num_simulations):
+    for sim_num in range(num_simulations):
+        qc.qam.random_seed = sim_num+1
         expt_results = list(estimate_observables(qc, obs_expt, num_shots=num_shots,
                                                  symmetrization_method=exhaustive_symmetrization))
         expt_results = list(calibrate_observable_estimates(qc, expt_results, noisy_program=p))
@@ -1430,7 +1464,7 @@ def test_measure_1q_observable_raw_variance(forest):
     eps_not = (p00 + p11) / 2
     eps = 1 - eps_not
     expected_result = np.sqrt((1 - (1 - 2 * eps) ** 2) / num_shots)
-    np.testing.assert_allclose(result, expected_result, atol=2e-2)
+    np.testing.assert_allclose(result, expected_result, atol=3e-2)
 
 
 def test_measure_1q_observable_calibration_expectation(forest):
@@ -1442,10 +1476,11 @@ def test_measure_1q_observable_calibration_expectation(forest):
     p.define_noisy_readout(0, p00=p00, p11=p11)
     obs_expt = ObservablesExperiment(settings=[expt], program=p)
 
-    num_simulations = 25
+    num_simulations = 10
 
     calibration_expectations = []
-    for _ in range(num_simulations):
+    for sim_num in range(num_simulations):
+        qc.qam.random_seed = sim_num+1
         expt_results = list(estimate_observables(qc, obs_expt, num_shots=1000,
                                                  symmetrization_method=exhaustive_symmetrization))
         expt_results = list(calibrate_observable_estimates(qc, expt_results, noisy_program=p))
@@ -1457,7 +1492,7 @@ def test_measure_1q_observable_calibration_expectation(forest):
     eps_not = (p00 + p11) / 2
     eps = 1 - eps_not
     expected_result = 1 - 2 * eps
-    np.testing.assert_allclose(result, expected_result, atol=2e-2)
+    np.testing.assert_allclose(result, expected_result, atol=3e-2)
 
 
 def test_measure_1q_observable_calibration_variance(forest):
@@ -1469,11 +1504,12 @@ def test_measure_1q_observable_calibration_variance(forest):
     p.define_noisy_readout(0, p00=p00, p11=p11)
     obs_expt = ObservablesExperiment(settings=[expt], program=p)
 
-    num_simulations = 25
+    num_simulations = 10
     num_shots = 1000
 
     raw_std_errs = []
-    for _ in range(num_simulations):
+    for sim_num in range(num_simulations):
+        qc.qam.random_seed = sim_num+1
         expt_results = list(estimate_observables(qc, obs_expt, num_shots=num_shots,
                                                  symmetrization_method=exhaustive_symmetrization))
         expt_results = list(calibrate_observable_estimates(qc, expt_results, noisy_program=p))
@@ -1485,7 +1521,7 @@ def test_measure_1q_observable_calibration_variance(forest):
     eps_not = (p00 + p11) / 2
     eps = 1 - eps_not
     expected_result = np.sqrt((1 - (1 - 2 * eps) ** 2) / num_shots)
-    np.testing.assert_allclose(result, expected_result, atol=2e-2)
+    np.testing.assert_allclose(result, expected_result, atol=3e-2)
 
 
 def test_uncalibrated_asymmetric_readout_nontrivial_1q_state(forest):
@@ -1512,11 +1548,12 @@ def test_uncalibrated_asymmetric_readout_nontrivial_1q_state(forest):
                                                   obs_expt, num_shots=1000)):
         expect_arr[idx] = res.expectation
 
-    assert np.isclose(np.mean(expect_arr), expected_expectation, atol=2e-2)
+    assert np.isclose(np.mean(expect_arr), expected_expectation, atol=3e-2)
 
 
 def test_uncalibrated_symmetric_readout_nontrivial_1q_state(forest):
     qc = get_qc('1q-qvm')
+    qc.qam.random_seed = 1
     expt = ExperimentSetting(TensorProductState(), sZ(0))
     # pick some random value for RX rotation
     theta = np.random.uniform(0.0, 2 * np.pi)
@@ -1541,7 +1578,7 @@ def test_uncalibrated_symmetric_readout_nontrivial_1q_state(forest):
                                                   symmetrization_method=exhaustive_symmetrization)):
         expect_arr[idx] = res.expectation
 
-    assert np.isclose(np.mean(expect_arr), expected_expectation, atol=2e-2)
+    assert np.isclose(np.mean(expect_arr), expected_expectation, atol=3e-2)
 
 
 def test_calibrated_symmetric_readout_nontrivial_1q_state(forest):
@@ -1573,7 +1610,7 @@ def test_calibrated_symmetric_readout_nontrivial_1q_state(forest):
         expect_arr[idx] = res.expectation
         z_cal_expect_arr[idx] = res.calibration_expectation
 
-    assert np.isclose(np.mean(z_cal_expect_arr), p00 + p11 - 1, atol=2e-2)
+    assert np.isclose(np.mean(z_cal_expect_arr), p00 + p11 - 1, atol=3e-2)
     assert np.isclose(np.mean(expect_arr), expected_expectation, atol=3e-2)
 
 
@@ -1591,13 +1628,14 @@ def test_measure_2q_observable_raw_statistics(forest):
     p.define_noisy_readout(1, p00=q00, p11=q11)
     obs_expt = ObservablesExperiment(settings=[expt], program=p)
 
-    num_simulations = 25
+    num_simulations = 10
     num_shots = 5000
 
     raw_expectations = []
     raw_std_errs = []
 
-    for _ in range(num_simulations):
+    for sim_num in range(num_simulations):
+        qc.qam.random_seed = sim_num+1
         expt_results = list(estimate_observables(qc, obs_expt, num_shots=num_shots,
                                                  symmetrization_method=exhaustive_symmetrization))
         expt_results = list(calibrate_observable_estimates(qc, expt_results, noisy_program=p))
@@ -1620,8 +1658,8 @@ def test_measure_2q_observable_raw_statistics(forest):
     # calculate standard deviation of the mean
     simulated_std_err = np.sqrt((1 - z_expectation ** 2) / num_shots)
     # compare against simulated results
-    np.testing.assert_allclose(result_expectation, z_expectation, atol=2e-2)
-    np.testing.assert_allclose(result_std_err, simulated_std_err, atol=2e-2)
+    np.testing.assert_allclose(result_expectation, z_expectation, atol=3e-2)
+    np.testing.assert_allclose(result_std_err, simulated_std_err, atol=3e-2)
 
 
 def test_raw_statistics_2q_nontrivial_nonentangled_state(forest):
@@ -1638,13 +1676,14 @@ def test_raw_statistics_2q_nontrivial_nonentangled_state(forest):
     p.define_noisy_readout(1, p00=q00, p11=q11)
     obs_expt = ObservablesExperiment(settings=[expt], program=p)
 
-    num_simulations = 25
+    num_simulations = 10
     num_shots = 5000
 
     raw_expectations = []
     raw_std_errs = []
 
-    for _ in range(num_simulations):
+    for sim_num in range(num_simulations):
+        qc.qam.random_seed = sim_num+1
         expt_results = list(estimate_observables(qc, obs_expt, num_shots=num_shots,
                                                  symmetrization_method=exhaustive_symmetrization))
         expt_results = list(calibrate_observable_estimates(qc, expt_results, noisy_program=p))
@@ -1690,8 +1729,8 @@ def test_raw_statistics_2q_nontrivial_nonentangled_state(forest):
     z_expectation = (pr00 + pr11) - (pr01 + pr10)
     simulated_std_err = np.sqrt((1 - z_expectation ** 2) / num_shots)
     # compare against simulated results
-    np.testing.assert_allclose(result_expectation, z_expectation, atol=2e-2)
-    np.testing.assert_allclose(result_std_err, simulated_std_err, atol=2e-2)
+    np.testing.assert_allclose(result_expectation, z_expectation, atol=3e-2)
+    np.testing.assert_allclose(result_std_err, simulated_std_err, atol=3e-2)
 
 
 def test_raw_statistics_2q_nontrivial_entangled_state(forest):
@@ -1708,13 +1747,14 @@ def test_raw_statistics_2q_nontrivial_entangled_state(forest):
     p.define_noisy_readout(1, p00=q00, p11=q11)
     obs_expt = ObservablesExperiment(settings=[expt], program=p)
 
-    num_simulations = 25
+    num_simulations = 10
     num_shots = 5000
 
     raw_expectations = []
     raw_std_errs = []
 
-    for _ in range(num_simulations):
+    for sim_num in range(num_simulations):
+        qc.qam.random_seed = sim_num+1
         expt_results = list(estimate_observables(qc, obs_expt, num_shots=num_shots,
                                                  symmetrization_method=exhaustive_symmetrization))
         expt_results = list(calibrate_observable_estimates(qc, expt_results, noisy_program=p))
@@ -1748,8 +1788,8 @@ def test_raw_statistics_2q_nontrivial_entangled_state(forest):
     z_expectation = (pr00 + pr11) - (pr01 + pr10)
     simulated_std_err = np.sqrt((1 - z_expectation ** 2) / num_shots)
     # compare against simulated results
-    np.testing.assert_allclose(result_expectation, z_expectation, atol=2e-2)
-    np.testing.assert_allclose(result_std_err, simulated_std_err, atol=2e-2)
+    np.testing.assert_allclose(result_expectation, z_expectation, atol=3e-2)
+    np.testing.assert_allclose(result_std_err, simulated_std_err, atol=3e-2)
 
 
 def test_corrected_statistics_2q_nontrivial_nonentangled_state(forest):
@@ -1767,14 +1807,16 @@ def test_corrected_statistics_2q_nontrivial_nonentangled_state(forest):
     p.define_noisy_readout(1, p00=q00, p11=q11)
     obs_expt = ObservablesExperiment(settings=[expt], program=p)
 
-    num_simulations = 25
+    num_simulations = 10
 
     expectations = []
     std_errs = []
 
-    for _ in range(num_simulations):
+    for sim_num in range(num_simulations):
+        qc.qam.random_seed = sim_num+1
         results = estimate_observables(qc, obs_expt,
-                                       symmetrization_method=exhaustive_symmetrization)
+                                       symmetrization_method=exhaustive_symmetrization,
+                                       num_shots=1000)
         expt_results = list(calibrate_observable_estimates(qc, list(results), noisy_program=p))
         expectations.append([res.expectation for res in expt_results])
         std_errs.append([res.std_err for res in expt_results])
@@ -1792,8 +1834,10 @@ def test_corrected_statistics_2q_nontrivial_nonentangled_state(forest):
     expected_expectation = (alph00 + alph11) - (alph01 + alph10)
     expected_std_err = np.sqrt(np.var(expectations))
     # compare against simulated results
-    np.testing.assert_allclose(result_expectation, expected_expectation, atol=2e-2)
-    np.testing.assert_allclose(result_std_err, expected_std_err, atol=2e-2)
+    print(expectations)
+    print(std_errs)
+    np.testing.assert_allclose(result_expectation, expected_expectation, atol=3e-2)
+    np.testing.assert_allclose(result_std_err, expected_std_err, atol=3e-2)
 
 
 def _point_state_fidelity_estimate(v, dim=2):
@@ -1804,6 +1848,7 @@ def _point_state_fidelity_estimate(v, dim=2):
 
 def test_bit_flip_state_fidelity(forest):
     qc = get_qc('1q-qvm')
+    qc.qam.random_seed = 1
     # prepare experiment setting
     expt = ExperimentSetting(TensorProductState(), sZ(0))
 
@@ -1819,9 +1864,10 @@ def test_bit_flip_state_fidelity(forest):
     # prepare ObservablesExperiment
     process_exp = ObservablesExperiment(settings=[expt], program=p)
     # list to store experiment results
-    num_expts = 25
+    num_simulations = 10
     expts = []
-    for _ in range(num_expts):
+    for sim_num in range(num_simulations):
+        qc.qam.random_seed = sim_num+1
         expt_results = []
         for res in estimate_observables(qc, process_exp, num_shots=1000):
             expt_results.append(res.expectation)
@@ -1832,7 +1878,7 @@ def test_bit_flip_state_fidelity(forest):
     estimated_fidelity = _point_state_fidelity_estimate(results)
     # how close is the mixed state to |0>
     expected_fidelity = 1 - prob
-    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=2e-2)
+    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
 
 
 def test_dephasing_state_fidelity(forest):
@@ -1851,9 +1897,10 @@ def test_dephasing_state_fidelity(forest):
     # prepare ObservablesExperiment
     process_exp = ObservablesExperiment(settings=[expt], program=p)
     # list to store experiment results
-    num_expts = 25
+    num_simulations = 10
     expts = []
-    for _ in range(num_expts):
+    for sim_num in range(num_simulations):
+        qc.qam.random_seed = sim_num+1
         expt_results = []
         for res in estimate_observables(qc, process_exp, num_shots=1000):
             expt_results.append(res.expectation)
@@ -1864,7 +1911,7 @@ def test_dephasing_state_fidelity(forest):
     estimated_fidelity = _point_state_fidelity_estimate(results)
     # how close is the mixed state to |0>
     expected_fidelity = 1
-    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=2e-2)
+    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
 
 
 def test_depolarizing_state_fidelity(forest):
@@ -1885,9 +1932,10 @@ def test_depolarizing_state_fidelity(forest):
     # prepare ObservablesExperiment
     process_exp = ObservablesExperiment(settings=[expt], program=p)
     # list to store experiment results
-    num_expts = 25
+    num_simulations = 10
     expts = []
-    for _ in range(num_expts):
+    for sim_num in range(num_simulations):
+        qc.qam.random_seed = sim_num+1
         expt_results = []
         for res in estimate_observables(qc, process_exp, num_shots=1000):
             expt_results.append(res.expectation)
@@ -1898,7 +1946,7 @@ def test_depolarizing_state_fidelity(forest):
     estimated_fidelity = _point_state_fidelity_estimate(results)
     # how close is the mixed state to |0>
     expected_fidelity = (1 + prob) / 2
-    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=2e-2)
+    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
 
 
 def test_unitary_state_fidelity(forest):
@@ -1913,9 +1961,10 @@ def test_unitary_state_fidelity(forest):
     # prepare ObservablesExperiment
     process_exp = ObservablesExperiment(settings=[expt], program=p)
     # list to store experiment results
-    num_expts = 25
+    num_simulations = 10
     expts = []
-    for _ in range(num_expts):
+    for sim_num in range(num_simulations):
+        qc.qam.random_seed = sim_num+1
         expt_results = []
         for res in estimate_observables(qc, process_exp, num_shots=1000):
             expt_results.append(res.expectation)
@@ -1926,7 +1975,7 @@ def test_unitary_state_fidelity(forest):
     estimated_fidelity = _point_state_fidelity_estimate(results)
     # how close is this state to |0>
     expected_fidelity = (np.cos(theta / 2)) ** 2
-    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=2e-2)
+    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
 
 
 def test_bit_flip_state_fidelity_readout_error(forest):
@@ -1947,9 +1996,10 @@ def test_bit_flip_state_fidelity_readout_error(forest):
     # prepare ObservablesExperiment
     process_exp = ObservablesExperiment(settings=[expt], program=p)
     # list to store experiment results
-    num_expts = 25
+    num_simulations = 10
     expts = []
-    for _ in range(num_expts):
+    for sim_num in range(num_simulations):
+        qc.qam.random_seed = sim_num+1
         expt_results = []
         results = estimate_observables(qc, process_exp,
                                        symmetrization_method=exhaustive_symmetrization)
@@ -1962,7 +2012,7 @@ def test_bit_flip_state_fidelity_readout_error(forest):
     estimated_fidelity = _point_state_fidelity_estimate(results)
     # how close is the mixed state to |0>
     expected_fidelity = 1 - prob
-    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=2e-2)
+    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
 
 
 def test_dephasing_state_fidelity_readout_error(forest):
@@ -1982,9 +2032,10 @@ def test_dephasing_state_fidelity_readout_error(forest):
     # prepare ObservablesExperiment
     process_exp = ObservablesExperiment(settings=[expt], program=p)
     # list to store experiment results
-    num_expts = 25
+    num_simulations = 10
     expts = []
-    for _ in range(num_expts):
+    for sim_num in range(num_simulations):
+        qc.qam.random_seed = sim_num+1
         expt_results = []
         results = estimate_observables(qc, process_exp,
                                        symmetrization_method=exhaustive_symmetrization)
@@ -1997,7 +2048,7 @@ def test_dephasing_state_fidelity_readout_error(forest):
     estimated_fidelity = _point_state_fidelity_estimate(results)
     # how close is the mixed state to |0>
     expected_fidelity = 1
-    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=2e-2)
+    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
 
 
 def test_depolarizing_state_fidelity_readout_error(forest):
@@ -2019,9 +2070,10 @@ def test_depolarizing_state_fidelity_readout_error(forest):
     # prepare ObservablesExperiment
     process_exp = ObservablesExperiment(settings=[expt], program=p)
     # list to store experiment results
-    num_expts = 25
+    num_simulations = 10
     expts = []
-    for _ in range(num_expts):
+    for sim_num in range(num_simulations):
+        qc.qam.random_seed = sim_num+1
         expt_results = []
         results = estimate_observables(qc, process_exp,
                                        symmetrization_method=exhaustive_symmetrization)
@@ -2034,7 +2086,7 @@ def test_depolarizing_state_fidelity_readout_error(forest):
     estimated_fidelity = _point_state_fidelity_estimate(results)
     # how close is the mixed state to |0>
     expected_fidelity = (1 + prob) / 2
-    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=2e-2)
+    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
 
 
 def test_unitary_state_fidelity_readout_error(forest):
@@ -2050,9 +2102,10 @@ def test_unitary_state_fidelity_readout_error(forest):
     # prepare ObservablesExperiment
     process_exp = ObservablesExperiment(settings=[expt], program=p)
     # list to store experiment results
-    num_expts = 25
+    num_simulations = 10
     expts = []
-    for _ in range(num_expts):
+    for sim_num in range(num_simulations):
+        qc.qam.random_seed = sim_num+1
         expt_results = []
         results = estimate_observables(qc, process_exp,
                                        symmetrization_method=exhaustive_symmetrization)
@@ -2065,4 +2118,4 @@ def test_unitary_state_fidelity_readout_error(forest):
     estimated_fidelity = _point_state_fidelity_estimate(results)
     # how close is this state to |0>
     expected_fidelity = (np.cos(theta / 2)) ** 2
-    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=2e-2)
+    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
