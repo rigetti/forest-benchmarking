@@ -25,9 +25,8 @@ Further references include:
        https://arxiv.org/abs/quant-ph/0401119
 
 """
-from typing import Sequence, Tuple, List
 import numpy as np
-from forest.benchmarking.utils import n_qubit_pauli_basis, partial_trace
+from forest.benchmarking.utils import partial_trace
 
 
 # ==================================================================================================
