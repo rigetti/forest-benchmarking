@@ -5,7 +5,7 @@ In this note book we explore the different ways to label qubit Hilbert spaces in
 It is largely motivated by the compelling arguments given in [Simith17]. Unfortunately not everyone in the world uses this convetion so we need to be explicit about it here.
 
 
-[SMITH1007]  Someone shouts, "|01000>!" Who is Excited?  
+[SMITH17]  Someone shouts, "|01000>!" Who is Excited?  
 			 	Robert S. Smith  
 				https://arxiv.org/abs/1711.02086  
 				
