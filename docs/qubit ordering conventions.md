@@ -2,7 +2,7 @@
 
 In this note book we explore the different ways to label qubit Hilbert spaces in a tensor product. This becomes important when doing QCVV as different labeling of qubits can create confusion about which state or process is the ideal.
 
-It is largely motivated by the compelling arguments given in [Simith17]. Unfortunately not everyone in the world uses this convetion so we need to be explicit about it here.
+It is largely motivated by the compelling arguments given in [SMITH17]. Unfortunately not everyone in the world uses this convetion so we need to be explicit about it here.
 
 
 [SMITH17]  Someone shouts, "|01000>!" Who is Excited?  
