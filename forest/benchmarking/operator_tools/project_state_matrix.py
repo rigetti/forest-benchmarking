@@ -3,7 +3,7 @@ import functools
 from scipy.linalg import eigh
 
 
-def project_density_matrix_to_physical(rho: np.ndarray) -> np.ndarray:
+def project_state_matrix_to_physical(rho: np.ndarray) -> np.ndarray:
     """
     Project a possibly unphysical estimated density matrix to the closest (with respect to the
     2-norm) positive semi-definite matrix with trace 1, that is a valid quantum state.

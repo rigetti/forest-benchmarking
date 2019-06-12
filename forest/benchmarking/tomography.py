@@ -13,7 +13,7 @@ from pyquil.unitary_tools import lifted_pauli as pauli2matrix, lifted_state_oper
 import forest.benchmarking.distance_measures as dm
 from forest.benchmarking.utils import all_traceless_pauli_terms
 from forest.benchmarking.superoperator_tools import vec, unvec, proj_choi_to_physical
-from forest.benchmarking.operator_tools.project_state_matrix import project_density_matrix_to_physical
+from forest.benchmarking.operator_tools.project_state_matrix import project_state_matrix_to_physical
 from forest.benchmarking.observable_estimation import ExperimentSetting, ObservablesExperiment, \
     ExperimentResult, SIC0, SIC1, SIC2, SIC3, plusX, minusX, plusY, minusY, plusZ, minusZ, \
     TensorProductState, zeros_state
@@ -22,6 +22,8 @@ MAXITER = "maxiter"
 OPTIMAL = "optimal"
 FRO = 'fro'
 
+def project_density_matrix():
+    return None
 
 # ==================================================================================================
 # Generate state and process tomography experiments
@@ -385,7 +387,7 @@ def estimate_variance(results: List[ExperimentResult],
         functional is measured. Not applicable if functional is ``dm.purity``.
     :param n_resamples: The number of times to resample.
     :param project_to_physical: Whether to project the estimated state to a physical one
-        with :py:func:`project_density_matrix_to_physical`.
+        with :py:func:`project_state_matrix_to_physical`.
     """
     if functional != dm.purity:
         if target_state is None:
@@ -398,7 +400,7 @@ def estimate_variance(results: List[ExperimentResult],
         rho = tomo_estimator(resampled_results, qubits)
 
         if project_to_physical:
-            rho = project_density_matrix_to_physical(rho)
+            rho = project_state_matrix_to_physical(rho)
 
         # Calculate functional of the state
         if functional == dm.purity:
