@@ -8,7 +8,7 @@ Pseudocode for many of these routines can be found in the appendix of the paper:
         https://dx.doi.org/10.1088/1367-2630/18/3/033024
         https://arxiv.org/abs/1509.03770
 """
-from typing import Optional, List
+from typing import Optional, List, Union
 
 import numpy as np
 from numpy import linalg as la
@@ -150,19 +150,23 @@ def rand_map_with_BCSZ_dist(dim: int, kraus_rank: int) -> np.ndarray:
     return Z
 
 
-def permute_tensor_factors(dim: int, perm: List[int]) -> np.ndarray:
+def permute_tensor_factors(dims: Union[int, List[int]], perm: List[int]) -> np.ndarray:
     r"""
-    Return a permutation matrix of the given dimension.
+    Return a permutation matrix that appropriately swaps spaces of the given dimension(s).
 
     Given a Hilbert space dimension dim and an list representing the permutation perm of the
     tensor product Hilbert spaces, returns a $dim^len(perm)$ by $dim^len(perm)$ permutation matrix.
     
-    E.g. 1) Suppose D=2 and perm=[0,1] 
+    E.g. 1) Suppose dims=2 and perm=[0,1]
             Returns the identity operator on two qubits
             
-         2) Suppose D=2 and perm=[1,0]
+         2) Suppose dims=2 and perm=[1,0]
             Returns the SWAP operator on two qubits which
             maps A_1 \otimes A_2 --> A_2 \otimes A_1.
+
+        3) Suppose dims=[2, 4] and perm=[1,0]
+            Returns the SWAP operator on three qubits which
+            maps A_1 \otimes (A_2 \otimes A_3) -> (A_2 \otimes A_3)
 
     See: Equations 5.11, 5.12, and 5.13 in
 
@@ -175,28 +179,31 @@ def permute_tensor_factors(dim: int, perm: List[int]) -> np.ndarray:
     This function is used in tests for other functions. However, it can also be useful when
     thinking about higher moment (N>2) integrals over the Haar measure.
 
-    :param dim: Hilbert space dimension.
+    :param dims: The dimension of each Hilbert space factor given in order of the pre-permuted
+        factorization of the total space. If an int is specified then each space in the
+        permutation is assumed to have this dimension.
     :param perm: A list representing the permutation of the tensor factors.
-    :return: a matrix permuting the operators
+    :return: a permutation matrix that permutes the factors of the given dimension.
     """
-    dim_list = [dim for i in range(2 * len(perm))]
-
-    Id = np.eye(dim ** len(perm), dim ** len(perm))
-
-    P = Permutation(perm)
-    tran = P.transpositions
-    trans = tran()
-
-    temp = np.reshape(Id, dim_list)
-
-    # implement the permutation
-
-    if P == []:
-        return Id
+    if isinstance(dims, int):
+        dim_list = [dims for _ in range(2 * len(perm))]
+        total_dim = dims ** len(perm)
     else:
-        for pdx in range(len(trans)):
-            tdx = trans[pdx]
-            answer = np.swapaxes(temp, tdx[0], tdx[1])
-            temp = answer
+        assert len(dims) == len(perm), "Please specify the dimension of each factor to be permuted."
+        dim_list = [dim for _ in range(2) for dim in dims]
+        total_dim = np.prod(dims)
 
-    return np.reshape(answer, [dim ** len(perm), dim ** len(perm)])
+    transpositions = Permutation(perm).transpositions()
+
+    # start with identity
+    perm_matrix = np.eye(total_dim, total_dim)
+
+    # reshape for easy implementation of transpositions
+    perm_matrix = np.reshape(perm_matrix, dim_list)
+
+    # build up the permutation one transposition at a time
+    for swap in transpositions:
+        perm_matrix = np.swapaxes(perm_matrix, swap[0], swap[1])
+
+    # reshape to act on total_dim space
+    return np.reshape(perm_matrix, [total_dim, total_dim])
