@@ -7,7 +7,7 @@ from sympy.combinatorics import Permutation
 from numpy import linalg as la
 import forest.benchmarking.distance_measures as dm
 import forest.benchmarking.operator_tools.random_operators as rand_ops
-from forest.benchmarking.operator_tools.superoperator_tools import (
+from forest.benchmarking.operator_tools.validate_superoperator import (
     choi_is_trace_preserving,choi_is_completely_positive)
 
 D2_SWAP = np.array([[1, 0, 0, 0],

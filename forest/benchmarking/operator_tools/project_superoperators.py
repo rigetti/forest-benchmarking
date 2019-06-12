@@ -2,31 +2,17 @@
 
 We have arbitrarily decided to use a column stacking convention.
 
-For more information about the conventions used, look at the file in
-/docs/Superoperator representations.md
+A good reference for these methods is:
 
-Further references include:
-
-[GRAPTN] Tensor networks and graphical calculus for open quantum systems
-         Wood et al.
-         Quant. Inf. Comp. 15, 0579-0811 (2015)
-         (no DOI)
-         https://arxiv.org/abs/1111.6950
-
-[MATQO] On the Matrix Representation of Quantum Operations
-        Nambu et al.,
-        arXiv: 0504091 (2005)
-        https://arxiv.org/abs/quant-ph/0504091
-
-[DUAL] On duality between quantum maps and quantum states
-       Zyczkowski et al.,
-       Open Syst. Inf. Dyn. 11, 3 (2004)
-       https://dx.doi.org/10.1023/B:OPSY.0000024753.05661.c2
-       https://arxiv.org/abs/quant-ph/0401119
-
+[PGD] Maximum-likelihood quantum process tomography via projected gradient descent
+      Knee et al.,
+      Phys. Rev. A 98, 062336 (2018)
+      https://dx.doi.org/10.1103/PhysRevA.98.062336
+      https://arxiv.org/abs/1803.10062
 """
 import numpy as np
 from forest.benchmarking.utils import partial_trace
+from forest.benchmarking.operator_tools.superoperator_transformations import vec
 
 
 def proj_choi_to_completely_positive(choi: np.ndarray) -> np.ndarray:

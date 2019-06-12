@@ -30,11 +30,6 @@ import numpy as np
 from forest.benchmarking.utils import n_qubit_pauli_basis
 
 
-# ==================================================================================================
-# Superoperator conversion tools
-# ==================================================================================================
-
-
 def vec(matrix: np.ndarray) -> np.ndarray:
     """
     Vectorize, i.e. "vec", a matrix by column stacking.
