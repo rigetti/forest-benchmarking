@@ -1,7 +1,7 @@
 import functools
 import itertools
 from operator import mul
-from typing import Callable, Tuple, List, Sequence
+from typing import Callable, Tuple, List, Sequence, Iterator
 import warnings
 
 import numpy as np
@@ -140,13 +140,17 @@ def linear_inv_state_estimate(results: List[ExperimentResult],
 
     :param results: A tomographically complete list of results.
     :param qubits: All qubits that were tomographized. This specifies the order in
-        which qubits will be kron'ed together.
+        which qubits will be kron'ed together; the first qubit in the list is the left-most
+        tensor factor.
     :return: A point estimate of the quantum state rho.
     """
+    # state2matrix and pauli2matrix use pyquil tensor factor ordering where the least significant
+    # qubit, e.g. qubit 0, is the right-most tensor factor. We stick with the standard convention
+    # here that the first qubit in the list is the left-most tensor factor, so we have to reverse
+    # the qubits before passing to state2matrix and pauli2matrix
+    qs = qubits[::-1]
     measurement_matrix = np.vstack([
-        vec(pauli2matrix(result.setting.observable, qubits=qubits)).T.conj()
-        for result in results
-    ])
+        vec(pauli2matrix(result.setting.observable, qubits=qs)).T.conj() for result in results ])
     expectations = np.array([result.expectation for result in results])
     rho = pinv(measurement_matrix) @ expectations
     # add in the traceful identity term
@@ -198,7 +202,9 @@ def iterative_mle_state_estimate(results: List[ExperimentResult], qubits: List[i
              https://arxiv.org/pdf/1302.3399.pdf
 
     :param results: Measured results from a state tomography experiment
-    :param qubits: Qubits that were tomographized.
+    :param qubits: All qubits that were tomographized. This specifies the order in
+        which qubits will be kron'ed together; the first qubit in the list is the left-most
+        tensor factor.
     :param epsilon: the dilution parameter used in [DIMLE1]. In practice epsilon ~ 1/num_shots
     :param entropy_penalty: the entropy penalty parameter from [DIMLE2], i.e. lambda
     :param beta: The Hedging parameter from [HMLE], i.e. beta
@@ -211,6 +217,12 @@ def iterative_mle_state_estimate(results: List[ExperimentResult], qubits: List[i
     if (entropy_penalty != 0.0) and (beta != 0.0):
         raise ValueError("One can't sensibly do entropy penalty and hedging. Do one or the other"
                          " but not both.")
+
+    # state2matrix and pauli2matrix use pyquil tensor factor ordering where the least significant
+    # qubit, e.g. qubit 0, is the right-most tensor factor. We stick with the standard convention
+    # here that the first qubit in the list is the left-most tensor factor, so we have to reverse
+    # the qubits before passing to state2matrix and pauli2matrix
+    qs = qubits[::-1]
 
     # Identity prop to the size of Hilbert space
     dim = 2**len(qubits)
@@ -225,7 +237,7 @@ def iterative_mle_state_estimate(results: List[ExperimentResult], qubits: List[i
             warnings.warn('Maximum number of iterations reached before convergence.')
             break
         # Vanilla Iterative MLE
-        R = _R(rho, results, qubits)
+        R = _R(rho, results, qs)
         Tk = R - IdH  # Eq 6 of [DIMLE2] with \lambda = 0.
 
         # MaxENT Iterative MLE
@@ -303,7 +315,8 @@ def _R(state, results, qubits):
     return update / len(results)
 
 
-def state_log_likelihood(state, results, qubits) -> float:
+def state_log_likelihood(state: np.ndarray, results: Iterator[ExperimentResult],
+                         qubits: Sequence[int]) -> float:
     """
     The log Likelihood function used in the diluted MLE tomography routine.
 
@@ -311,13 +324,21 @@ def state_log_likelihood(state, results, qubits) -> float:
 
     :param state: The state (given as a density matrix) that we think we have.
     :param results: Measured results from a state tomography experiment
-    :param qubits: Qubits that were tomographized.
+    :param qubits: All qubits that were tomographized. This specifies the order in
+        which qubits will be kron'ed together; the first qubit in the list is the left-most
+        tensor factor. This should agree with the provided state.
     :return: The log likelihood that our state is the one we believe it is.
     """
+    # state2matrix and pauli2matrix use pyquil tensor factor ordering where the least significant
+    # qubit, e.g. qubit 0, is the right-most tensor factor. We stick with the standard convention
+    # here that the first qubit in the list is the left-most tensor factor, so we have to reverse
+    # the qubits before passing to state2matrix and pauli2matrix
+    qs = qubits[::-1]
+
     ll = 0
     for res in results:
         n = res.total_counts
-        op_matrix = pauli2matrix(res.setting.observable, qubits)
+        op_matrix = pauli2matrix(res.setting.observable, qs)
         meas_exp = res.expectation
         pred_exp = np.real(np.trace(op_matrix @ state))
 
@@ -461,6 +482,45 @@ def estimate_variance(results: List[ExperimentResult],
 # ==================================================================================================
 # PROCESS tomography: estimation methods and helper functions
 # ==================================================================================================
+def linear_inv_process_estimate(results: List[ExperimentResult], qubits: List[int]) -> np.ndarray:
+    """
+    Estimate a quantum process using linear inversion.
+
+    This is the simplest process tomography post processing. To use this function,
+    collect process tomography data with :py:func:`generate_process_tomography_experiment`
+    and :py:func:`~pyquil.operator_estimation.measure_observables`.
+
+    For more details on this post-processing technique,
+    see https://en.wikipedia.org/wiki/Quantum_tomography#Linear_inversion or
+    see section 3.5 of
+
+    [WOOD] Initialization and characterization of open quantum systems
+           C. Wood,
+           PhD thesis from University of Waterloo, (2015).
+           http://hdl.handle.net/10012/9557
+
+    :param results: A tomographically complete list of results.
+    :param qubits: All qubits that were tomographized. This specifies the order in
+        which qubits will be kron'ed together; the first qubit in the list is the left-most
+        tensor factor.
+    :return: A point estimate of the quantum state rho.
+    """
+    # state2matrix and pauli2matrix use pyquil tensor factor ordering where the least significant
+    # qubit, e.g. qubit 0, is the right-most tensor factor. We stick with the standard convention
+    # here that the first qubit in the list is the left-most tensor factor, so we have to reverse
+    # the qubits before passing to state2matrix and pauli2matrix
+    qs = qubits[::-1]
+    measurement_matrix = np.vstack([
+        vec(np.kron(state2matrix(result.setting.in_state, qs).conj(),
+                    pauli2matrix(result.setting.observable, qs))).conj().T
+        for result in results
+    ])
+    expectations = np.array([result.expectation for result in results])
+    rho = pinv(measurement_matrix) @ expectations
+    # add in identity term
+    dim = 2 ** len(qubits)
+    return unvec(rho) + np.eye(dim**2) / dim
+
 
 def _extract_from_results(results: List[ExperimentResult], qubits: List[int]):
     """

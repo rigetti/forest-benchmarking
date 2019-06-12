@@ -8,7 +8,7 @@ from forest.benchmarking.compilation import basic_compile
 from forest.benchmarking.random_operators import haar_rand_unitary
 from forest.benchmarking.superoperator_tools import kraus2choi
 from forest.benchmarking.tomography import generate_process_tomography_experiment, \
-    pgdb_process_estimate
+    pgdb_process_estimate, linear_inv_process_estimate
 from forest.benchmarking.observable_estimation import estimate_observables, ExperimentResult, \
     ObservablesExperiment, \
     _one_q_state_prep
@@ -107,12 +107,14 @@ def single_q_tomo_fixture(basis, single_q_process, measurement_func):
 def test_single_q_pgdb(single_q_tomo_fixture):
     qubits, results, u_rand = single_q_tomo_fixture
 
-    process_choi_est = pgdb_process_estimate(results, qubits=qubits)
+    process_choi_lin_inv_est = linear_inv_process_estimate(results, qubits)
+    process_choi_est = pgdb_process_estimate(results, qubits)
     process_choi_true = kraus2choi(u_rand)
+    np.testing.assert_allclose(process_choi_true, process_choi_lin_inv_est, atol=.05)
     np.testing.assert_allclose(process_choi_true, process_choi_est, atol=.05)
 
 
-@pytest.fixture(params=['CNOT', 'haar'])
+@pytest.fixture(params=['haar'])
 def two_q_process(request):
     if request.param == 'CNOT':
         return Program(CNOT(0, 1)), mat.CNOT
@@ -129,13 +131,17 @@ def two_q_process(request):
 def two_q_tomo_fixture(basis, two_q_process, measurement_func):
     qubits = [0, 1]
     process, u_rand = two_q_process
+    if basis == 'pauli':
+        raise pytest.skip("This test is currently too slow.")
     tomo_expt = generate_process_tomography_experiment(process, qubits, in_basis=basis)
     results = measurement_func(tomo_expt)
     return qubits, results, u_rand
 
 
-def test_two_q_pgdb(two_q_tomo_fixture):
+def test_two_q(two_q_tomo_fixture):
     qubits, results, u_rand = two_q_tomo_fixture
-    process_choi_est = pgdb_process_estimate(results, qubits=qubits)
+    process_choi_lin_inv_est = linear_inv_process_estimate(results, qubits)
+    process_choi_est = pgdb_process_estimate(results, qubits)
     process_choi_true = kraus2choi(u_rand)
+    np.testing.assert_allclose(process_choi_true, process_choi_lin_inv_est, atol=.1)
     np.testing.assert_allclose(process_choi_true, process_choi_est, atol=0.05)
