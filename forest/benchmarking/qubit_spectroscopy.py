@@ -1,461 +1,303 @@
-from typing import Union, List, Tuple
+from typing import Sequence, List, Dict
 
 import numpy as np
-import pandas as pd
-from scipy import optimize
-from matplotlib import pyplot as plt
+from numpy import pi
+from lmfit.model import ModelResult
 
 from pyquil.api import QuantumComputer
-from pyquil.gates import RX, RZ, CZ, MEASURE
+from pyquil.gates import RX, RY, RZ, CZ, MEASURE
 from pyquil.quil import Program
 from pyquil.quilbase import Pragma
+from pyquil.paulis import PauliTerm
 
-MILLISECOND = 1e-6  # A millisecond (ms) is an SI unit of time
+from forest.benchmarking.utils import transform_pauli_moments_to_bit
+from forest.benchmarking.analysis.fitting import fit_decay_constant_param_decay, \
+    fit_decaying_cosine, fit_shifted_cosine
+from forest.benchmarking.observable_estimation import ObservablesExperiment, ExperimentResult, \
+    ExperimentSetting, estimate_observables, minusZ, plusZ, minusY
+
 MICROSECOND = 1e-6  # A microsecond (us) is an SI unit of time
-NANOSECOND = 1e-9  # A nanosecond (ns) is an SI unit of time
 
 # A Hertz (Hz) is a derived unit of frequency in SI Units; 1 Hz is defined as one cycle per second.
-KHZ = 1e3  # kHz
-MHZ = 1e6  # MHz
-GHZ = 1e9  # GHz
+MHZ = 1e6  # MHz, megahertz
+
+
+def acquire_qubit_spectroscopy_data(qc: QuantumComputer,
+                                    experiments: Sequence[ObservablesExperiment],
+                                    num_shots: int = 500) -> List[List[ExperimentResult]]:
+    """
+    A standard data acquisition method for all experiments in this module.
+
+    Each input ObservablesExperiment is simply run in series, and a list of results are returned
+    for each experiment in the corresponding order.
+
+    :param qc: a quantum computer on which to run the experiments
+    :param experiments: the ObservablesExperiments to run on the given qc
+    :param num_shots: the number of shots to collect for each experiment.
+    :return: a list of ExperimentResults for each ObservablesExperiment, returned in order of the
+        input sequence of experiments.
+    """
+    results = []
+    for expt in experiments:
+        results.append(list(estimate_observables(qc, expt, num_shots)))
+    return results
+
+
+def get_stats_by_qubit(expt_results: List[List[ExperimentResult]]) \
+        -> Dict[int, Dict[str, List[float]]]:
+    """
+    Organize the mean and std_err of a single-observable experiment by qubit.
+
+    Each individual experiment result is assumed to consist of a single qubit observable. The
+    inner list of observables should be a group of such experiments acting on different qubits.
+    The outer list dictates the order of the returned statistics for each qubit. For example,
+    in a T1 experiment the outer list of results is indexed by increasing time; the returned
+    statistics will also be arranged in order of increasing time for each qubit separately.
+
+    :param expt_results:
+    :return: a dictionary indexed by qubit label, where each value is itself a dictionary with
+        'expectation' and 'std_err' values for the given qubit.
+    """
+    stats_by_qubit = {}
+    for results in expt_results:
+        for res in results:
+            qubits = res.setting.observable.get_qubits()
+            if len(qubits) > 1:
+                raise ValueError("This method is intended for single qubit observables.")
+            qubit = qubits[0]
+
+            if qubit not in stats_by_qubit:
+                stats_by_qubit[qubit] = {'expectation': [], 'std_err': []}
+
+            stats_by_qubit[qubit]['expectation'].append(res.expectation)
+            stats_by_qubit[qubit]['std_err'].append(res.std_err)
+
+    return stats_by_qubit
 
 
 # ==================================================================================================
 #   T1
 # ==================================================================================================
 
-def generate_single_t1_experiment(qubits: Union[int, List[int]],
-                                  time: float,
-                                  n_shots: int = 1000) -> Program:
+
+def generate_t1_experiments(qubits: Sequence[int], times: Sequence[float]) \
+        -> List[ObservablesExperiment]:
     """
-    Return a t1 program in native Quil for a single time point.
+    Return a ObservablesExperiment containing programs which constitute a t1 experiment to
+    measure the decay time from the excited state to ground state for each qubit in qubits.
 
-    :param qubits: Which qubits to measure.
-    :param time: The decay time before measurement.
-    :param n_shots: The number of shots to average over for the data point.
-    :return: A T1 Program.
+    For each delay time in times a single program will be generated in which all qubits are
+    initialized to the excited state (|1>) and simultaneously measured after the given delay.
+
+    :param qubits: list of qubits to measure.
+    :param times: The times at which to measure, given in seconds. Each time is rounded to the
+        nearest .1 microseconds.
+    :return: ObservablesExperiments which will measure the decay of each qubit after
+        initialization to the 1 state and delay of t seconds for each t in times.
     """
-    program = Program()
+    expts = []
+    for t in times:
+        t = round(t, 7)  # enforce 100ns boundaries
+        program = Program()
+        settings = []
+        for q in qubits:
+            program += Pragma('DELAY', [q], str(t))
+            settings.append(ExperimentSetting(minusZ(q), PauliTerm('Z', q)))
 
-    try:
-        len(qubits)
-    except TypeError:
-        qubits = [qubits]
+        expts.append(ObservablesExperiment([settings], program))
 
-    ro = program.declare('ro', 'BIT', len(qubits))
-    for q in qubits:
-        program += RX(np.pi, q)
-        program += Pragma('DELAY', [q], str(time))
-    for i in range(len(qubits)):
-        program += MEASURE(qubits[i], ro[i])
-    program.wrap_in_numshots_loop(n_shots)
-    return program
+    return expts
 
 
-def generate_t1_experiments(qubits: Union[int, List[int]],
-                            stop_time: float,
-                            n_shots: int = 1000,
-                            n_points: int = 15) -> pd.DataFrame:
+def acquire_t1_data(qc: QuantumComputer, experiments: Sequence[ObservablesExperiment],
+                    num_shots: int = 500) -> List[List[ExperimentResult]]:
     """
-    Return a DataFrame containing programs which ran in sequence constitute a t1 experiment to
-    measure the decay time from the excited state to ground state.
+    Acquire data to measure the T1 decay time for each of the input experiments.
 
-    :param qubits: Which qubits to measure.
-    :param stop_time: The maximum decay time to measure at.
-    :param n_shots: The number of shots to average over for each data point.
-    :param num_points: The number of points for each t1 curve.
-    :return: A dataframe with columns: time, t1 program
-    """
-    start_time = 0
-    time_and_programs = []
-
-    for t in np.linspace(start_time, stop_time, n_points):
-        t = round(t, 7)  # try to keep time on 100ns boundaries
-        time_and_programs.append({
-            'Time': t,
-            'Program': generate_single_t1_experiment(qubits, t, n_shots)
-        })
-    return pd.DataFrame(time_and_programs)
-
-
-def acquire_t1_data(qc: QuantumComputer,
-                    t1_experiment: pd.DataFrame,
-                    ) -> pd.DataFrame:
-    """
-    Execute experiments to measure the T1 decay time of 1 or more qubits.
+    This simply calls the standard data acquisition method but is included to keep consistency
+    with other routines in forest-benchmarking which offer named data acquisition methods.
 
     :param qc: The QuantumComputer to run the experiment on
-    :param t1_experiment: A pandas DataFrame with columns: time, t1 program
-    :return: pandas DataFrame
+    :param experiments: the ObservablesExperiments to run on the given qc
+    :param num_shots: the number of shots to collect for each experiment.
+    :return: a list of ExperimentResults for each ObservablesExperiment, returned in order of the
+        input sequence of experiments.
     """
-    results = []
-
-    for index, row in t1_experiment.iterrows():
-        t = row['Time']
-        program = row['Program']
-
-        executable = qc.compiler.native_quil_to_executable(program)
-        bitstrings = qc.run(executable)
-
-        qubits = list(program.get_qubits())
-        for i in range(len(qubits)):
-            avg = np.mean(bitstrings[:, i])
-            results.append({
-                'Qubit': qubits[i],
-                'Time': t,
-                'Num_bitstrings': len(bitstrings),
-                'Average': float(avg),
-                'Program': program,
-            })
-
-    df = pd.DataFrame(results)
-    return df
+    return acquire_qubit_spectroscopy_data(qc, experiments, num_shots)
 
 
-def estimate_t1(df: pd.DataFrame):
+def fit_t1_results(times: Sequence[float], z_expectations: Sequence[float],
+                   z_std_errs: Sequence[float] = None, param_guesses: tuple = (1.0, 15, 0.0)) \
+        -> ModelResult:
     """
-    Estimate T1 from experimental data.
+    Wrapper for fitting the results of a T1 experiment for a single qubit; simply extracts key
+    parameters and passes on to the standard fit.
 
-    :param df: A pandas DataFrame of experimental T1 results to plot
-    :return: pandas DataFrame
+    The estimate for T1 can be found in the returned fit.params['decay_constant']
+
+    :param times: the times at which the z_expectations were measured. The units of the time
+        determine the units of the T1 estimate, decay_constant. Here we set the default guess to
+        O(10) which corresponds to the times being given in units of microseconds.
+    :param z_expectations: expectation of Z at each time for a qubit initialized to 1
+    :param z_std_errs: std_err of the Z expectation, optionally used to weight the fit.
+    :param param_guesses: guesses for the (amplitude, decay_constant, offset) parameters. Here
+        the default decay_constant of 15 assumes that times are given in units of microseconds.
+    :return: a ModelResult fit with estimates of the Model parameters, including the T1
+        'decay_constant'
     """
-    results = []
+    z_expectations = np.asarray(z_expectations)
+    if z_std_errs is not None:
+        probability_one, var = transform_pauli_moments_to_bit(np.asarray(-1 * z_expectations),
+                                                              np.asarray(z_std_errs)**2)
+        err = np.sqrt(var)
+        min_non_zero = min([v for v in err if v > 0])
+        # TODO: does this handle 0 var appropriately? Incorporate unbiased prior into std_err estimate?
+        non_zero_err = np.asarray([v if v > 0 else min_non_zero for v in err])
 
-    for q in df['Qubit'].unique():
-        df2 = df[df['Qubit'] == q].sort_values('Time')
-        x_data = df2['Time']
-        y_data = df2['Average']
+        weights = 1 / non_zero_err
+    else:
+        probability_one, _ = transform_pauli_moments_to_bit(np.asarray(-1 * z_expectations), 0)
+        weights = None
 
-        try:
-            fit_params, fit_params_errs = fit_to_exponential_decay_curve(x_data, y_data)
-            results.append({
-                'Qubit': q,
-                'T1': fit_params[1] / MICROSECOND,
-                'Fit_params': fit_params,
-                'Fit_params_errs': fit_params_errs,
-                'Message': None,
-            })
-        except RuntimeError:
-            print(f"Could not fit to experimental data for qubit {q}")
-            results.append({
-                'Qubit': q,
-                'T1': None,
-                'Fit_params': None,
-                'Fit_params_errs': None,
-                'Message': 'Could not fit to experimental data for qubit' + str(q),
-            })
-    return pd.DataFrame(results)
-
-
-def plot_t1_estimate_over_data(df: pd.DataFrame,
-                               df_est: pd.DataFrame,
-                               qubits: list = None,
-                               filename: str = None) -> None:
-    """
-    Plot T1 experimental data and estimated value of T1 as and exponential decay curve.
-
-    :param df: A pandas DataFrame experimental results to plot
-    :param df_est: A pandas DataFrame with estimates of T1.
-    :param qubits: A list of qubits that you actually want plotted. The default is all qubits.
-    :param qc_type: String indicating whether QVM or QPU was used to collect data.
-    :return: None
-    """
-    if qubits is None:
-        qubits = df['Qubit'].unique().tolist()
-
-    # check the user specified valid qubits
-    for qbx in qubits:
-        if qbx not in df['Qubit'].unique():
-            raise ValueError("The list of qubits does not match the ones you experimented on.")
-
-    for q in qubits:
-        df2 = df[df['Qubit'] == q].sort_values('Time')
-        x_data = df2['Time']
-        y_data = df2['Average']
-
-        plt.plot(x_data / MICROSECOND, y_data, 'o-', label=f"QC{q} T1 data")
-
-        row = df_est[df_est['Qubit'] == q]
-
-        if row['Fit_params'].values[0] is None:
-            print(f"T1 estimate did not succeed for qubit {q}")
-        else:
-            fit_params = (row['Fit_params'].values)[0]
-            plt.plot(x_data / MICROSECOND, exponential_decay_curve(x_data, *fit_params),
-                     label=f"QC{q} fit: T1={fit_params[1] / MICROSECOND:.2f}us")
-
-    plt.xlabel("Time [us]")
-    plt.ylabel(r"Pr($|1\rangle$)")
-    plt.title("$T_1$ decay")
-
-    plt.legend(loc='best')
-    plt.tight_layout()
-    if filename is not None:
-        plt.savefig(filename)
-    plt.show()
+    return fit_decay_constant_param_decay(np.asarray(times), probability_one, weights,
+                                          param_guesses)
 
 
 # ==================================================================================================
 #   T2 star and T2 echo functions
 # ==================================================================================================
-def generate_single_t2_star_experiment(qubits: Union[int, List[int]],
-                                       time: float,
-                                       detuning: float,
-                                       n_shots: int = 1000) -> Program:
+def generate_t2_star_experiments(qubits: Sequence[int], times: Sequence[float],
+                                 detuning: float = 5e6) -> List[ObservablesExperiment]:
     """
-    Return a T2 star program in native Quil for a single time point.
+    Return ObservablesExperiments containing programs which constitute a T2 star experiment to
+    measure the T2 star coherence decay time for each qubit in qubits.
 
-    :param qubits: Which qubits to measure.
-    :param time: The decay time before measurement.
+    For each delay time in times a single program will be generated in which all qubits are
+    initialized to the minusY state and simultaneously measured along the Y axis after the given
+    delay and Z rotation. If the qubit frequency is perfectly calibrated then the Y expectation
+    will oscillate at the given detuning frequency as the qubit is rotated about the Z axis (with
+    respect to the lab frame, which by hypothesis matches the natural qubit frame).
+
+    :param qubits: list of qubits to measure.
+    :param times: the times at which to measure, given in seconds. Each time is rounded to the
+        nearest .1 microseconds.
+    :param detuning: The additional detuning frequency about the z axis in Hz.
+    :return: ObservablesExperiments which can be run to acquire an estimate of T2* for each qubit
+    """
+    expts = []
+    for t in times:
+        t = round(t, 7)  # enforce 100ns boundaries
+        program = Program()
+        settings = []
+        for q in qubits:
+            program += Pragma('DELAY', [q], str(t))
+            program += RZ(2 * pi * t * detuning, q)
+            settings.append(ExperimentSetting(minusY(q), PauliTerm('Y', q)))
+
+        expts.append(ObservablesExperiment([settings], program))
+
+    return expts
+
+
+def generate_t2_echo_experiments(qubits: Sequence[int], times: Sequence[float],
+                                 detuning: float = 5e6) -> List[ObservablesExperiment]:
+    """
+    Return ObservablesExperiments containing programs which constitute a T2 echo experiment to
+    measure the T2 echo coherence decay time.
+
+    For each delay time in times a single program will be generated in which all qubits are
+    initialized to the minusY state and later simultaneously measured along the Y axis. Unlike in
+    the t2_star experiment above there is a 'echo' applied in the middle of the delay in which
+    the qubit is rotated by pi radians around the Y axis.
+
+    Similarly to t2_star, if the qubit frequency is perfectly calibrated then the Y expectation
+    will oscillate at the given detuning frequency as the qubit is rotated about the Z axis (with
+    respect to the lab frame, which by hypothesis matches the natural qubit frame). Unlike in a
+    t2_star experiment, even if the qubit frequency is off such that there is some spurious
+    rotation about the Z axis during the DELAY, the effect of an ideal echo is to cancel the
+    effect of this rotation so that the qubit returns to the initial state minusY before the
+    detuning rotation is applied.
+
+    :param qubits: list of qubits to measure.
+    :param times: the times at which to measure, given in seconds. Each time is rounded to the
+        nearest .1 microseconds.
     :param detuning: The additional detuning frequency about the z axis.
-    :param n_shots: The number of shots to average over for the data point.
-    :return: A T2 Program.
+    :return: ObservablesExperiments which can be run to acquire an estimate of T2 for each qubit.
     """
-    program = Program()
+    expts = []
+    for t in times:
+        half_time = round(t/2, 7)  # enforce 100ns boundaries
+        program = Program()
+        settings = []
+        for q in qubits:
+            half_delay = Pragma('DELAY', [q], str(half_time))
+            # echo
+            program += [half_delay, RY(pi, q), half_delay]
+            # apply detuning
+            program += RZ(2 * pi * t * detuning, q)
+            settings.append(ExperimentSetting(minusY(q), PauliTerm('Y', q)))
 
-    try:
-        len(qubits)
-    except TypeError:
-        qubits = [qubits]
+        expts.append(ObservablesExperiment(settings, program))
 
-    ro = program.declare('ro', 'BIT', len(qubits))
-    for q in qubits:
-        program += RX(np.pi / 2, q)
-        program += Pragma('DELAY', [q], str(time))
-        program += RZ(2 * np.pi * time * detuning, q)
-        program += RX(np.pi / 2, q)
-    for i in range(len(qubits)):
-        program += MEASURE(qubits[i], ro[i])
-    program.wrap_in_numshots_loop(n_shots)
-    return program
+    return expts
 
 
-def generate_t2_star_experiments(qubits: Union[int, List[int]],
-                                 stop_time: float,
-                                 detuning: float = 5e6,
-                                 n_shots: int = 1000,
-                                 num_points: int = 15)  -> pd.DataFrame:
+def acquire_t2_data(qc: QuantumComputer, experiments: Sequence[ObservablesExperiment],
+                    num_shots: int = 500) -> List[List[ExperimentResult]]:
     """
-    Return a DataFrame containing programs which ran in sequence constitute a T2 star
-    experiment to measure the T2 star coherence decay time.
+    Execute experiments to measure the T2 time of one or more qubits.
 
-    :param qubits: Which qubits to measure.
-    :param stop_time: The maximum decay time to measure at.
-    :param detuning: The additional detuning frequency about the z axis.
-    :param n_shots: The number of shots to average over for each data point.
-    :param num_points: The number of points for each T2 curve.
-    :return: pandas DataFrame with columns: time, program, detuning
-    """
-    start_time = 0
-    time_and_programs = []
-    for t in np.linspace(start_time, stop_time, num_points):
-        # TODO: avoid aliasing while being mindful of the 20ns resolution in the QCS stack
-        time_and_programs.append({
-            'Time': t,
-            'Program': generate_single_t2_star_experiment(qubits, t, detuning, n_shots=n_shots),
-            'Detuning': detuning,
-        })
-    return pd.DataFrame(time_and_programs)
-
-
-def generate_single_t2_echo_experiment(qubits: Union[int, List[int]],
-                                       time: float,
-                                       detuning: float,
-                                       n_shots: int = 1000) -> Program:
-    """
-    Return a T2 echo program in native Quil for a single time point.
-
-    :param qubits: Which qubits to measure.
-    :param time: The decay time before measurement.
-    :param detuning: The additional detuning frequency about the z axis.
-    :param n_shots: The number of shots to average over for the data point.
-    :return: A T2 Program.
-    """
-    program = Program()
-
-    try:
-        len(qubits)
-    except TypeError:
-        qubits = [qubits]
-
-    ro = program.declare('ro', 'BIT', len(qubits))
-    for q in qubits:
-        # prepare plus state |+>
-        program += RX(np.pi / 2, q)
-        # wait half of the delay
-        program += Pragma('DELAY', [q], str(time / 2))
-        # apply an X gate compiled out of RX(90)
-        program += RX(np.pi / 2, q)
-        program += RX(np.pi / 2, q)
-        # wait the other half of the delay
-        program += Pragma('DELAY', [q], str(time / 2))
-        program += RZ(2 * np.pi * time * detuning, q)
-        program += RX(np.pi / 2, q)
-    for i in range(len(qubits)):
-        program += MEASURE(qubits[i], ro[i])
-    program.wrap_in_numshots_loop(n_shots)
-    return program
-
-
-def generate_t2_echo_experiments(qubits: Union[int, List[int]],
-                                 stop_time: float,
-                                 detuning: float = 5e6,
-                                 n_shots: int = 1000,
-                                 num_points: int = 15) -> pd.DataFrame:
-    """
-    Return a DataFrame containing programs which ran in sequence constitute a T2 echo
-    experiment to measure the T2 echo coherence decay time.
-
-    :param qubits: Which qubits to measure.
-    :param stop_time: The maximum decay time to measure at.
-    :param detuning: The additional detuning frequency about the z axis.
-    :param n_shots: The number of shots to average over for each data point.
-    :param num_points: The number of points for each T2 curve.
-    :return: pandas DataFrame with columns: time, program, detuning
-    """
-    start_time = 0
-    time_and_programs = []
-    for t in np.linspace(start_time, stop_time, num_points):
-        # TODO: avoid aliasing while being mindful of the 20ns resolution in the QCS stack
-        time_and_programs.append({
-            'Time': t,
-            'Program': generate_single_t2_echo_experiment(qubits, t, detuning, n_shots=n_shots),
-            'Detuning': detuning,
-        })
-    return pd.DataFrame(time_and_programs)
-
-
-def acquire_t2_data(qc: QuantumComputer,
-                    t2_experiment: pd.DataFrame) -> pd.DataFrame:
-    """
-    Execute experiments to measure the T2 star or T2 echo decay time of 1 or more qubits.
+    This simply calls the standard data acquisition method but is included to keep consistency
+    with other routines in forest-benchmarking which offer named data acquisition methods.
 
     :param qc: The QuantumComputer to run the experiment on
-    :param t2_experiment: A pandas DataFrame containing: time, T2 program
-    :return: pandas DataFrame containing T2 results, and detuning used in creating experiments for
-    those results.
+    :param experiments: the ObservablesExperiments to run on the given qc
+    :param num_shots: the number of shots to collect for each experiment.
+    :return: a list of ExperimentResults for each ObservablesExperiment, returned in order of the
+        input sequence of experiments.
     """
-    results = []
-
-    for index, row in t2_experiment.iterrows():
-        t = row['Time']
-        program = row['Program']
-        detuning = row['Detuning']
-        executable = qc.compiler.native_quil_to_executable(program)
-        bitstrings = qc.run(executable)
-
-        qubits = list(program.get_qubits())
-        for i in range(len(qubits)):
-            avg = np.mean(bitstrings[:, i])
-            results.append({
-                'Qubit': qubits[i],
-                'Time': t,
-                'Num_bitstrings': len(bitstrings),
-                'Average': float(avg),
-                'Detuning': float(detuning),
-            })
-
-    return pd.DataFrame(results)
+    return acquire_qubit_spectroscopy_data(qc, experiments, num_shots)
 
 
-def estimate_t2(df: pd.DataFrame) -> pd.DataFrame:
+def fit_t2_results(times: Sequence[float], y_expectations: Sequence[float],
+                   y_std_errs: Sequence[float] = None, detuning: float = 5e6,
+                   param_guesses: tuple = None) -> ModelResult:
     """
-    Estimate T2 star or T2 echo from experimental data.
+    Wrapper for fitting the results of a ObservablesExperiment; simply extracts key parameters
+    and passes on to the standard fit.
 
-    :param df: A pandas DataFrame with experimental T2 results
-    :param detuning: Detuning frequency used in experiment creation
-    :return: pandas DataFrame
+    The estimate for T2 can be found in the returned fit.params['decay_constant']
+
+    :param times: the times at which the y_expectations were measured. The units of the time
+        determine the units of the T2 estimate, decay_constant. Here we set the default guess to
+        O(10) which corresponds to the times being given in units of microseconds.
+    :param y_expectations: expectation of Y measured at each time for a qubit
+    :param y_std_errs: std_err of the Y expectation, optionally used to weight the fit.
+    :param detuning: the detuning specified in creation of the experiment
+    :param param_guesses: guesses for the (amplitude, decay_constant, offset, baseline,
+        frequency) parameters. The default values assume time is provided in microseconds and
+        detuning is provided in HZ, whereas the frequency is reported in MHZ.
+    :return: a ModelResult fit with estimates of the Model parameters, including the T2
+        'decay_constant'
     """
-    results = []
-    for q in df['Qubit'].unique():
-        df2 = df[df['Qubit'] == q].sort_values('Time')
-        x_data = df2['Time']
-        y_data = df2['Average']
-        detuning = df2['Detuning'].values[0]
+    if param_guesses is None:  # make some standard reasonable guess
+        param_guesses = (.5, 10, 0.0, 0.5, detuning / MHZ)
 
-        try:
-            fit_params, fit_params_errs = fit_to_exponentially_decaying_sinusoidal_curve(x_data,
-                                                                                         y_data,
-                                                                                         detuning)
-            results.append({
-                'Qubit': q,
-                'T2': fit_params[1] / MICROSECOND,
-                'Freq': fit_params[2] / MHZ,
-                'Fit_params': fit_params,
-                'Fit_params_errs': fit_params_errs,
-                'Message': None,
-            })
-        except RuntimeError:
-            print(f"Could not fit to experimental data for qubit {q}")
-            results.append({
-                'Qubit': q,
-                'T2': None,
-                'Freq': None,
-                'Fit_params': None,
-                'Fit_params_errs': None,
-                'Message': 'Could not fit to experimental data for qubit' + str(q),
-            })
+    y_expectations = np.asarray(y_expectations)
+    if y_std_errs is not None:
+        probability_one, var = transform_pauli_moments_to_bit(np.asarray(-1 * y_expectations),
+                                                              np.asarray(y_std_errs)**2)
+        err = np.sqrt(var)
+        min_non_zero = min([v for v in err if v > 0])
+        # TODO: does this handle 0 var appropriately? Incorporate unbiased prior into std_err estimate?
+        non_zero_err = np.asarray([v if v > 0 else min_non_zero for v in err])
 
-    return pd.DataFrame(results)
-
-
-def plot_t2_estimate_over_data(df: pd.DataFrame,
-                               df_est: pd.DataFrame,
-                               qubits: list = None,
-                               t2_type: str = 'unknown',
-                               filename: str = None) -> None:
-    """
-    Plot T2 star or T2 echo experimental data and estimated value of T1 as and exponential decay
-    curve.
-
-    :param df: A pandas DataFrame containing experimental results to plot.
-    :param df_est: A pandas DataFrame containing estimates of T2.
-    :param qubits: A list of qubits that you actually want plotted. The default is all qubits.
-    :param detuning: Detuning frequency used in experiment creation.
-    :param t2_type: String either 'star' or 'echo'.
-    :param filename: String.
-    :return: None
-    """
-    if qubits is None:
-        qubits = df['Qubit'].unique().tolist()
-
-    # check the user specified valid qubits
-    for qbx in qubits:
-        if qbx not in df['Qubit'].unique():
-            raise ValueError("The list of qubits does not match the ones you experimented on.")
-
-    for q in qubits:
-        df2 = df[df['Qubit'] == q].sort_values('Time')
-        x_data = df2['Time']
-        y_data = df2['Average']
-
-        plt.plot(x_data / MICROSECOND, y_data, 'o-', label=f"Qubit {q} T2 data")
-
-        row = df_est[df_est['Qubit'] == q]
-
-        if row['Fit_params'].values[0] is None:
-            print(f"T2 estimate did not succeed for qubit {q}")
-        else:
-            fit_params = row['Fit_params'].values[0]
-            plt.plot(x_data / MICROSECOND,
-                     exponentially_decaying_sinusoidal_curve(x_data, *fit_params),
-                     label=f"QC{q} fit: freq={fit_params[2] / MHZ:.2f}MHz, "
-                           f""f"T2={fit_params[1] / MICROSECOND:.2f}us")
-
-    plt.xlabel("Time [µs]")
-    plt.ylabel(r"Pr($|1\rangle$)")
-    if t2_type.lower() == 'star':
-        plt.title("$T_2^*$ (Ramsey) decay")
-    elif t2_type.lower() == 'echo':
-        plt.title("$T_2$ (Echo) decay")
+        weights = 1 / non_zero_err
     else:
-        plt.title("$T_2$ (unknown) decay")
+        probability_one, _ = transform_pauli_moments_to_bit(np.asarray(-1 * y_expectations), 0)
+        weights = None
 
-    plt.legend(loc='best')
-    plt.tight_layout()
-    if filename is not None:
-        plt.savefig(filename)
-    plt.show()
+    return fit_decaying_cosine(np.asarray(times), probability_one, weights, param_guesses)
 
 
 # ==================================================================================================
@@ -466,614 +308,187 @@ def plot_t2_estimate_over_data(df: pd.DataFrame,
 # ==================================================================================================
 #   Rabi
 # ==================================================================================================
-
-def generate_single_rabi_experiment(qubits: Union[int, List[int]],
-                                    theta: float,
-                                    n_shots: int = 1000) -> Program:
+def generate_rabi_experiments(qubits: Sequence[int], angles: Sequence[float]) \
+        -> List[ObservablesExperiment]:
     """
-    Return a Rabi program in native Quil rotated through the given angle.
+    Return ObservablesExperiments containing programs which constitute a Rabi experiment.
 
     Rabi oscillations are observed by applying successively larger rotations to the same initial
     state.
 
-    :param qubits: Which qubits to measure.
-    :param theta: The angle of the Rabi RX rotation.
-    :param n_shots: The number of shots to average over for the data point.
-    :return: A Program that rotates through a given angle about the X axis.
+    :param qubits: list of qubits to measure.
+    :param angles: A list of angles at which to make a measurement
+    :return: ObservablesExperiments which can be run to verify the  RX(*, q) calibration
+        for each qubit
     """
-    program = Program()
+    expts = []
+    for angle in angles:
+        program = Program()
+        settings = []
+        for q in qubits:
+            program += RX(angle, q)
+            settings.append(ExperimentSetting(plusZ(q), PauliTerm('Z', q)))
 
-    try:
-        len(qubits)
-    except TypeError:
-        qubits = [qubits]
+        expts.append(ObservablesExperiment([settings], program))
 
-    ro = program.declare('ro', 'BIT', len(qubits))
-    for q in qubits:
-        program += RX(theta, q)
-    for i in range(len(qubits)):
-        program += MEASURE(qubits[i], ro[i])
-    program.wrap_in_numshots_loop(n_shots)
-    return program
+    return expts
 
 
-def generate_rabi_experiments(qubits: Union[int, List[int]],
-                              n_shots: int = 1000,
-                              num_points: int = 15) -> pd.DataFrame:
+def acquire_rabi_data(qc: QuantumComputer, experiments: Sequence[ObservablesExperiment],
+                      num_shots: int = 500) -> List[List[ExperimentResult]]:
     """
-    Return a DataFrame containing programs which, when run in sequence, constitute a Rabi
-    experiment.
+    Execute Rabi experiments.
 
-    Rabi oscillations are observed by applying successively larger rotations to the same initial
-    state.
-
-    :param qubits: Which qubits to measure.
-    :param n_shots: The number of shots to average over for each data point
-    :param num_points: The number of points for each Rabi curve
-    :return: pandas DataFrame with columns: angle, program
-    """
-    angle_and_programs = []
-    for theta in np.linspace(0.0, 2 * np.pi, num_points):
-        angle_and_programs.append({
-            'Angle': theta,
-            'Program': generate_single_rabi_experiment(qubits, theta, n_shots),
-        })
-    return pd.DataFrame(angle_and_programs)
-
-
-def acquire_rabi_data(qc: QuantumComputer,
-                      rabi_experiment: pd.DataFrame,
-                      filename: str = None) -> pd.DataFrame:
-    """
-    Execute experiments to measure Rabi flop one or more qubits.
+    This simply calls the standard data acquisition method but is included to keep consistency
+    with other routines in forest-benchmarking which offer named data acquisition methods.
 
     :param qc: The QuantumComputer to run the experiment on
-    :param rabi_experiment: pandas DataFrame: (theta, Rabi program)
-    :param filename: The name of the file to write JSON-serialized results to
-    :return: DataFrame with Rabi results
+    :param experiments: the ObservablesExperiments to run on the given qc
+    :param num_shots: the number of shots to collect for each experiment.
+    :return: a list of ExperimentResults for each ObservablesExperiment, returned in order of the
+        input sequence of experiments.
     """
-    results = []
-    for index, row in rabi_experiment.iterrows():
-        theta = row['Angle']
-        program = row['Program']
-        executable = qc.compiler.native_quil_to_executable(program)
-        bitstrings = qc.run(executable)
-
-        qubits = list(program.get_qubits())
-        for i in range(len(qubits)):
-            avg = np.mean(bitstrings[:, i])
-            results.append({
-                'Qubit': qubits[i],
-                'Angle': theta,
-                'Num_bitstrings': len(bitstrings),
-                'Average': float(avg),
-            })
-
-    if filename:
-        pd.DataFrame(results).to_json(filename)
-    return pd.DataFrame(results)
+    return acquire_qubit_spectroscopy_data(qc, experiments, num_shots)
 
 
-def estimate_rabi(df: pd.DataFrame):
+def fit_rabi_results(angles: Sequence[float], z_expectations: Sequence[float],
+                     z_std_errs: Sequence[float] = None, param_guesses: tuple = (-.5, 0, .5, 1.)) \
+        -> ModelResult:
     """
-    Estimate Rabi oscillation from experimental data.
+    Wrapper for fitting the results of a rabi experiment on a qubit; simply extracts key parameters
+    and passes on to the standard fit.
 
-    :param df: Experimental Rabi results to estimate
-    :return: pandas DataFrame
+    Note the following interpretation of the model fit parameters:
+    x: the independent variable is the angle that we specify when writing a gate instruction. If
+        our gates are incorrectly calibrated then a given control angle will result in a different
+        angle than intended by the multiplicative 'frequency' of the model
+    amplitude: this will have magnitude (p1_given_1 - p1_given_0) / 2 where
+        p1_given_1 is the probability of measuring 1 when the qubit is in the |1> state.
+        p1_given_0 is the probability of measuring 1 when the qubit is in the |0> state.
+    offset: This is the offset phase, in radians, with respect to the true rotation frequency.
+        e.g. if our gate is mis-calibrated resulting in an offset 'off' then we require a control
+        angle of RX(-off / frequency) to correct the offset
+    baseline: this is the amplitude + p1_given_0
+    frequency: The ratio of the actual angle rotated over the intended control angle
+        e.g. If our gates are incorrectly calibrated to apply an over-rotation then
+        frequency will be greater than 1; the intended control angle will be smaller than the
+        true angle rotated.
+
+    :param angles: the angles at which the z_expectations were measured.
+    :param z_expectations: expectation of Z at each angle for a qubit initialized to 0
+    :param z_std_errs: std_err of the Z expectation, optionally used to weight the fit.
+    :param param_guesses: guesses for the (amplitude, offset, baseline, frequency) parameters
+    :return: a ModelResult fit with estimates of the Model parameters, including the frequency
+        which gives the ratio of actual angle over intended control angle
     """
-    results = []
+    z_expectations = np.asarray(z_expectations)
+    if z_std_errs is not None:
+        probability_one, var = transform_pauli_moments_to_bit(np.asarray(-1 * z_expectations),
+                                                              np.asarray(z_std_errs)**2)
+        err = np.sqrt(var)
+        min_non_zero = min([v for v in err if v > 0])
+        # TODO: does this handle 0 var appropriately? Incorporate unbiased prior into std_err estimate?
+        non_zero_err = np.asarray([v if v > 0 else min_non_zero for v in err])
 
-    for q in df['Qubit'].unique():
-        df2 = df[df['Qubit'] == q].sort_values('Angle')
-        angles = df2['Angle']
-        prob_of_one = df2['Average']
+        weights = 1 / non_zero_err
+    else:
+        probability_one, _ = transform_pauli_moments_to_bit(np.asarray(-1 * z_expectations), 0)
+        weights = None
 
-        try:
-            # fit to sinusoid
-            fit_params, fit_params_errs = fit_to_sinusoidal_waveform(angles, prob_of_one)
-
-            results.append({
-                'Qubit': q,
-                'Angle': fit_params[1],
-                'Prob_of_one': fit_params[2],
-                'Fit_params': fit_params,
-                'Fit_params_errs': fit_params_errs,
-                'Message': None,
-            })
-        except RuntimeError:
-            print(f"Could not fit to experimental data for qubit {q}")
-            results.append({
-                'Qubit': q,
-                'Angle': None,
-                'Prob_of_one': None,
-                'Fit_params': None,
-                'Fit_params_errs': None,
-                'Message': 'Could not fit to experimental data for qubit' + str(q),
-            })
-    return pd.DataFrame(results)
-
-
-def plot_rabi_estimate_over_data(df: pd.DataFrame,
-                                 df_est: pd.DataFrame,
-                                 qubits: list = None,
-                                 filename: str = None) -> None:
-    """
-    Plot Rabi oscillation experimental data and estimated curve.
-
-    :param df: Experimental results to plot and fit curve to.
-    :param df_est: Estimates of Rabi oscillation.
-    :param qubits: A list of qubits that you actually want plotted. The default is all qubits.
-    :param filename: The name of the file to write JSON-serialized results to
-    :return: None
-    """
-    if qubits is None:
-        qubits = df['Qubit'].unique().tolist()
-
-    # check the user specified valid qubits
-    for qbx in qubits:
-        if qbx not in df['Qubit'].unique():
-            raise ValueError("The list of qubits does not match the ones you experimented on.")
-
-    for q in qubits:
-        df2 = df[df['Qubit'] == q].sort_values('Angle')
-        angles = df2['Angle']
-        prob_of_one = df2['Average']
-
-        # plot raw data
-        plt.plot(angles, prob_of_one, 'o-', label=f"qubit {q} Rabi data")
-
-        row = df_est[df_est['Qubit'] == q]
-
-        if row['Fit_params'].values[0] is None:
-            print(f"Rabi estimate did not succeed for qubit {q}")
-        else:
-            fit_params = row['Fit_params'].values[0]
-            # overlay fitted sinusoidal curve
-            plt.plot(angles, sinusoidal_waveform(angles, *fit_params),
-                     label=f"qubit {q} fitted line")
-
-    plt.xlabel("RX angle [rad]")
-    plt.ylabel(r"Pr($|1 \rangle$)")
-    plt.title("Rabi flop")
-    plt.legend(loc='best')
-    plt.tight_layout()
-    if filename is not None:
-        plt.savefig(filename)
-    plt.show()
+    return fit_shifted_cosine(np.asarray(angles), probability_one, weights, param_guesses)
 
 
 # ==================================================================================================
 #   CZ phase Ramsey
 # ==================================================================================================
-
-def generate_cz_phase_ramsey_program(qb: int, other_qb: int, n_shots: int = 1000) -> Program:
+def generate_cz_phase_ramsey_experiment(cz_qubits: Sequence[int], measure_qubit: int,
+                                        angles: Sequence[float]) -> List[ObservablesExperiment]:
     """
-    Generate a single CZ phase Ramsey experiment at a given phase.
+    Return ObservablesExperiments containing programs that constitute a CZ phase ramsey experiment.
 
-    :param qb: The qubit to move around the Bloch sphere and measure the incurred RZ on.
-    :param other_qb: The other qubit that constitutes a two-qubit pair along with `qb`.
-    :param n_shots: The number of shots to average over for each data point.
-    :param phase: The phase kick to supply after playing the CZ pulse on the equator.
-    :param n_shots: The number of shots to average over for the data point.
-    :return: A parametric Program for performing a CZ Ramsey experiment.
+    :param cz_qubits: the qubits participating in the cz gate
+    :param measure_qubit: Which qubit to measure.
+    :param angles: A list of angles at which to make a measurement
+    :return: ObservablesExperiments which can be run to estimate the effective RZ rotation
+        applied to a single qubit during the application of a CZ gate.
     """
-    program = Program()
-    # NOTE: only need readout register for `qb` not `other_qb` since `other_qb` is only
-    #       needed to identify which CZ gate we're using
-    ro = program.declare('ro', 'BIT', 1)
-    theta = program.declare('theta', 'REAL')
+    expts = []
+    for angle in angles:
+        settings = []
+        program = Program()
+        # apply CZ, possibly inducing an effective RZ on measure qubit by some angle
+        program += CZ(*cz_qubits)
+        # apply phase to measure_qubit akin to T2 experiment
+        program += RZ(angle, measure_qubit)
+        settings = [ExperimentSetting(minusY(measure_qubit), PauliTerm('Y', measure_qubit))]
 
-    # go to the equator
-    program += Program(RX(np.pi / 2, qb))
-    # apply the CZ gate - note that CZ is symmetric, so the order of qubits doesn't matter
-    program += Program(CZ(qb, other_qb))
-    # go to |1> after a phase kick
-    program += Program(RZ(theta, qb), RX(np.pi / 2, qb))
+        expts.append(ObservablesExperiment([settings], program))
 
-    program += MEASURE(qb, ro[0])
-
-    program.wrap_in_numshots_loop(n_shots)
-    return program
+    return expts
 
 
-def generate_cz_phase_ramsey_experiment(edges: List[Tuple[int, int]],
-                                        start_phase: float = 0.0,
-                                        stop_phase: float = 2 * np.pi,
-                                        num_points: int = 15,
-                                        num_shots: int = 1000):
-    """
-    Returns a DataFrame of parameters and programs that constitute a CZ phase ramsey experiment.
-
-    :param edges: List of Tuples containing edges that one can perform a CZ on.
-    :param start_phase: The starting phase for the CZ phase Ramsey experiment.
-    :param stop_phase: The stopping phase for the CZ phase Ramsey experiment.
-    :param num_points: The number of points to sample at between the starting and stopping phase.
-    :param num_shots: The number of shots to average over for each data point.
-    :return: pandas DataFrame
-    """
-
-    cz_expriment = []
-    for edge in edges:
-        qubit, other_qubit = edge
-
-        # first qubit gets RZ
-        cz_expriment.append({
-            'Edge': tuple(edge),
-            'Rz_qubit': qubit,
-            'Program': generate_cz_phase_ramsey_program(qubit, other_qubit, num_shots),
-            'Start_phase': start_phase,
-            'Stop_phase': stop_phase,
-            'Num_points': num_points,
-            'Num_shots': num_shots,
-        })
-
-        # second qubit gets RZ
-        cz_expriment.append({
-            'Edge': tuple(edge),
-            'Rz_qubit': other_qubit,
-            'Program': generate_cz_phase_ramsey_program(other_qubit, qubit, num_shots),
-            'Start_phase': start_phase,
-            'Stop_phase': stop_phase,
-            'Num_points': num_points,
-            'Num_shots': num_shots,
-        })
-
-    return pd.DataFrame(cz_expriment)
-
-
-def acquire_cz_phase_ramsey_data(qc: QuantumComputer,
-                                 cz_experiment: pd.DataFrame,
-                                 filename: str = None) -> pd.DataFrame:
+def acquire_cz_phase_ramsey_data(qc: QuantumComputer, experiments: Sequence[ObservablesExperiment],
+                                 num_shots: int = 500) -> List[List[ExperimentResult]]:
     """
     Execute experiments to measure the RZ incurred as a result of a CZ gate.
 
-    :param qc: The qubit to move around the Bloch sphere and measure the incurred RZ on
-    :param cz_experiment: pandas DataFrame
-    :param filename: The name of the file to write JSON-serialized results to
-    :return: pandas DataFrame
+    This simply calls the standard data acquisition method but is included to keep consistency
+    with other routines in forest-benchmarking which offer named data acquisition methods.
+
+    :param qc: The QuantumComputer to run the experiment on
+    :param experiments: the ObservablesExperiments to run on the given qc
+    :param num_shots: the number of shots to collect for each experiment.
+    :return: a list of ExperimentResults for each ObservablesExperiment, returned in order of the
+        input sequence of experiments.
     """
-    results = []
-
-    for index, row in cz_experiment.iterrows():
-        parametric_ramsey_prog = row['Program']
-        edge = row['Edge']
-        rz_qb = row['Rz_qubit']
-        start_phase = row['Start_phase']
-        stop_phase = row['Stop_phase']
-        num_points = row['Num_points']
-        num_shots = row['Num_shots']
-
-        binary = compile_parametric_program(qc, parametric_ramsey_prog, num_shots=num_shots)
-
-        qc.qam.load(binary)
-
-        for theta in np.linspace(start_phase, stop_phase, num_points):
-            qc.qam.write_memory(region_name='theta', value=theta)
-            qc.qam.run()
-            qc.qam.wait()
-            bitstrings = qc.qam.read_from_memory_region(region_name="ro")
-
-            avg = np.mean(bitstrings[:, 0])
-            results.append({
-                'Edge': edge,
-                'Rz_qubit': rz_qb,
-                'Phase': theta,
-                'Num_bitstrings': len(bitstrings),
-                'Average': float(avg),
-            })
-
-    if filename:
-        pd.DataFrame(results).to_json(filename)
-    return pd.DataFrame(results)
+    return acquire_qubit_spectroscopy_data(qc, experiments, num_shots)
 
 
-def estimate_cz_phase_ramsey(df: pd.DataFrame) -> pd.DataFrame:
+def fit_cz_phase_ramsey_results(angles: Sequence[float], y_expectations: Sequence[float],
+                                y_std_errs: Sequence[float] = None,
+                                param_guesses: tuple = (.5, 0, .5, 1.)) -> ModelResult:
     """
-    Estimate CZ phase ramsey experimental data.
+    Wrapper for fitting the results of a ObservablesExperiment; simply extracts key parameters
+    and passes on to the standard fit.
 
-    :param df: Experimental results to plot and fit exponential decay curve to.
-    :return: List of dicts.
+    Note the following interpretation of the model fit:
+    x: the independent variable is the control angle that we specify when writing a gate
+        instruction. If our gates are incorrectly calibrated then a given control angle will
+        result in a different angle than intended by the multiplicative 'frequency' of the model
+    amplitude: this will have magnitude (p1_given_1 - p1_given_0) / 2 where
+        p1_given_1 is the probability of measuring 1 when the qubit is in the |1> state.
+        p1_given_0 is the probability of measuring 1 when the qubit is in the |0> state.
+    offset: This is the offset phase, in radians, with respect to the true rotation frequency.
+        e.g. say that our RZ gate is perfectly calibrated and the CZ gate imparts an effective
+        RZ(pi/5) rotation to the measure qubit; in this case offset is pi/5, and frequency is one,
+        so the offset phase could be corrected by applying the gate RZ(-pi/5, qubit) after CZ. If
+        our RZ gate was instead found to be mis-calibrated, a correction using our mis-calibrated
+        RZ gate would require a control angle of RZ(-pi/5 / frequency, qubit)
+    baseline: this is the amplitude + p1_given_0
+    frequency: The ratio of the actual angle rotated over the intended control angle
+        e.g. If our gates are incorrectly calibrated to apply an over-rotation then
+        frequency will be greater than 1; the intended control angle will be smaller than the
+        true angle rotated.
+
+    :param angles: the angles at which the z_expectations were measured.
+    :param y_expectations: expectation of Y measured at each time for a qubit
+    :param y_std_errs: std_err of the Y expectation, optionally used to weight the fit.
+    :param param_guesses: guesses for the (amplitude, offset, baseline, frequency) parameters
+    :return: a ModelResult fit with estimates of the Model parameters, including the offset which
+        is an estimate of the phase imparted on the measure qubit by the CZ gate.
     """
-    results = []
-    edges = df['Edge'].unique()
+    y_expectations = np.asarray(y_expectations)
+    if y_std_errs is not None:
+        probability_one, var = transform_pauli_moments_to_bit(np.asarray(-1 * y_expectations),
+                                                              np.asarray(y_std_errs)**2)
+        err = np.sqrt(var)
+        min_non_zero = min([v for v in err if v > 0])
+        # TODO: does this handle 0 var appropriately? Incorporate unbiased prior into std_err estimate?
+        non_zero_err = np.asarray([v if v > 0 else min_non_zero for v in err])
 
-    for id_row, edge in enumerate(edges):
-
-        for id_col, qubit in enumerate(edge):
-            qubit_df = df[(df['Rz_qubit'] == qubit) & (df['Edge'] == edge)].sort_values('Phase')
-            phases = qubit_df['Phase']
-            prob_of_one = qubit_df['Average']
-            rz_qb = qubit_df['Rz_qubit'].values[0]
-
-            try:
-                # fit to sinusoid
-                fit_params, fit_params_errs = fit_to_sinusoidal_waveform(phases, prob_of_one)
-                # find max excited state visibility (ESV) and propagate error from fit params
-                max_ESV, max_ESV_err = get_peak_from_fit_params(fit_params, fit_params_errs)
-
-                results.append({
-                    'Edge': edge,
-                    'Rz_qubit': rz_qb,
-                    'Angle': fit_params[1],
-                    'Prob_of_one': fit_params[2],
-                    'Fit_params': fit_params,
-                    'Fit_params_errs': fit_params_errs,
-                    'max_ESV': max_ESV,
-                    'max_ESV_err': max_ESV_err,
-                    'Message': None,
-                })
-            except RuntimeError:
-                print(f"Could not fit to experimental data for edge {edge}")
-                results.append({
-                    'Edge': edge,
-                    'Rz_qubit': rz_qb,
-                    'Angle': None,
-                    'Prob_of_one': None,
-                    'Fit_params': None,
-                    'Fit_params_errs': None,
-                    'max_ESV': None,
-                    'max_ESV_err': None,
-                    'Message': 'Could not fit to experimental data for edge' + str(edge),
-                })
-    return pd.DataFrame(results)
-
-
-def plot_cz_phase_estimate_over_data(df: pd.DataFrame,
-                                     df_est: pd.DataFrame,
-                                     filename: str = None) -> None:
-    """
-    Plot Ramsey experimental data, the fitted sinusoid, and the maximum of that sinusoid.
-
-    :param df: Experimental results to plot and fit exponential decay curve to.
-    :param df_est: estimates of CZ Ramsey experiments
-    :param filename: The name of the file to write JSON-serialized results to
-    :return: None
-    """
-    edges = df['Edge'].unique()
-    if len(edges) == 1:
-        # this deals with the one edge case, then plot will have an empty row
-        # if you don't do this you get `axes.shape = (2,)`
-        fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(24, 30))
+        weights = 1 / non_zero_err
     else:
-        fig, axes = plt.subplots(nrows=len(edges), ncols=2, figsize=(24, 10 * len(edges)))
+        probability_one, _ = transform_pauli_moments_to_bit(np.asarray(-1 * y_expectations), 0)
+        weights = None
 
-    for id_row, edge in enumerate(edges):
-
-        for id_col, qubit in enumerate(edge):
-            qubit_df = df[(df['Rz_qubit'] == qubit) & (df['Edge'] == edge)].sort_values('Phase')
-            phases = qubit_df['Phase']
-            prob_of_one = qubit_df['Average']
-
-            # plot raw data
-            axes[id_row, id_col].plot(phases, prob_of_one, 'o',
-                                      label=f"qubit{qubit} CZ Ramsey data")
-
-            row = df_est[df_est['Rz_qubit'] == qubit]
-
-            if row['Fit_params'].values[0] is None:
-                print(f"Rabi estimate did not succeed for qubit {q}")
-            else:
-                fit_params = row['Fit_params'].values[0]
-                max_ESV = row['max_ESV'].values[0]
-                max_ESV_err = row['max_ESV_err'].values[0]
-
-                # overlay fitted curve and vertical line at maximum ESV
-                axes[id_row, id_col].plot(phases, sinusoidal_waveform(phases, *fit_params),
-                                          label=f"QC{qubit} fitted line")
-                axes[id_row, id_col].axvline(max_ESV,
-                                             label=f"QC{qubit} max ESV={max_ESV:.3f}+/-{max_ESV_err:.3f} rad")
-
-            axes[id_row, id_col].set_xlabel("Phase on second +X/2 gate [rad]")
-            axes[id_row, id_col].set_ylabel(r'Pr($ |1 \rangle $)')
-            axes[id_row, id_col].set_title(f"CZ Phase Ramsey fringes on QC{qubit}\n"
-                                           f"due to CZ_{edge[0]}_{edge[1]} application")
-            axes[id_row, id_col].legend(loc='best')
-    if filename is not None:
-        plt.savefig(filename)
-    plt.show()
-
-
-# ==================================================================================================
-#   Fits and so forth
-# ==================================================================================================
-
-def exponential_decay_curve(t: Union[float, np.ndarray],
-                            amplitude: float,
-                            time_decay_constant: float,
-                            t_offset: float = 0.0) -> Union[float, np.ndarray]:
-    """
-    Calculate exponential decay at a series of points.
-
-    :param t: The independent variable with respect to which decay is calculated.
-    :param amplitude: The amplitude of the decay curve.
-    :param time_decay_constant: The time decay constant - in this case T1 - of the decay curve.
-    :param t_offset: The time offset of the curve, assumed to be 0.0.
-    :return: The exponential decay at the point(s) in time.
-    """
-    return amplitude * np.exp(-1 * (t - t_offset) / time_decay_constant)
-
-
-def fit_to_exponential_decay_curve(x_data: np.ndarray,
-                                   y_data: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Fit experimental data to exponential decay curve.
-
-    :param x_data: Independent data to fit to.
-    :param y_data: Experimental, dependent data to fit to.
-    :return: Arrays of fitted decay curve parameters and their errors
-    """
-    params, params_covariance = optimize.curve_fit(exponential_decay_curve,
-                                                   x_data, y_data,
-                                                   p0=[1.0, 15e-6, 0.0])
-
-    # parameter error extraction from
-    # https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.curve_fit.html
-    params_errs = np.sqrt(np.diag(params_covariance))
-
-    return params, params_errs
-
-
-def sinusoidal_waveform(x: float,
-                        amplitude: float,
-                        baseline: float,
-                        frequency: float,
-                        x_offset: float) -> np.ufunc:
-    """
-    Calculate sinusoidal response at a series of points.
-
-    :param x: The independent variable with respect to which the sinusoidal response is calculated.
-    :param amplitude: The amplitude of the sinusoid.
-    :param baseline: The baseline of the sinusoid.
-    :param frequency: The frequency of the sinusoid.
-    :param x_offset: The x offset of the sinusoid.
-    :return: The sinusoidal response at the given phases(s).
-    """
-    return amplitude * np.sin(frequency * x + x_offset) + baseline
-
-
-def fit_to_sinusoidal_waveform(x_data: np.ndarray,
-                               y_data: List[float],
-                               displayflag: bool = False,
-                               ) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Fit experimental data to sinusoid.
-
-    :param x_data: Independent data to fit to.
-    :param y_data: Experimental, dependent data to fit to.
-    :param displayflag: If True displays results from scipy curve fit analysis.
-    :return: Arrays of fitted decay curve parameters and their standard deviations
-    """
-    params, params_covariance = optimize.curve_fit(sinusoidal_waveform, x_data, y_data,
-                                                   p0=[0.5, 0.5, 1.0, np.pi / 2])
-    # parameter error extraction from
-    # https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.curve_fit.html
-    params_errs = np.sqrt(np.diag(params_covariance))
-
-    # interleave params and params_errs
-    print_params = []
-    for idx in range(len(params)):
-        print_params.append(params[idx])
-        print_params.append(params_errs[idx])
-
-    if displayflag:
-        print("scipy curve fitting analysis returned\n"
-              "amplitude:\t{:.5f} +/- {:.5f}\n"
-              "baseline:\t{:.5f} +/- {:.5f}\n"
-              "frequency:\t{:.5f} +/- {:.5f}\n"
-              "x offset:\t{:.5f} +/- {:.5f}".format(*print_params))
-
-    return params, params_errs
-
-
-def get_peak_from_fit_params(fit_params: np.ndarray,
-                             fit_params_errs: np.ndarray) -> Tuple[float, float]:
-    """
-    Extract peak from the fit parameters returned by scipy.optimize.curve_fit.
-
-    :param fit_params: fit parameters out of scipy.optimize.curve_fit
-    :param fit_params_errs: standard deviations on the fit parameters from scipy.optimize.curve_fit
-    :return: The phase corresponding the to the maximum excited state visibility and its st. dev.
-    """
-    # TODO: do away with hard-coded indices for fit params
-    x0 = fit_params[-1]
-    x0_err = fit_params_errs[-1]
-    freq = fit_params[-2]
-    freq_err = fit_params_errs[-2]
-
-    print("propagating error using x_0 = {} +/- {} and freq = {} +/- {}".format(x0, x0_err,
-                                                                                freq, freq_err))
-
-    # find the phase corresponding to maximum excited state visibility (ESV) using the fit params
-    max_ESV = (np.pi / 2 - x0) / freq
-    # max_ESV_err obtained by applying error propagation formula to max_ESV
-    max_ESV_err = np.sqrt((x0_err / freq) ** 2 + ((np.pi / 2 - x0) * (freq_err / freq ** 2)) ** 2)
-
-    print("\nmaximum excited state visibility observed at x = {} +/- {}".format(max_ESV,
-                                                                                max_ESV_err))
-
-    return max_ESV, max_ESV_err
-
-
-def exponentially_decaying_sinusoidal_curve(t: Union[float, np.ndarray],
-                                            amplitude: float,
-                                            time_decay_constant: float,
-                                            frequency: float,
-                                            baseline: float,
-                                            sin_t_offset: float = 0.0) -> Union[float, np.ndarray]:
-    """
-    Calculate exponentially decaying sinusoid at a series of points.
-
-    :param t: The independent variable with respect to which decay is calculated.
-    :param amplitude: The amplitude of the decay curve.
-    :param time_decay_constant: The time decay constant - in this case T2 - of the decay curve.
-    :param frequency: The frequency to fit to the Ramsey fringes.
-    :param baseline: The baseline of the Ramsey fringes.
-    :param sin_t_offset: The time offset of the sinusoidal curve, assumed to be 0.0.
-    :return: The exponentially decaying sinusoid evaluated at the point(s) in time.
-    """
-    return amplitude * np.exp(-1 * t / time_decay_constant) * \
-           np.sin(frequency * (t - sin_t_offset)) + baseline
-
-
-def fit_to_exponentially_decaying_sinusoidal_curve(x_data: np.ndarray,
-                                                   y_data: np.ndarray,
-                                                   detuning: float = 5e6) -> Tuple[np.ndarray,
-                                                                                   np.ndarray]:
-    """
-    Fit experimental data to exponential decay curve.
-
-    :param x_data: Independent data to fit to.
-    :param y_data: Experimental, dependent data to fit to.
-    :param detuning: Detuning frequency used in experiment creation.
-    :return: Arrays of fitted decay curve parameters and their errors
-    """
-    params, params_covariance = optimize.curve_fit(exponentially_decaying_sinusoidal_curve,
-                                                   x_data, y_data,
-                                                   p0=[0.5, 15e-6, detuning, 0.5, 0.0])
-
-    # parameter error extraction from
-    # https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.curve_fit.html
-    params_errs = np.sqrt(np.diag(params_covariance))
-
-    return params, params_errs
-
-
-def compile_parametric_program(qc: QuantumComputer,
-                               parametric_prog: Program,
-                               num_shots: int = 1000) -> None:
-    """
-    Compile the parametric program, and transfer the binary to the quantum device.
-
-    :param qc: The QuantumComputer to run the experiment on.
-    :param parametric_prog: The parametric program to compile and transfer to the quantum device.
-    :param num_shots: The number of shots to average over for each data point.
-    :return: The binary from the compiled parametric program.
-    """
-    parametric_prog.wrap_in_numshots_loop(shots=num_shots)
-    binary = qc.compiler.native_quil_to_executable(parametric_prog)
-    return binary
-
-
-def remove_qubits_from_qubit_list(qubit_list: List[int],
-                                  qubits_to_remove: Union[int, List[int]]) -> Union[int, List[int]]:
-    """
-    Remove the selected qubits from the given list and return the pruned list.
-
-    :param qubit_list: The qubit list to remove the selected qubits from.
-    :param qubits_to_remove: The qubits to remove from the selected list.
-    :return: The given qubit list with the selected qubits removed
-    """
-    # cast qubits_to_remove as a list
-    try:
-        len(qubits_to_remove)
-    except TypeError:
-        qubits_to_remove = [qubits_to_remove]
-
-    # remove list of qubits_to_remove
-    new_qubit_list = list(set(qubit_list) - set(qubits_to_remove))
-
-    # return an int or a list, as appropriate
-    if len(new_qubit_list) == 1:
-        return new_qubit_list[0]
-    else:
-        return new_qubit_list
+    return fit_shifted_cosine(np.asarray(angles), probability_one, weights, param_guesses)

@@ -9,13 +9,14 @@ from forest.benchmarking.random_operators import haar_rand_unitary
 from forest.benchmarking.superoperator_tools import kraus2choi
 from forest.benchmarking.tomography import generate_process_tomography_experiment, \
     pgdb_process_estimate
+from forest.benchmarking.observable_estimation import estimate_observables, ExperimentResult, \
+    ObservablesExperiment, \
+    _one_q_state_prep
 from pyquil import Program
 from pyquil import gate_matrices as mat
 from pyquil.api import QVM
 from pyquil.gates import CNOT, X
 from pyquil.numpy_simulator import NumpyWavefunctionSimulator
-from pyquil.operator_estimation import measure_observables, ExperimentResult, TomographyExperiment, \
-    _one_q_state_prep
 
 
 @pytest.fixture
@@ -48,7 +49,7 @@ def test_qc():
         return pytest.skip("This test requires a running local QVM: {}".format(e))
 
 
-def wfn_measure_observables(n_qubits, tomo_expt: TomographyExperiment):
+def wfn_estimate_observables(n_qubits, tomo_expt: ObservablesExperiment):
     if len(tomo_expt.program.defined_gates) > 0:
         raise pytest.skip("Can't do wfn on defined gates yet")
     wfn = NumpyWavefunctionSimulator(n_qubits)
@@ -61,7 +62,7 @@ def wfn_measure_observables(n_qubits, tomo_expt: TomographyExperiment):
 
             yield ExperimentResult(
                 setting=setting,
-                expectation=wfn.reset().do_program(prog).expectation(setting.out_operator),
+                expectation=wfn.reset().do_program(prog).expectation(setting.observable),
                 std_err=0.,
                 total_counts=1,  # don't set to zero unless you want nans
             )
@@ -75,10 +76,9 @@ def basis(request):
 @pytest.fixture(params=['sampling', 'wfn'])
 def measurement_func(request, test_qc):
     if request.param == 'wfn':
-        return lambda expt: list(wfn_measure_observables(n_qubits=2, tomo_expt=expt))
+        return lambda expt: list(wfn_estimate_observables(n_qubits=2, tomo_expt=expt))
     elif request.param == 'sampling':
-        return lambda expt: list(measure_observables(qc=test_qc,
-                                                     tomo_experiment=expt, n_shots=500))
+        return lambda expt: list(estimate_observables(qc=test_qc, obs_expt=expt, num_shots=500))
     else:
         raise ValueError()
 

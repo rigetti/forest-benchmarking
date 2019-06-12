@@ -7,15 +7,15 @@ import warnings
 import numpy as np
 from scipy.linalg import logm, pinv, eigh
 
-import forest.benchmarking.distance_measures as dm
-from forest.benchmarking.superoperator_tools import vec, unvec, proj_choi_to_physical
-from forest.benchmarking.utils import n_qubit_pauli_basis
 from pyquil import Program
-from pyquil.operator_estimation import ExperimentSetting, \
-    TomographyExperiment as PyQuilTomographyExperiment, ExperimentResult, SIC0, SIC1, SIC2, SIC3, \
-    plusX, minusX, plusY, minusY, plusZ, minusZ, TensorProductState, zeros_state
-from pyquil.paulis import sI, sX, sY, sZ, PauliSum, PauliTerm, is_identity
 from pyquil.unitary_tools import lifted_pauli as pauli2matrix, lifted_state_operator as state2matrix
+
+import forest.benchmarking.distance_measures as dm
+from forest.benchmarking.utils import all_traceless_pauli_terms
+from forest.benchmarking.superoperator_tools import vec, unvec, proj_choi_to_physical
+from forest.benchmarking.observable_estimation import ExperimentSetting, ObservablesExperiment, \
+    ExperimentResult, SIC0, SIC1, SIC2, SIC3, plusX, minusX, plusY, minusY, plusZ, minusZ, \
+    TensorProductState, zeros_state
 
 MAXITER = "maxiter"
 OPTIMAL = "optimal"
@@ -26,36 +26,34 @@ FRO = 'fro'
 # Generate state and process tomography experiments
 # ==================================================================================================
 def _state_tomo_settings(qubits: Sequence[int]):
-    """Yield settings over itertools.product(I, X, Y, Z).
+    """
+    Yield settings over every non-identity observable in the Pauli basis over the qubits.
 
     Used as a helper function for generate_state_tomography_experiment
 
     :param qubits: The qubits to tomographize.
     """
-    n_qubits = len(qubits)
-    for o_ops in itertools.product([sI, sX, sY, sZ], repeat=n_qubits):
-        o_op = functools.reduce(mul, (op(q) for op, q in zip(o_ops, qubits)), sI())
-
+    for obs in all_traceless_pauli_terms(qubits):
         yield ExperimentSetting(
             in_state=zeros_state(qubits),
-            out_operator=o_op,
+            observable=obs,
         )
 
 
 def generate_state_tomography_experiment(program: Program, qubits: List[int]):
-    """Generate a (pyQuil) TomographyExperiment containing the experimental settings required
+    """
+    Generate a (pyQuil) TomographyExperiment containing the experimental settings required
     to characterize a quantum state.
 
     To collect data, try::
 
-        from pyquil.operator_estimation import measure_observables
-        results = list(measure_observables(qc=qc, tomo_experiment=experiment, n_shots=100_000))
+        from forest.benchmarking.operator_estimation import estimate_observables
+        results = list(measure_observables(qc=qc, experiment, num_shots=100_000))
 
     :param program: The program to prepare a state to tomographize
     :param qubits: The qubits to tomographize
     """
-    return PyQuilTomographyExperiment(settings=list(_state_tomo_settings(qubits)),
-                                      program=program)
+    return ObservablesExperiment(settings=list(_state_tomo_settings(qubits)), program=program)
 
 
 def _sic_process_tomo_settings(qubits: Sequence[int]):
@@ -68,15 +66,10 @@ def _sic_process_tomo_settings(qubits: Sequence[int]):
     for in_sics in itertools.product([SIC0, SIC1, SIC2, SIC3], repeat=len(qubits)):
         i_state = functools.reduce(mul, (state(q) for state, q in zip(in_sics, qubits)),
                                    TensorProductState())
-        for o_ops in itertools.product([sI, sX, sY, sZ], repeat=len(qubits)):
-            o_op = functools.reduce(mul, (op(q) for op, q in zip(o_ops, qubits)), sI())
-
-            if is_identity(o_op):
-                continue
-
+        for obs in all_traceless_pauli_terms(qubits):
             yield ExperimentSetting(
                 in_state=i_state,
-                out_operator=o_op,
+                observable=obs,
             )
 
 
@@ -91,15 +84,10 @@ def _pauli_process_tomo_settings(qubits):
                                     repeat=len(qubits)):
         i_state = functools.reduce(mul, (state(q) for state, q in zip(states, qubits)),
                                    TensorProductState())
-        for o_ops in itertools.product([sI, sX, sY, sZ], repeat=len(qubits)):
-            o_op = functools.reduce(mul, (op(q) for op, q in zip(o_ops, qubits)), sI())
-
-            if is_identity(o_op):
-                continue
-
+        for obs in all_traceless_pauli_terms(qubits):
             yield ExperimentSetting(
                 in_state=i_state,
-                out_operator=o_op,
+                observable=obs,
             )
 
 
@@ -118,14 +106,14 @@ def generate_process_tomography_experiment(program: Program, qubits: List[int], 
     :param in_basis: A string identifying the input basis. Either "sic" or "pauli". SIC requires
         a smaller number of experiment settings to be run.
     """
-    if in_basis == 'sic':
+    if in_basis.upper() == 'SIC':
         func = _sic_process_tomo_settings
-    elif in_basis == 'pauli':
+    elif in_basis.upper() == 'PAULI':
         func = _pauli_process_tomo_settings
     else:
         raise ValueError(f"Unknown basis {in_basis}")
 
-    return PyQuilTomographyExperiment(settings=list(func(qubits)), program=program)
+    return ObservablesExperiment(settings=list(func(qubits)), program=program)
 
 
 # ==================================================================================================
@@ -156,12 +144,14 @@ def linear_inv_state_estimate(results: List[ExperimentResult],
     :return: A point estimate of the quantum state rho.
     """
     measurement_matrix = np.vstack([
-        vec(pauli2matrix(result.setting.out_operator, qubits=qubits)).T.conj()
+        vec(pauli2matrix(result.setting.observable, qubits=qubits)).T.conj()
         for result in results
     ])
     expectations = np.array([result.expectation for result in results])
     rho = pinv(measurement_matrix) @ expectations
-    return unvec(rho)
+    # add in the traceful identity term
+    dim = 2**len(qubits)
+    return unvec(rho) + np.eye(dim)/dim
 
 
 def iterative_mle_state_estimate(results: List[ExperimentResult], qubits: List[int], epsilon=.1,
@@ -273,7 +263,7 @@ def _R(state, results, qubits):
     Pi_j = measurement operator or projector, with \sum_j Pi_j = Id and Pi_j \geq 0
     Pr_j = Tr[Pi_j \rho]  (up to some normalization of the Pi_j)
 
-    We are working with results whose out_operators are elements of the un-normalized Pauli
+    We are working with results whose observables are elements of the un-normalized Pauli
     basis. Each Pauli P_j can be split into projectors onto the plus and minus eigenspaces
         P_k = Pi_k^+ - Pi_k^-   ;   Pi_k^+ = (I + P_k) / 2   ;   Pi_k^- = (I - P_k) / 2
     where each Pi \geq 0 as required above. Hence for each P_k we associate two Pi_k,
@@ -299,7 +289,7 @@ def _R(state, results, qubits):
     IdH = np.eye(update.shape[0])
 
     for res in results:
-        op_matrix = pauli2matrix(res.setting.out_operator, qubits)
+        op_matrix = pauli2matrix(res.setting.observable, qubits)
         meas_exp = res.expectation
         pred_exp = np.trace(op_matrix @ state)
 
@@ -327,7 +317,7 @@ def state_log_likelihood(state, results, qubits) -> float:
     ll = 0
     for res in results:
         n = res.total_counts
-        op_matrix = pauli2matrix(res.setting.out_operator, qubits)
+        op_matrix = pauli2matrix(res.setting.observable, qubits)
         meas_exp = res.expectation
         pred_exp = np.real(np.trace(op_matrix @ state))
 
@@ -493,7 +483,7 @@ def _extract_from_results(results: List[ExperimentResult], qubits: List[int]):
         # matrix. This is simply the density matrix of the state that was prepared.
         in_state_matrix = state2matrix(result.setting.in_state, qubits=qubits)
         # 'lift' the result's ExperimentSetting output PauliTerm to the corresponding matrix.
-        operator = pauli2matrix(result.setting.out_operator, qubits=qubits)
+        operator = pauli2matrix(result.setting.observable, qubits=qubits)
         proj_plus = (np.eye(2 ** len(qubits)) + operator) / 2
         proj_minus = (np.eye(2 ** len(qubits)) - operator) / 2
 

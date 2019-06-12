@@ -97,6 +97,7 @@ def plot_pauli_transfer_matrix(ptransfermatrix, ax, labels=None, title='', fonts
     :return: The modified axis object.
     :rtype: AxesSubplot
     """
+    ptransfermatrix = np.real_if_close(ptransfermatrix)
     im = ax.imshow(ptransfermatrix, interpolation="nearest", cmap="RdBu", vmin=-1, vmax=1)
     if labels is None:
         dim_squared = ptransfermatrix.shape[0]
