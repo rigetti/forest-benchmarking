@@ -22,8 +22,6 @@ MAXITER = "maxiter"
 OPTIMAL = "optimal"
 FRO = 'fro'
 
-def project_density_matrix():
-    return None
 
 # ==================================================================================================
 # Generate state and process tomography experiments
