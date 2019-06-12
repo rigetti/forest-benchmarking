@@ -29,9 +29,6 @@ import numpy as np
 from forest.benchmarking.utils import partial_trace
 
 
-# ==================================================================================================
-# Project Channels to CP, TNI, TP, and physical
-# ==================================================================================================
 def proj_choi_to_completely_positive(choi: np.ndarray) -> np.ndarray:
     """
     Projects the Choi representation of a process into the nearest Choi matrix in the space of

@@ -27,10 +27,6 @@ Further references include:
 """
 import numpy as np
 
-
-# ==================================================================================================
-# Channel and Superoperator approximation tools
-# ==================================================================================================
 def pauli_twirl_chi_matrix(chi_matrix: np.ndarray) -> np.ndarray:
     r"""
     Implements a Pauli twirl of a chi matrix (aka a process matrix).

@@ -29,7 +29,9 @@ from typing import Sequence
 import numpy as np
 from forest.benchmarking.utils import partial_trace
 from forest.benchmarking.operator_tools.superoperator_transformations import choi2kraus
-from forest.benchmarking.operator_tools.superoperator_tools import apply_choi_matrix_2_state
+from forest.benchmarking.operator_tools.validate_operator import (
+    is_positive_semidefinite_matrix, is_identity_matrix, is_hermitian_matrix)
+from forest.benchmarking.operator_tools.apply_superoperator import apply_choi_matrix_2_state
 
 
 # ==================================================================================================
@@ -52,9 +54,10 @@ def kraus_operators_are_valid(kraus_ops: Sequence[np.ndarray],
     rows, _ = np.asarray(kraus_ops[0]).shape
     # Standard case of square Kraus operators is if rows==cols. For non-square Kraus ops it is
     # required that sum_i M_i^\dagger M_i  = np.eye(rows,rows).
-    id_iff_valid = sum(np.transpose(op).conjugate().dot(op) for op in kraus_ops)
-    # TODO: check if each POVM element (i.e. M_i^\dagger M_i) is PSD
-    return np.allclose(id_iff_valid, np.eye(rows), rtol=rtol, atol=atol)
+    POVM = [np.transpose(op).conjugate().dot(op) for op in kraus_ops]
+    all_POVM_elements_are_PSD = all(is_positive_semidefinite_matrix(elem) for elem in POVM)
+    POVM_elements_sum_to_Id = is_identity_matrix(sum(POVM), rtol, atol)
+    return all_POVM_elements_are_PSD and POVM_elements_sum_to_Id
 
 
 def choi_is_hermitian_preserving(choi: np.ndarray, rtol: float = 1e-05,
@@ -69,12 +72,12 @@ def choi_is_hermitian_preserving(choi: np.ndarray, rtol: float = 1e-05,
         False otherwise.
     """
     # Equation 3.31 of [GRAPTN]
-    return np.allclose(choi, choi.conj().T, rtol=rtol, atol=atol)
+    return is_hermitian_matrix(choi, rtol, atol)
 
 
 def choi_is_trace_preserving(choi: np.ndarray, rtol: float = 1e-05, atol: float = 1e-08) -> bool:
     """
-    Checks if  a quantum process, specified by a Choi matrix, is trace-preserving.
+    Checks if a quantum process, specified by a Choi matrix, is trace-preserving (TP).
 
     :param choi: A dim**2 by dim**2 Choi matrix
     :param rtol: The relative tolerance parameter in np.allclose
@@ -89,21 +92,36 @@ def choi_is_trace_preserving(choi: np.ndarray, rtol: float = 1e-05, atol: float 
     keep = [0]
     id_iff_tp = partial_trace(choi, keep, [dim, dim])
     # Equation 3.33 of [GRAPTN]
-    return np.allclose(id_iff_tp, np.identity(dim), rtol=rtol, atol=atol)
+    return is_identity_matrix(id_iff_tp, rtol, atol)
 
 
-def choi_is_completely_positive(choi: np.ndarray, limit: float = 1e-09) -> bool:
+def choi_is_completely_positive(choi: np.ndarray, rtol: float = 1e-05, atol: float = 1e-08) -> bool:
     """
-    Checks if  a quantum process, specified by a Choi matrix, is completely positive.
+    Checks if a quantum process, specified by a Choi matrix, is completely positive (CP).
 
     :param choi: A dim**2 by dim**2 Choi matrix
-    :param limit: A tolerance parameter, all eigenvalues must be greater than -|limit|.
+    :param rtol: The relative tolerance parameter in np.allclose
+    :param atol: The absolute tolerance parameter in np.allclose
     :return: Returns True if the quantum channel is completely positive with the given tolerance;
         False otherwise.
     """
-    evals, evecs = np.linalg.eig(choi)
     # Equation 3.35 of [GRAPTN]
-    return all(x >= -abs(limit) for x in evals)
+    return is_positive_semidefinite_matrix(choi, rtol, atol)
+
+
+def choi_is_cptp(choi: np.ndarray, rtol: float = 1e-05, atol: float = 1e-08) -> bool:
+    """
+    Checks if a quantum process, specified by a Choi matrix, is completely positive and
+    trace-preserving (CPTP).
+
+    :param choi: A dim**2 by dim**2 Choi matrix
+    :param rtol: The relative tolerance parameter in np.allclose
+    :param atol: The absolute tolerance parameter in np.allclose
+    :return: Returns True if the quantum channel is CPTP with the given tolerance; False otherwise.
+    """
+    choi_is_TP = choi_is_trace_preserving(choi, rtol, atol)
+    choi_is_CP = choi_is_completely_positive(choi, rtol, atol)
+    return choi_is_CP and choi_is_TP
 
 
 def choi_is_unital(choi: np.ndarray, rtol: float = 1e-05, atol: float = 1e-08) -> bool:
@@ -121,7 +139,7 @@ def choi_is_unital(choi: np.ndarray, rtol: float = 1e-05, atol: float = 1e-08) -
     rows, cols = choi.shape
     dim = int(np.sqrt(rows))
     id_iff_unital = apply_choi_matrix_2_state(choi, np.identity(dim))
-    return np.allclose(id_iff_unital, np.identity(dim), rtol=rtol, atol=atol)
+    return is_identity_matrix(id_iff_unital, rtol, atol)
 
 
 def choi_is_unitary(choi: np.ndarray, limit: float = 1e-09) -> bool:

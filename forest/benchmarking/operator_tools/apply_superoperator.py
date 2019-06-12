@@ -30,9 +30,6 @@ import numpy as np
 from forest.benchmarking.utils import partial_trace
 
 
-# ==================================================================================================
-# Apply channel
-# ==================================================================================================
 def apply_kraus_ops_2_state(kraus_ops: Sequence[np.ndarray], state: np.ndarray) -> np.ndarray:
     r"""
     Apply a quantum channel, specified by Kraus operators, to state.

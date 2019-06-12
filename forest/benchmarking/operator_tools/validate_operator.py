@@ -33,7 +33,7 @@ from forest.benchmarking.operator_tools.superoperator_tools import apply_choi_ma
 
 
 # ==================================================================================================
-# Check physicality of operators or matrices
+# Check properties of operators or matrices
 # ==================================================================================================
 def is_square_matrix(matrix: np.ndarray) -> bool:
     """

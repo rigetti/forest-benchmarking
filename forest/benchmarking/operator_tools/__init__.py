@@ -1,2 +1,3 @@
-#from .random_operators import *
-__all__ = ["random_operators", "superoperator_transformations"]
+__all__ = ["apply_superoperator", "channel_approximation", "project_superoperators",
+           "random_operators", "superoperator_transformations", "validate_operator",
+           "validate_superoperator" ]
