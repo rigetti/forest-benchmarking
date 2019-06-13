@@ -176,15 +176,16 @@ def two_q_tomo_fixture():
     qc = get_test_qc(n_qubits=len(qubits))
 
     # Generate random unitary
-    u_rand = haar_rand_unitary(2 ** 1, rs=np.random.RandomState(52))
-    state_prep = Program().defgate("RandUnitary", u_rand)
-    state_prep.inst([("RandUnitary", q) for q in qubits])
+    u_rand1 = haar_rand_unitary(2 ** 1, rs=np.random.RandomState(52))
+    u_rand2 = haar_rand_unitary(2 ** 1, rs=np.random.RandomState(53))
+    state_prep = Program().defgate("RandUnitary1", u_rand1).defgate("RandUnitary2", u_rand2)
+    state_prep.inst(("RandUnitary1", qubits[0])).inst(("RandUnitary2", qubits[1]))
 
     # True state
     wfn = NumpyWavefunctionSimulator(n_qubits=2)
     psi = wfn \
-        .do_gate_matrix(u_rand, qubits=[0]) \
-        .do_gate_matrix(u_rand, qubits=[1]) \
+        .do_gate_matrix(u_rand1, qubits=[0]) \
+        .do_gate_matrix(u_rand2, qubits=[1]) \
         .wf.reshape(-1)
     rho_true = np.outer(psi, psi.T.conj())
 
