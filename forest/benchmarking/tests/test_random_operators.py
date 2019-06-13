@@ -195,7 +195,7 @@ def test_random_unitaries_first_moment():
         D3_avg += np.kron(U3, U3d) / N_avg
 
     # Compute the Frobenius norm of the different between the estimated operator and the answer
-    assert np.real(la.norm((D2_avg - D2_SWAP / D2), 'fro')) <= 0.01
+    assert np.real(la.norm((D2_avg - D2_SWAP / D2), 'fro')) <= 0.02
     assert np.real(la.norm((D2_avg - D2_SWAP / D2), 'fro')) >= 0.00
     assert np.real(la.norm((D3_avg - D3_SWAP / D3), 'fro')) <= 0.02
     assert np.real(la.norm((D3_avg - D3_SWAP / D3), 'fro')) >= 0.00
