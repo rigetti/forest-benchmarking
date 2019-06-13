@@ -439,7 +439,7 @@ def linear_inv_process_estimate(results: List[ExperimentResult], qubits: List[in
 
     This is the simplest process tomography post processing. To use this function,
     collect process tomography data with :py:func:`generate_process_tomography_experiment`
-    and :py:func:`~pyquil.operator_estimation.measure_observables`.
+    and :py:func:`~forest.benchmarking.observable_estimation.estimate_observables`.
 
     For more details on this post-processing technique,
     see https://en.wikipedia.org/wiki/Quantum_tomography#Linear_inversion or
@@ -454,7 +454,7 @@ def linear_inv_process_estimate(results: List[ExperimentResult], qubits: List[in
     :param qubits: All qubits that were tomographized. This specifies the order in
         which qubits will be kron'ed together; the first qubit in the list is the left-most
         tensor factor.
-    :return: A point estimate of the quantum state rho.
+    :return: A point estimate of the quantum process represented by a Choi matrix
     """
     # state2matrix and pauli2matrix use pyquil tensor factor ordering where the least significant
     # qubit, e.g. qubit 0, is the right-most tensor factor. We stick with the standard convention

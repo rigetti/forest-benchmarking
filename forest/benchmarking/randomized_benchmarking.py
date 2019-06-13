@@ -145,6 +145,7 @@ def generate_rb_sequence(bm: BenchmarkConnection, qubits: Sequence[int], depth: 
     gateset = get_rb_gateset(qubits)
     programs = bm.generate_rb_sequence(depth=depth, gateset=gateset, interleaver=interleaved_gate,
                                        seed=random_seed)
+    # return a sequence composed of depth-many Cliffords.
     return programs
 
 
@@ -206,17 +207,17 @@ def group_sequences_into_parallel_experiments(parallel_expts_seqs: Sequence[List
     group of qubits. Note that there is an important physical distinction (e.g. due to
     cross-talk) between running separate RB experiments on different groups of qubits and running
     a 'parallel RB' experiment on the collection of those groups. For this reason one should not
-    expect in general that the rb decay for the a particular group of qubits is comparable between
+    expect in general that the rb decay for a particular group of qubits is comparable between
     the individual and parallel modes of rb experiment.
 
     :param parallel_expts_seqs: the outer Sequence is indexed by disjoint groups of qubits;
-        Clifford sequences from each of these different groups (which should be of the same depth)
-        will be merged together into a single program. The intended use-case is that each
-        List[List[program]] sequence of Cliffords is an output of generate_rb_experiment_sequences
-        for disjoint groups of qubits but with identical list of depths (see
-        generate_rb_experiments for example). If sequences of different depth are merged into
-        a Program then some qubits may be sitting idle while the sequences of greater depth
-        continue running. Measurement occurs only when all sequences have terminated.
+        Clifford sequences from each of these different groups (which should be of the same depth
+        across qubit groups) will be merged together into a single program. The intended use-case
+        is that each List[List[program]] of sequences of Cliffords is an output of
+        generate_rb_experiment_sequences for disjoint groups of qubits but with identical
+        depths input (see generate_rb_experiments for example). If sequences of different depth are
+        merged into a Program then some qubits may be sitting idle while the sequences of greater
+        depth continue running. Measurement occurs only when all sequences have terminated.
     :param qubit_groups: The partition of the qubits into groups for each of which you would like to
         estimate an rb decay. Typically this grouping of qubits should match the qubits that are
         acted on by each sequence in the corresponding List[List[Program]] of the input
@@ -403,16 +404,18 @@ def fit_rb_results(depths: Sequence[int], z_expectations: Sequence[Sequence[floa
     so the sum of all corresponding expectations (including one for all I operator) divided by
     the dimension is the probability of the all zeros state.
 
+    :param depths: the depth of each sequence over which a decay will be fitted
+    :param z_expectations: the groups of 2**(num_qubits) - 1 expectations estimated for each
+        sequence, where each group of observables has all traceless tensor products of I and Z.
+    :param z_std_errs: the groups of std_errs for each expectation estimate
     :param param_guesses: guesses for the (amplitude, decay, baseline) parameters
     :return: a ModelResult fit with estimates of the Model parameters, including the rb 'decay'
     """
     survivals = []
     variances = []
 
-    assert len(depths) == len(z_expectations), 'There should be one expectation per sequence. ' \
-                                               'The depths used in generate_experiment will need ' \
-                                               'to be repeated for the appropriate number of ' \
-                                               'sequences.'
+    assert len(depths) == len(z_expectations), 'There should be one expectation per sequence and ' \
+                                               'depths should give the depth of each sequence.'
 
     for depth, expectations, std_errs in zip(depths, z_expectations, z_std_errs):
         # get the fraction of all zero outcomes 00...00
@@ -426,11 +429,16 @@ def fit_rb_results(depths: Sequence[int], z_expectations: Sequence[Sequence[floa
         param_guesses = (survivals[0] - survivals[-1], 0.95, survivals[-1])
 
     err = np.sqrt(variances)
-    min_non_zero = min([v for v in err if v > 0])
-    # TODO: does this handle 0 var appropriately? Incorporate unbiased prior into std_err estimate?
-    non_zero_err = np.asarray([v if v > 0 else min_non_zero for v in err])
+    non_zero = [v for v in err if v > 0]
+    if len(non_zero) == 0:
+        weights = None
+    else:
+        # TODO: does this handle 0 var appropriately?
+        # Other possibility is to use unbiased prior in std_err estimate.
+        min_non_zero = min(non_zero)
+        non_zero_err = np.asarray([v if v > 0 else min_non_zero for v in err])
 
-    weights = 1 / non_zero_err
+        weights = 1 / non_zero_err
 
     return fit_base_param_decay(np.asarray(depths), np.asarray(survivals), weights, param_guesses)
 
@@ -461,7 +469,7 @@ def generate_unitarity_experiments(bm: BenchmarkConnection, qubit_groups: Sequen
         generated and merged into a series of programs each of which runs groups of disjoint
         sequences 'simultaneously'.
     :param depths: the depth of each sequences in the experiment.
-\    :param random_seed: Random seed passed to bm to seed sequence generation.
+    :param random_seed: Random seed passed to bm to seed sequence generation.
     :param use_self_inv_seqs: by default False, unlike with a typical RB sequence the last
         Clifford does not invert the sequence. If True, the subset of Z*I observable experiment
         results can equally well be analyzed as a unitarity or RB experiment. This argument does
@@ -527,7 +535,7 @@ def estimate_purity_err(dim: int, op_expect: np.ndarray, op_expect_var: np.ndarr
 
 
 def fit_unitarity_results(depths: Sequence[int], expectations: Sequence[Sequence[float]],
-                   std_errs: Sequence[Sequence[float]], param_guesses: tuple = None) \
+                          std_errs: Sequence[Sequence[float]], param_guesses: tuple = None) \
         -> ModelResult:
     """
     Fits the results of a unitarity experiment by first calculating shifted purities and
@@ -535,6 +543,9 @@ def fit_unitarity_results(depths: Sequence[int], expectations: Sequence[Sequence
 
     The estimate for the unitarity (the decay) can be found in the returned fit.params['decay']
 
+    :param depths: the depth of each sequence over which a decay will be fitted
+    :param expectations: the groups of 4**(num_qubits) - 1 expectations estimated for each sequence
+    :param std_errs: the groups of std_errs for each expectation estimate
     :param param_guesses: guesses for the (amplitude, decay, baseline) parameters
     :return: a ModelResult fit with estimates of the Model parameters, including the 'decay',
         which is the unitarity parameter. Note that [ECN] parameterizes the decay differently;
@@ -544,9 +555,10 @@ def fit_unitarity_results(depths: Sequence[int], expectations: Sequence[Sequence
     shifted_purities = []
     shifted_purity_errs = []
 
-    assert len(depths) == len(expectations), 'There should be one expectation per sequence. The ' \
-                                             'depths used in generate_experiment will need to be ' \
-                                             'repeated for the appropriate number of sequences.'
+    assert len(depths) == len(expectations), 'There should be one group of 4**(num_qubits) - 1 ' \
+                                             'expectations per sequence and depths should give ' \
+                                             'the depth of each sequence.'
+
     for depth, exps, errs in zip(depths, expectations, std_errs):
         # This assumes inclusion of all terms with at least one observable to make dim**2-1 many
         # total terms
@@ -566,11 +578,16 @@ def fit_unitarity_results(depths: Sequence[int], expectations: Sequence[Sequence
     if param_guesses is None:  # make some standard reasonable guess (amplitude, decay, baseline)
         param_guesses = (shifted_purities[0], 0.95, 0)
 
-    min_non_zero = min([v for v in shifted_purity_errs if v > 0])
-    # TODO: does this handle 0 var appropriately? Incorporate unbiased prior into std_err estimate?
-    non_zero_err = np.asarray([v if v > 0 else min_non_zero for v in shifted_purity_errs])
+    non_zero = [v for v in shifted_purity_errs if v > 0]
+    if len(non_zero) == 0:
+        weights = None
+    else:
+        # TODO: does this handle 0 var appropriately?
+        # Other possibility is to use unbiased prior in std_err estimate.
+        min_non_zero = min(non_zero)
+        non_zero_err = np.asarray([v if v > 0 else min_non_zero for v in shifted_purity_errs])
 
-    weights = 1 / non_zero_err
+        weights = 1 / non_zero_err
 
     return fit_base_param_decay(np.asarray(depths), np.asarray(shifted_purities), weights,
                                 param_guesses)

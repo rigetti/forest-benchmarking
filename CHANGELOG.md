@@ -7,6 +7,9 @@ Improvements and Changes:
 
 - Fixed the years in this Change log file 2018 -> 2019
 - Added linear inversion process tomography (gh-142)
+- Changed qubit tensor factor ordering of state tomography estimates to match that of process tomography, e.g. 
+tomographizing the plus eigenstate of `X0 * Z1` and passing in `qubits = [0,1]` will yield the state 
+estimate corresponding to `|+0> = (1, 0, 1, 0)/sqrt(2)` rather than `|0+>` (gh-142)
 
 
 v0.6 (June 11, 2019)
