@@ -1,7 +1,15 @@
 Changelog
 =========
 
-v0.6 (June 11, 2018)
+v0.7 (June XX, 2019)
+--------------------
+Improvements and Changes:
+
+- Fixed the years in this Change log file 2018 -> 2019
+- Added linear inversion process tomography (gh-142)
+
+
+v0.6 (June 11, 2019)
 --------------------
 Breaking Changes:
 
@@ -58,7 +66,7 @@ Bugfixes:
 
 - t2 experiments now implement correct echo sequence
 
-v0.5 (June 10, 2018)
+v0.5 (June 10, 2019)
 --------------------
 Improvements and Changes:
 
@@ -72,7 +80,7 @@ Improvements and Changes:
 - Added the ability to check if the Kraus operators are valid (PR 128)
 
 
-v0.4 (May 6, 2018)
+v0.4 (May 6, 2019)
 ------------------
 
 Improvements and Changes:
@@ -100,7 +108,7 @@ Bugfixes:
 - Fixed keyword argument name `symmetrize_readout` in call to pyQuil's
   `measure_observables` (gh-115)
 
-v0.3 (April 5, 2018)
+v0.3 (April 5, 2019)
 --------------------
 
 Initial public release of `forest-benchmarking`.
