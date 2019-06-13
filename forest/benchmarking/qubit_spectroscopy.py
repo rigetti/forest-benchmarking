@@ -150,11 +150,16 @@ def fit_t1_results(times: Sequence[float], z_expectations: Sequence[float],
         probability_one, var = transform_pauli_moments_to_bit(np.asarray(-1 * z_expectations),
                                                               np.asarray(z_std_errs)**2)
         err = np.sqrt(var)
-        min_non_zero = min([v for v in err if v > 0])
-        # TODO: does this handle 0 var appropriately? Incorporate unbiased prior into std_err estimate?
-        non_zero_err = np.asarray([v if v > 0 else min_non_zero for v in err])
+        non_zero = [v for v in err if v > 0]
+        if len(non_zero) == 0:
+            weights = None
+        else:
+            # TODO: does this handle 0 var appropriately?
+            # Other possibility is to use unbiased prior into std_err estimate.
+            min_non_zero = min(non_zero)
+            non_zero_err = np.asarray([v if v > 0 else min_non_zero for v in err])
 
-        weights = 1 / non_zero_err
+            weights = 1 / non_zero_err
     else:
         probability_one, _ = transform_pauli_moments_to_bit(np.asarray(-1 * z_expectations), 0)
         weights = None
@@ -288,11 +293,16 @@ def fit_t2_results(times: Sequence[float], y_expectations: Sequence[float],
         probability_one, var = transform_pauli_moments_to_bit(np.asarray(-1 * y_expectations),
                                                               np.asarray(y_std_errs)**2)
         err = np.sqrt(var)
-        min_non_zero = min([v for v in err if v > 0])
-        # TODO: does this handle 0 var appropriately? Incorporate unbiased prior into std_err estimate?
-        non_zero_err = np.asarray([v if v > 0 else min_non_zero for v in err])
+        non_zero = [v for v in err if v > 0]
+        if len(non_zero) == 0:
+            weights = None
+        else:
+            # TODO: does this handle 0 var appropriately? 
+            # Other possibility is to use unbiased prior in std_err estimate.
+            min_non_zero = min(non_zero)
+            non_zero_err = np.asarray([v if v > 0 else min_non_zero for v in err])
 
-        weights = 1 / non_zero_err
+            weights = 1 / non_zero_err
     else:
         probability_one, _ = transform_pauli_moments_to_bit(np.asarray(-1 * y_expectations), 0)
         weights = None
@@ -386,11 +396,16 @@ def fit_rabi_results(angles: Sequence[float], z_expectations: Sequence[float],
         probability_one, var = transform_pauli_moments_to_bit(np.asarray(-1 * z_expectations),
                                                               np.asarray(z_std_errs)**2)
         err = np.sqrt(var)
-        min_non_zero = min([v for v in err if v > 0])
-        # TODO: does this handle 0 var appropriately? Incorporate unbiased prior into std_err estimate?
-        non_zero_err = np.asarray([v if v > 0 else min_non_zero for v in err])
+        non_zero = [v for v in err if v > 0]
+        if len(non_zero) == 0:
+            weights = None
+        else:
+            # TODO: does this handle 0 var appropriately? 
+            # Other possibility is to use unbiased prior in std_err estimate.
+            min_non_zero = min(non_zero)
+            non_zero_err = np.asarray([v if v > 0 else min_non_zero for v in err])
 
-        weights = 1 / non_zero_err
+            weights = 1 / non_zero_err
     else:
         probability_one, _ = transform_pauli_moments_to_bit(np.asarray(-1 * z_expectations), 0)
         weights = None
@@ -482,11 +497,16 @@ def fit_cz_phase_ramsey_results(angles: Sequence[float], y_expectations: Sequenc
         probability_one, var = transform_pauli_moments_to_bit(np.asarray(-1 * y_expectations),
                                                               np.asarray(y_std_errs)**2)
         err = np.sqrt(var)
-        min_non_zero = min([v for v in err if v > 0])
-        # TODO: does this handle 0 var appropriately? Incorporate unbiased prior into std_err estimate?
-        non_zero_err = np.asarray([v if v > 0 else min_non_zero for v in err])
+        non_zero = [v for v in err if v > 0]
+        if len(non_zero) == 0:
+            weights = None
+        else:
+            # TODO: does this handle 0 var appropriately? 
+            # Other possibility is to use unbiased prior in std_err estimate.
+            min_non_zero = min(non_zero)
+            non_zero_err = np.asarray([v if v > 0 else min_non_zero for v in err])
 
-        weights = 1 / non_zero_err
+            weights = 1 / non_zero_err
     else:
         probability_one, _ = transform_pauli_moments_to_bit(np.asarray(-1 * y_expectations), 0)
         weights = None
