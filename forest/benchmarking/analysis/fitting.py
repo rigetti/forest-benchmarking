@@ -193,10 +193,10 @@ DEFAULT_AXIS_FONT_SIZE = 14
 DEFAULT_REPORT_FONT_SIZE = 11
 
 
-def make_figure(fit_result: ModelResult, xlabel: str = 'x', ylabel: str = 'y', xscale: float = 1.0,
-                yscale: float = 1.0, title: str = '', figsize=DEFAULT_FIG_SIZE,
-                axis_fontsize: tuple = DEFAULT_AXIS_FONT_SIZE,
-                report_fontsize: float = DEFAULT_REPORT_FONT_SIZE) -> plt.figure:
+def plot_figure_for_fit(fit_result: ModelResult, xlabel: str = 'x', ylabel: str = 'y',
+                        xscale: float = 1.0, yscale: float = 1.0, title: str = '',
+                        figsize=DEFAULT_FIG_SIZE, axis_fontsize: tuple = DEFAULT_AXIS_FONT_SIZE,
+                        report_fontsize: float = DEFAULT_REPORT_FONT_SIZE) -> plt.figure:
     """
     Plots fit and residuals from lmfit with residuals *below* fit.
     Also shows fit result text below.
@@ -209,7 +209,7 @@ def make_figure(fit_result: ModelResult, xlabel: str = 'x', ylabel: str = 'y', x
     :param title: title of the plot
     :param figsize: size of the plot
     :param axis_fontsize: size of the font
-
+    :param report_fontsize: size of font for the stats report
     :return: matplotlib figure
     """
 

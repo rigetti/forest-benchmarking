@@ -582,14 +582,14 @@ def unitarity_to_rb_decay(unitarity, dimension) -> float:
     RB decay given the input unitarity, where the upperbound is saturated when no unitary errors are present,
     e.g. in the case of depolarizing noise. For more, see Proposition 8. in [ECN]
         unitarity >= (1-dr/(d-1))^2
-    where r is the average gate infidelity and d is the dimension
+    where r is the average gate error and d is the dimension
 
     :param unitarity: The measured decay parameter in a unitarity measurement
     :param dimension: The dimension of the Hilbert space, 2^num_qubits
     :return: The upperbound on RB decay, saturated if no unitary errors are present Proposition 8 [ECN]
     """
     r = (np.sqrt(unitarity) - 1)*(1-dimension)/dimension
-    return average_gate_infidelity_to_rb_decay(r, dimension)
+    return average_gate_error_to_rb_decay(r, dimension)
 
 
 ########
@@ -648,7 +648,7 @@ def interleaved_gate_fidelity_bounds(irb_decay, rb_decay, dim, unitarity = None)
         # calculate bounds on the equivalent gate-only decay parameter
         decay_bounds = [sign * (sign * g * np.cos(theta) + np.sin(theta) * np.sqrt(1-g**2) ) for sign in pm]
         # convert decay bounds to bounds on fidelity of the gate
-        fidelity_bounds = [rb_decay_to_gate_fidelity(decay, dim) for decay in decay_bounds]
+        fidelity_bounds = [1 - rb_decay_to_gate_error(decay, dim) for decay in decay_bounds]
 
     else:
         # Equation 5 of [IRB]
@@ -657,56 +657,56 @@ def interleaved_gate_fidelity_bounds(irb_decay, rb_decay, dim, unitarity = None)
         E2 = 2*(dim**2 - 1)*(1-rb_decay)/(rb_decay*dim**2) + 4*np.sqrt(1-rb_decay)*np.sqrt(dim**2-1)/rb_decay
 
         E = min(E1,E2)
-        infidelity = irb_decay_to_gate_infidelity(irb_decay, rb_decay, dim)
+        error = irb_decay_to_gate_error(irb_decay, rb_decay, dim)
 
-        fidelity_bounds = [1-infidelity-E, 1-infidelity+E]
+        fidelity_bounds = [1-error-E, 1-error+E]
 
     return fidelity_bounds
 
 
-def gate_infidelity_to_irb_decay(irb_infidelity, rb_decay, dim):
+def gate_error_to_irb_decay(irb_error, rb_decay, dim):
     """
-    For convenience, inversion of Eq. 4 of [IRB]. See irb_decay_to_infidelity
+    For convenience, inversion of Eq. 4 of [IRB]. See irb_decay_to_error
 
-    :param irb_infidelity: Infidelity of the interleaved gate.
+    :param irb_error: error of the interleaved gate.
     :param rb_decay: Observed decay parameter in standard rb experiment.
     :param dim: Dimension of the Hilbert space, 2**num_qubits
     :return: Decay parameter in irb experiment with relevant gate interleaved between Cliffords
     """
-    return (1 - irb_infidelity * (dim/(dim-1)) ) * rb_decay
+    return (1 - irb_error * (dim/(dim-1)) ) * rb_decay
 
 
-def irb_decay_to_gate_infidelity(irb_decay, rb_decay, dim):
+def irb_decay_to_gate_error(irb_decay, rb_decay, dim):
     """
-    Eq. 4 of [IRB], which provides an estimate of the infidelity of the interleaved gate,
+    Eq. 4 of [IRB], which provides an estimate of the error of the interleaved gate,
     given both the observed interleaved and standard decay parameters.
 
     :param irb_decay: Observed decay parameter in irb experiment with desired gate interleaved between Cliffords
     :param rb_decay: Observed decay parameter in standard rb experiment.
     :param dim: Dimension of the Hilbert space, 2**num_qubits
-    :return: Estimated gate infidelity (1 - fidelity) of the interleaved gate.
+    :return: Estimated gate error of the interleaved gate.
     """
     return ((dim - 1) / dim) * (1 - irb_decay / rb_decay)
 
 
-def average_gate_infidelity_to_rb_decay(gate_infidelity, dimension):
+def average_gate_error_to_rb_decay(gate_error, dimension):
     """
     Inversion of eq. 5 of [RB] arxiv paper.
 
-    :param gate_infidelity: The average gate infidelity.
+    :param gate_error: The average gate error.
     :param dimension: Dimension of the Hilbert space, 2^num_qubits
-    :return: The RB decay corresponding to the gate_infidelity
+    :return: The RB decay corresponding to the gate_error
     """
-    return (gate_infidelity - 1 + 1/dimension)/(1/dimension -1)
+    return (gate_error - 1 + 1/dimension)/(1/dimension -1)
 
 
-def rb_decay_to_gate_fidelity(rb_decay, dimension):
+def rb_decay_to_gate_error(rb_decay, dimension):
     """
-    Derived from eq. 5 of [RB] arxiv paper. Note that 'gate' here typically means an element of the Clifford group,
-    which comprise standard rb sequences.
+    Eq. 5 of [RB] arxiv paper. Note that 'gate' here typically means an element of the Clifford
+    group, which comprise standard rb sequences.
 
     :param rb_decay: Observed decay parameter in standard rb experiment.
     :param dimension: Dimension of the Hilbert space, 2**num_qubits
-    :return: The gate fidelity corresponding to the input decay.
+    :return: The gate error corresponding to the input decay.
     """
-    return 1/dimension - rb_decay*(1/dimension -1)
+    return 1 - rb_decay - (1 - rb_decay)/dimension
