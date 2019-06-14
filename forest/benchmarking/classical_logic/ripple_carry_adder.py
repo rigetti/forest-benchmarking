@@ -108,7 +108,7 @@ def get_qubit_registers_for_adder(qc: QuantumComputer, num_length: int,
     else:
         unavailable = [qubit for qubit in qc.qubits() if qubit not in qubits]
 
-    graph = qc.qubit_topology()
+    graph = qc.qubit_topology().copy()
     for qubit in unavailable:
         graph.remove_node(qubit)
 
