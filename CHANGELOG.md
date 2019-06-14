@@ -15,6 +15,8 @@ Improvements and Changes:
 tomographizing the plus eigenstate of `X0 * Z1` and passing in `qubits = [0,1]` will yield the state 
 estimate corresponding to `|+0> = (1, 0, 1, 0)/sqrt(2)` rather than `|0+>` (gh-142)
 - Improved the `superoperator_tools` notebook and the `random_operators` notebook (gh-98)
+- Improvements to Ripple carry adder notebook, added tests for non parametric bit string 
+prep program in utils (gh-98)
 
 v0.6 (June 11, 2019)
 --------------------
