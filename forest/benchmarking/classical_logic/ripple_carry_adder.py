@@ -249,7 +249,7 @@ def adder(num_a: Sequence[int], num_b: Sequence[int], register_a: Sequence[int],
 def get_n_bit_adder_results(qc: QuantumComputer, n_bits: int,
                             registers: Tuple[Sequence[int], Sequence[int], int, int] = None,
                             qubits: Sequence[int] = None, in_x_basis: bool = False,
-                            num_shots: int = 100, use_param_program: bool = True,
+                            num_shots: int = 100, use_param_program: bool = False,
                             use_active_reset: bool = True) -> Sequence[Sequence[Sequence[int]]]:
     """
     Convenient wrapper for collecting the results of addition for every possible pair of n_bits
