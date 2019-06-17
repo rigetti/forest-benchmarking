@@ -1,5 +1,6 @@
 """A module for computing distances (and other properites) between quantum states or
 processes"""
+from typing import Tuple
 import numpy as np
 from scipy.linalg import sqrtm
 from scipy.linalg import fractional_matrix_power
@@ -10,7 +11,7 @@ from scipy.optimize import minimize_scalar
 # Functions for quantum states
 # ===================================================================================================
 
-def purity(rho, dim_renorm=False):
+def purity(rho: np.ndarray, dim_renorm=False, tol: float = 1000) -> float:
     """
     Calculates the purity P = tr[ρ**2] of a quantum state ρ.
 
@@ -25,6 +26,7 @@ def purity(rho, dim_renorm=False):
 
     :param rho: Is a dim by dim positive matrix with unit trace.
     :param dim_renorm: Boolean, default False.
+    :param tol: Tolerance in machine epsilons for np.real_if_close.
     :return: P the purity of the state.
     """
     if dim_renorm:
@@ -33,10 +35,31 @@ def purity(rho, dim_renorm=False):
         P = (dim / (dim - 1.0)) * (Ptemp - 1.0 / dim)
     else:
         P = np.trace(np.matmul(rho, rho))
-    return P
+    return np.ndarray.item(np.real_if_close(P, tol))
 
 
-def fidelity(rho, sigma):
+def impurity(rho: np.ndarray, dim_renorm=False, tol: float = 1000) -> float:
+    """
+    Calculates the impurity (or linear entropy) L = 1 - tr[ρ**2] of a quantum state ρ.
+
+    As stated above lower value of the impurity depends on the dimension of ρ's Hilbert space. For
+    some applications this can be undesirable. For this reason we introduce an optional dimensional
+    renormalization flag with the following behavior
+
+    If the dimensional renormalization flag is FALSE (default) then  1/dim ≤ L ≤ 1.
+    If the dimensional renormalization flag is TRUE then 0 ≤ L ≤ 1.
+
+    where dim is the dimension of ρ's Hilbert space.
+
+    :param rho: Is a dim by dim positive matrix with unit trace.
+    :param dim_renorm: Boolean, default False.
+    :param tol: Tolerance in machine epsilons for np.real_if_close.
+    :return: L the impurity of the state.
+    """
+    return 1 - purity(rho, dim_renorm, tol)
+
+
+def fidelity(rho: np.ndarray, sigma: np.ndarray, tol: float = 1000) -> float:
     """
     Computes the fidelity F(rho,sigma) between two quantum states rho and sigma.
 
@@ -47,12 +70,27 @@ def fidelity(rho, sigma):
 
     :param rho: Is a dim by dim positive matrix with unit trace.
     :param sigma: Is a dim by dim positive matrix with unit trace.
+    :param tol: Tolerance in machine epsilons for np.real_if_close.
     :return: Fidelity which is a scalar.
     """
-    return (np.trace(sqrtm(np.matmul(np.matmul(sqrtm(rho), sigma), sqrtm(rho))))) ** 2
+    fid = (np.trace(sqrtm(np.matmul(np.matmul(sqrtm(rho), sigma), sqrtm(rho))))) ** 2
+    return np.ndarray.item(np.real_if_close(fid, tol))
 
 
-def trace_distance(rho, sigma):
+def infidelity(rho: np.ndarray, sigma: np.ndarray, tol: float = 1000) -> float:
+    """
+    Computes the infidelity, 1 - F(rho, sigma), between two quantum states rho and sigma
+    where F(rho, sigma) is the fidelity.
+
+    :param rho: Is a dim by dim positive matrix with unit trace.
+    :param sigma: Is a dim by dim positive matrix with unit trace.
+    :param tol: Tolerance in machine epsilons for np.real_if_close.
+    :return: Infidelity which is a scalar.
+    """
+    return 1 - fidelity(rho, sigma, tol)
+
+
+def trace_distance(rho: np.ndarray, sigma: np.ndarray) -> float:
     """
     Computes the trace distance between two states rho and sigma i.e.
     T(rho,sigma) = (1/2)||rho-sigma||_1 , where ||X||_1 denotes the 1 norm of X.
@@ -64,7 +102,7 @@ def trace_distance(rho, sigma):
     return (0.5) * np.linalg.norm(rho - sigma, 1)
 
 
-def bures_distance(rho, sigma):
+def bures_distance(rho: np.ndarray, sigma: np.ndarray) -> float:
     """
     Computes the Bures distance between two states rho and sigma i.e.
     D_B(rho,sigma)^2 = 2(1- sqrt[F(rho,sigma)]) , where F(rho,sigma) is the fidelity.
@@ -76,7 +114,7 @@ def bures_distance(rho, sigma):
     return np.sqrt(2 * (1 - np.sqrt(fidelity(rho, sigma))))
 
 
-def bures_angle(rho, sigma):
+def bures_angle(rho: np.ndarray, sigma: np.ndarray) -> float:
     """
     Computes the Bures angle (AKA Bures arc or Bures length) between two states rho and sigma i.e.
     D_A(rho,sigma) = arccos(sqrt[F(rho,sigma)]) , where F(rho,sigma) is the fidelity.
@@ -89,7 +127,9 @@ def bures_angle(rho, sigma):
     return np.arccos(np.sqrt(fidelity(rho, sigma)))
 
 
-def quantum_chernoff_bound(rho, sigma):
+def quantum_chernoff_bound(rho: np.ndarray,
+                           sigma: np.ndarray,
+                           tol: float =1000) -> Tuple[float, float]:
     r"""
     Computes the quantum Chernoff bound between rho and sigma. It is defined as
 
@@ -111,6 +151,7 @@ def quantum_chernoff_bound(rho, sigma):
 
     :param rho: Is a dim by dim positive matrix with unit trace.
     :param sigma: Is a dim by dim positive matrix with unit trace.
+    :param tol: Tolerance in machine epsilons for np.real_if_close.
     :return: the non-logarithmic quantum Chernoff bound and the s achieving the minimum.
     """
     def f(s):
@@ -119,12 +160,12 @@ def quantum_chernoff_bound(rho, sigma):
             np.matmul(fractional_matrix_power(rho, s), fractional_matrix_power(sigma, 1 - s)))
 
     f_min = minimize_scalar(f, bounds=(0, 1), method='bounded')
-    s_opt = f_min.x
-    qcb = f_min.fun
+    s_opt = np.real_if_close(f_min.x, tol)
+    qcb = np.real_if_close(f_min.fun, tol)
     return qcb, s_opt
 
 
-def hilbert_schmidt_ip(A, B):
+def hilbert_schmidt_ip(A: np.ndarray, B: np.ndarray, tol: float = 1000) -> float:
     r"""
     Computes the Hilbert-Schmidt (HS) inner product between two operators A and B as
         HS = (A|B) = Tr[A^\dagger B]
@@ -132,12 +173,14 @@ def hilbert_schmidt_ip(A, B):
 
     :param A: Is a dim by dim positive matrix with unit trace.
     :param B: Is a dim by dim positive matrix with unit trace.
+    :param tol: Tolerance in machine epsilons for np.real_if_close.
     :return: HS inner product which is a scalar.
     """
-    return np.trace(np.matmul(np.transpose(np.conj(A)), B))
+    hs_ip =  np.trace(np.matmul(np.transpose(np.conj(A)), B))
+    return np.ndarray.item(np.real_if_close(hs_ip, tol))
 
 
-def smith_fidelity(rho, sigma, power):
+def smith_fidelity(rho: np.ndarray, sigma: np.ndarray, power) -> float:
     """
     Computes the Smith fidelity F_S(rho,sigma,power) between two quantum states rho and sigma.
 
@@ -158,9 +201,10 @@ def smith_fidelity(rho, sigma, power):
     return np.sqrt(fidelity(rho, sigma)) ** power
 
 
-def total_variation_distance(P, Q):
+def total_variation_distance(P: np.ndarray, Q: np.ndarray) -> float:
     r"""
-    Computes the total variation distance between two probability measures P(x) and Q(x).
+    Computes the total variation distance between two (classical) probability
+    measures P(x) and Q(x).
 
     When x is a finite alphabet then the definition is
 
@@ -169,20 +213,23 @@ def total_variation_distance(P, Q):
     where tvd(P,Q) is in [0,1]. There is an alternate definition for non-finite alphabet measures
     involving a supremum.
 
-    :param P: Is a numpy array of length dim.
-    :param Q: Is a numpy array of length dim.
+    :param P: Is a dim by 1 np.ndarray.
+    :param Q: Is a dim by 1 np.ndarray.
     :return: total variation distance which is a scalar.
     """
-    if len(P) != len(Q):
+    rowsp, colsp = P.shape
+    rowsq, colsq = Q.shape
+    if not (colsp == colsq == 1 and rowsp > 1 and rowsq >1):
         raise ValueError("Arrays must be the same length")
-
-    return (np.sum( np.abs(P - Q) ) / 2)
+    return 0.5 * np.sum(np.abs(P - Q))
 
 
 # ============================================================================
 # Functions for quantum processes
 # ============================================================================
-def entanglement_fidelity(pauli_lio0: np.ndarray, pauli_lio1: np.ndarray) -> float:
+def entanglement_fidelity(pauli_lio0: np.ndarray,
+                          pauli_lio1: np.ndarray,
+                          tol: float = 1000) -> float:
     r"""Returns the entanglement fidelity (F_e) between two channels, E and F, represented as Pauli
     Liouville matrix. The expression is
 
@@ -208,13 +255,15 @@ def entanglement_fidelity(pauli_lio0: np.ndarray, pauli_lio1: np.ndarray) -> flo
 
     :param pauli_lio0: A dim**2 by dim**2 Pauli-Liouville matrix
     :param pauli_lio1: A dim**2 by dim**2 Pauli-Liouville matrix
+    :param tol: Tolerance in machine epsilons for np.real_if_close.
     :return: Returns the entanglement fidelity between pauli_lio0 and pauli_lio1 which is a scalar.
     """
     assert pauli_lio0.shape == pauli_lio1.shape
     assert pauli_lio0.shape[0] == pauli_lio1.shape[1]
     dim_squared = pauli_lio0.shape[0]
     dim = int(np.sqrt(dim_squared))
-    return np.trace(np.matmul(np.transpose(np.conj(pauli_lio0)), pauli_lio1)) / (dim ** 2)
+    Fe = np.trace(np.matmul(np.transpose(np.conj(pauli_lio0)), pauli_lio1)) / (dim ** 2)
+    return np.ndarray.item(np.real_if_close(Fe, tol))
 
 
 def process_fidelity(pauli_lio0: np.ndarray, pauli_lio1: np.ndarray) -> float:
@@ -300,7 +349,7 @@ def diamond_norm_distance(choi0: np.ndarray, choi1: np.ndarray) -> float:
     constraints += [W == W.H]
     constraints += [W >> 0]
 
-    constraints += [(W - cvx.kron(np.eye(dim), rho)) << 0]
+    constraints  = [(W - cvx.kron(np.eye(dim), rho)) << 0]
 
     J = cvx.Parameter([dim_squared, dim_squared], complex=True)
     objective = cvx.Maximize(cvx.real(cvx.trace(J.H * W)))
@@ -320,7 +369,7 @@ def _is_square(n):
 
 
 def watrous_bounds(choi: np.ndarray) -> float:
-    """Return the Watrous bounds for the diamond norm of a superoperator in
+    r"""Return the Watrous bounds for the diamond norm of a superoperator in
     the Choi representation. If this is applied to the difference of two Choi 
     representations, it yields bounds to the diamond norm distance.
 
@@ -330,14 +379,13 @@ def watrous_bounds(choi: np.ndarray) -> float:
 
     :param choi: dim1 by dim2 matrix (for qubits, dimi = 4**Ni, where Ni is a number of qubits)
     """
-
     if len(choi.shape) != 2:
         raise ValueError("Watrous bounds only defined for matrices")
 
     if not(_is_square(choi.shape[0]) and _is_square(choi.shape[1])):
         raise ValueError("Choi matrix must have dimensions that are perfect squares")
     
-    _,s,_ = np.linalg.svd(choi)
+    _, s, _ = np.linalg.svd(choi)
     nuclear_norm = np.sum(s)
-    
+
     return (nuclear_norm, choi.shape[0]*nuclear_norm)
