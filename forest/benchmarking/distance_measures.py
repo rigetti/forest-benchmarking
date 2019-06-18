@@ -54,7 +54,12 @@ def impurity(rho: np.ndarray, dim_renorm=False, tol: float = 1000) -> float:
     :param tol: Tolerance in machine epsilons for np.real_if_close.
     :return: L the impurity of the state.
     """
-    return 1 - purity(rho, dim_renorm, tol)
+    imp = 1 - np.trace(rho @ rho)
+    if dim_renorm:
+        dim = rho.shape[0]
+        imp = (dim / (dim - 1.0)) * imp
+    return np.ndarray.item(np.real_if_close(imp, tol))
+
 
 
 def fidelity(rho: np.ndarray, sigma: np.ndarray, tol: float = 1000) -> float:
@@ -291,6 +296,13 @@ def process_fidelity(pauli_lio0: np.ndarray, pauli_lio1: np.ndarray) -> float:
            https://doi.org/10.1016/S0375-9601(02)01272-0
            https://arxiv.org/abs/quant-ph/0205035
 
+
+    [C] Universal Quantum Gate Set Approaching Fault-Tolerant Thresholds with Superconducting Qubits
+        Jerry M. Chow, et al.
+        Phys. Rev. Lett. 109, 060501 (2012)
+        https://doi.org/10.1103/PhysRevLett.109.060501
+        https://arxiv.org/abs/1202.5344
+
     :param pauli_lio0: A dim**2 by dim**2 Pauli-Liouville matrix
     :param pauli_lio1: A dim**2 by dim**2 Pauli-Liouville matrix
     :return: The process fidelity between pauli_lio0 and pauli_lio1 which is a scalar.
@@ -303,6 +315,21 @@ def process_fidelity(pauli_lio0: np.ndarray, pauli_lio1: np.ndarray) -> float:
     Fe = entanglement_fidelity(pauli_lio0, pauli_lio1)
 
     return (dim * Fe + 1) / (dim + 1)
+
+
+def process_infidelity(pauli_lio0: np.ndarray, pauli_lio1: np.ndarray) -> float:
+    r"""Returns the infidelity between two channels, E and F, represented as a Pauli-Liouville
+    matrix. That is
+
+    inf_process(E,F) = 1- F_process(E,F).
+
+    See the docstrings for process_fidelity for more information.
+
+    :param pauli_lio0: A dim**2 by dim**2 Pauli-Liouville matrix
+    :param pauli_lio1: A dim**2 by dim**2 Pauli-Liouville matrix
+    :return: The process fidelity between pauli_lio0 and pauli_lio1 which is a scalar.
+    """
+    return 1 - process_fidelity(pauli_lio0, pauli_lio1)
 
 
 def diamond_norm_distance(choi0: np.ndarray, choi1: np.ndarray) -> float:
@@ -346,7 +373,7 @@ def diamond_norm_distance(choi0: np.ndarray, choi1: np.ndarray) -> float:
     constraints += [W == W.H]
     constraints += [W >> 0]
 
-    constraints  += [(W - cvx.kron(np.eye(dim), rho)) << 0]
+    constraints += [(W - cvx.kron(np.eye(dim), rho)) << 0]
 
     J = cvx.Parameter([dim_squared, dim_squared], complex=True)
     objective = cvx.Maximize(cvx.real(cvx.trace(J.H * W)))
