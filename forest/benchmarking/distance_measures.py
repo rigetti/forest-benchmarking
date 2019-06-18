@@ -321,7 +321,7 @@ def process_infidelity(pauli_lio0: np.ndarray, pauli_lio1: np.ndarray) -> float:
     r"""Returns the infidelity between two channels, E and F, represented as a Pauli-Liouville
     matrix. That is
 
-    inf_process(E,F) = 1- F_process(E,F).
+    process_infidelity(E,F) = 1- F_process(E,F).
 
     See the docstrings for process_fidelity for more information.
 
