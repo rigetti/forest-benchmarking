@@ -349,7 +349,7 @@ def diamond_norm_distance(choi0: np.ndarray, choi1: np.ndarray) -> float:
     constraints += [W == W.H]
     constraints += [W >> 0]
 
-    constraints  = [(W - cvx.kron(np.eye(dim), rho)) << 0]
+    constraints  += [(W - cvx.kron(np.eye(dim), rho)) << 0]
 
     J = cvx.Parameter([dim_squared, dim_squared], complex=True)
     objective = cvx.Maximize(cvx.real(cvx.trace(J.H * W)))
