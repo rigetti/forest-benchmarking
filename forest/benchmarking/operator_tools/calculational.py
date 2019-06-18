@@ -43,6 +43,8 @@ def outer_product(bra1: np.ndarray, bra2: np.ndarray) -> np.ndarray:
     rows2, cols2 = bra2.shape
     if cols1 == cols2 == 1 and rows1 > 1 and rows2 > 1:
         out_prod = np.outer(bra1, bra2.conj())
+    else:
+        raise ValueError("The vectors do not have the correct dimensions.")
     return out_prod
 
 
@@ -62,4 +64,6 @@ def inner_product(bra1: np.ndarray, bra2: np.ndarray) -> complex:
     rows2, cols2 = bra2.shape
     if cols1 == cols2 == 1 and rows1 > 1 and rows2 > 1:
         in_prod = np.transpose(bra1.conj()) @ bra2
+    else:
+        raise ValueError("The vectors do not have the correct dimensions.")
     return in_prod
