@@ -29,13 +29,11 @@ def purity(rho: np.ndarray, dim_renorm=False, tol: float = 1000) -> float:
     :param tol: Tolerance in machine epsilons for np.real_if_close.
     :return: P the purity of the state.
     """
+    p = np.trace(rho @ rho)
     if dim_renorm:
-        dim = np.shape(rho)[0]
-        Ptemp = np.trace(np.matmul(rho, rho))
-        P = (dim / (dim - 1.0)) * (Ptemp - 1.0 / dim)
-    else:
-        P = np.trace(np.matmul(rho, rho))
-    return np.ndarray.item(np.real_if_close(P, tol))
+        dim = rho.shape[0]
+        p = (dim / (dim - 1.0)) * (p - 1.0 / dim)
+    return np.ndarray.item(np.real_if_close(p, tol))
 
 
 def impurity(rho: np.ndarray, dim_renorm=False, tol: float = 1000) -> float:
@@ -46,7 +44,7 @@ def impurity(rho: np.ndarray, dim_renorm=False, tol: float = 1000) -> float:
     some applications this can be undesirable. For this reason we introduce an optional dimensional
     renormalization flag with the following behavior
 
-    If the dimensional renormalization flag is FALSE (default) then  1/dim ≤ L ≤ 1.
+    If the dimensional renormalization flag is FALSE (default) then  0 ≤ L ≤ 1/dim.
     If the dimensional renormalization flag is TRUE then 0 ≤ L ≤ 1.
 
     where dim is the dimension of ρ's Hilbert space.
@@ -65,8 +63,7 @@ def fidelity(rho: np.ndarray, sigma: np.ndarray, tol: float = 1000) -> float:
 
     If the states are pure the expression reduces to F(|psi>,|phi>) = |<psi|phi>|^2.
 
-    The fidelity obeys 0 ≤ F(rho,sigma) ≤ 1, where F(rho,sigma)=1 iff rho = sigma and
-    F(rho,sigma)= 0 iff
+    The fidelity obeys 0 ≤ F(rho,sigma) ≤ 1, where F(rho,sigma)=1 iff rho = sigma.
 
     :param rho: Is a dim by dim positive matrix with unit trace.
     :param sigma: Is a dim by dim positive matrix with unit trace.
@@ -152,7 +149,7 @@ def quantum_chernoff_bound(rho: np.ndarray,
     :param rho: Is a dim by dim positive matrix with unit trace.
     :param sigma: Is a dim by dim positive matrix with unit trace.
     :param tol: Tolerance in machine epsilons for np.real_if_close.
-    :return: the non-logarithmic quantum Chernoff bound and the s achieving the minimum.
+    :return: The non-logarithmic quantum Chernoff bound and the s achieving the minimum.
     """
     def f(s):
         s = np.real_if_close(s)
