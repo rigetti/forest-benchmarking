@@ -42,7 +42,7 @@ def impurity(rho: np.ndarray, dim_renorm=False, tol: float = 1000) -> float:
     """
     Calculates the impurity (or linear entropy) L = 1 - tr[ρ**2] of a quantum state ρ.
 
-    As stated above lower value of the impurity depends on the dimension of ρ's Hilbert space. For
+    As stated above the lower value of the impurity depends on the dimension of ρ's Hilbert space. For
     some applications this can be undesirable. For this reason we introduce an optional dimensional
     renormalization flag with the following behavior
 
@@ -349,7 +349,7 @@ def diamond_norm_distance(choi0: np.ndarray, choi1: np.ndarray) -> float:
     constraints += [W == W.H]
     constraints += [W >> 0]
 
-    constraints  = [(W - cvx.kron(np.eye(dim), rho)) << 0]
+    constraints  += [(W - cvx.kron(np.eye(dim), rho)) << 0]
 
     J = cvx.Parameter([dim_squared, dim_squared], complex=True)
     objective = cvx.Maximize(cvx.real(cvx.trace(J.H * W)))
