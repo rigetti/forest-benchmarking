@@ -13,6 +13,7 @@ def partial_trace(rho, keep, dims, optimize=False):
                  if the space is A x B x C x D and we want to trace out B and D, keep = [0,2].
     :param dims: An array of the dimensions of each space. For example, if the space is
                  A x B x C x D, dims = [dim_A, dim_B, dim_C, dim_D].
+    :param optimize: optimize argument in einsum
     :return:  ρ_a, a 2D array i.e. the traced matrix
     """
     # Code from
@@ -41,11 +42,9 @@ def outer_product(bra1: np.ndarray, bra2: np.ndarray) -> np.ndarray:
     """
     rows1, cols1 = bra1.shape
     rows2, cols2 = bra2.shape
-    if cols1 == cols2 == 1 and rows1 > 1 and rows2 > 1:
-        out_prod = np.outer(bra1, bra2.conj())
-    else:
+    if not (cols1 == cols2 == 1 and rows1 > 1 and rows2 > 1):
         raise ValueError("The vectors do not have the correct dimensions.")
-    return out_prod
+    return np.outer(bra1, bra2.conj())
 
 
 def inner_product(bra1: np.ndarray, bra2: np.ndarray) -> complex:
@@ -62,8 +61,6 @@ def inner_product(bra1: np.ndarray, bra2: np.ndarray) -> complex:
     """
     rows1, cols1 = bra1.shape
     rows2, cols2 = bra2.shape
-    if cols1 == cols2 == 1 and rows1 > 1 and rows2 > 1:
-        in_prod = np.transpose(bra1.conj()) @ bra2
-    else:
+    if not (cols1 == cols2 == 1 and rows1 > 1 and rows2 > 1):
         raise ValueError("The vectors do not have the correct dimensions.")
-    return in_prod
+    return np.transpose(bra1.conj()) @ bra2

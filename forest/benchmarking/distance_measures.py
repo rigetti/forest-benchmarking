@@ -61,7 +61,6 @@ def impurity(rho: np.ndarray, dim_renorm=False, tol: float = 1000) -> float:
     return np.ndarray.item(np.real_if_close(imp, tol))
 
 
-
 def fidelity(rho: np.ndarray, sigma: np.ndarray, tol: float = 1000) -> float:
     """
     Computes the fidelity F(rho,sigma) between two quantum states rho and sigma.
@@ -131,7 +130,7 @@ def bures_angle(rho: np.ndarray, sigma: np.ndarray) -> float:
 
 def quantum_chernoff_bound(rho: np.ndarray,
                            sigma: np.ndarray,
-                           tol: float =1000) -> Tuple[float, float]:
+                           tol: float = 1000) -> Tuple[float, float]:
     r"""
     Computes the quantum Chernoff bound between rho and sigma. It is defined as
 
@@ -156,6 +155,7 @@ def quantum_chernoff_bound(rho: np.ndarray,
     :param tol: Tolerance in machine epsilons for np.real_if_close.
     :return: The non-logarithmic quantum Chernoff bound and the s achieving the minimum.
     """
+
     def f(s):
         s = np.real_if_close(s)
         return np.trace(
@@ -178,7 +178,7 @@ def hilbert_schmidt_ip(A: np.ndarray, B: np.ndarray, tol: float = 1000) -> float
     :param tol: Tolerance in machine epsilons for np.real_if_close.
     :return: HS inner product which is a scalar.
     """
-    hs_ip =  np.trace(np.matmul(np.transpose(np.conj(A)), B))
+    hs_ip = np.trace(np.matmul(np.transpose(np.conj(A)), B))
     return np.ndarray.item(np.real_if_close(hs_ip, tol))
 
 
@@ -221,7 +221,7 @@ def total_variation_distance(P: np.ndarray, Q: np.ndarray) -> float:
     """
     rowsp, colsp = P.shape
     rowsq, colsq = Q.shape
-    if not (colsp == colsq == 1 and rowsp > 1 and rowsq >1):
+    if not (colsp == colsq == 1 and rowsp > 1 and rowsq > 1):
         raise ValueError("Arrays must be the same length")
     return 0.5 * np.sum(np.abs(P - Q))
 
@@ -232,7 +232,8 @@ def total_variation_distance(P: np.ndarray, Q: np.ndarray) -> float:
 def entanglement_fidelity(pauli_lio0: np.ndarray,
                           pauli_lio1: np.ndarray,
                           tol: float = 1000) -> float:
-    r"""Returns the entanglement fidelity (F_e) between two channels, E and F, represented as Pauli
+    r"""
+    Returns the entanglement fidelity (F_e) between two channels, E and F, represented as Pauli
     Liouville matrix. The expression is
 
             F_e(E,F) = Tr[E^\dagger F] / (dim ** 2),
@@ -389,11 +390,12 @@ def diamond_norm_distance(choi0: np.ndarray, choi1: np.ndarray) -> float:
 
 
 def _is_square(n):
-    return n == np.round(np.sqrt(n))**2
+    return n == np.round(np.sqrt(n)) ** 2
 
 
-def watrous_bounds(choi: np.ndarray) -> float:
-    r"""Return the Watrous bounds for the diamond norm of a superoperator in
+def watrous_bounds(choi: np.ndarray) -> Tuple[float, float]:
+    r"""
+    Return the Watrous bounds for the diamond norm of a superoperator in
     the Choi representation. If this is applied to the difference of two Choi 
     representations, it yields bounds to the diamond norm distance.
 
@@ -401,15 +403,15 @@ def watrous_bounds(choi: np.ndarray) -> float:
     StackOverflow answer, although the results can also be found scattered in 
     the literature.
 
-    :param choi: dim1 by dim2 matrix (for qubits, dimi = 4**Ni, where Ni is a number of qubits)
+    :param choi: dim1 by dim2 matrix (for qubits, dim = 4**Ni, where Ni is a number of qubits)
     """
     if len(choi.shape) != 2:
         raise ValueError("Watrous bounds only defined for matrices")
 
-    if not(_is_square(choi.shape[0]) and _is_square(choi.shape[1])):
+    if not (_is_square(choi.shape[0]) and _is_square(choi.shape[1])):
         raise ValueError("Choi matrix must have dimensions that are perfect squares")
-    
+
     _, s, _ = np.linalg.svd(choi)
     nuclear_norm = np.sum(s)
 
-    return (nuclear_norm, choi.shape[0]*nuclear_norm)
+    return nuclear_norm, choi.shape[0] * nuclear_norm
