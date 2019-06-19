@@ -76,7 +76,7 @@ def fidelity(rho: np.ndarray, sigma: np.ndarray, tol: float = 1000) -> float:
     :return: Fidelity which is a scalar.
     """
     sqrt_rho = sqrtm_psd(rho)
-    fid = (np.trace(sqrtm_psd(np.matmul(np.matmul(sqrt_rho, sigma), sqrt_rho)))) ** 2
+    fid = (np.trace(sqrtm_psd(sqrt_rho @ sigma @ sqrt_rho))) ** 2
     return np.ndarray.item(np.real_if_close(fid, tol))
 
 
