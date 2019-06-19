@@ -5,6 +5,7 @@ import numpy as np
 from scipy.linalg import sqrtm
 from scipy.linalg import fractional_matrix_power
 from scipy.optimize import minimize_scalar
+from forest.benchmarking.operator_tools.calculational import sqrtm_psd
 
 
 # ===================================================================================================
@@ -74,7 +75,8 @@ def fidelity(rho: np.ndarray, sigma: np.ndarray, tol: float = 1000) -> float:
     :param tol: Tolerance in machine epsilons for np.real_if_close.
     :return: Fidelity which is a scalar.
     """
-    fid = (np.trace(sqrtm(np.matmul(np.matmul(sqrtm(rho), sigma), sqrtm(rho))))) ** 2
+    sqrt_rho = sqrtm_psd(rho)
+    fid = (np.trace(sqrtm_psd(np.matmul(np.matmul(sqrt_rho, sigma), sqrt_rho)))) ** 2
     return np.ndarray.item(np.real_if_close(fid, tol))
 
 
