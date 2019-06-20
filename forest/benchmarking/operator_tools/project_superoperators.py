@@ -16,7 +16,7 @@ from forest.benchmarking.utils import partial_trace
 from forest.benchmarking.operator_tools.superoperator_transformations import vec, unvec, kraus2choi
 
 
-def proj_choi_to_completely_positive(choi: np.ndarray) -> np.ndarray:
+def proj_choi_to_completely_positive(choi: np.ndarray, check_finite: bool = True) -> np.ndarray:
     """
     Projects the Choi representation of a process into the nearest Choi matrix in the space of
     completely positive maps.
@@ -30,10 +30,11 @@ def proj_choi_to_completely_positive(choi: np.ndarray) -> np.ndarray:
           https://arxiv.org/abs/1803.10062
 
     :param choi: Choi representation of a process
+    :param check_finite: check that the input matrices contain only finite numbers.
     :return: closest Choi matrix in the space of completely positive maps
     """
-    hermitian = (choi + choi.conj().T) / 2  # enforce Hermiticity
-    evals, v = np.linalg.eigh(hermitian)
+    hermitian_choi = (choi + choi.conj().T) / 2  # enforce Hermiticity
+    evals, v = linalg.eigh(hermitian_choi, check_finite=check_finite)
     evals[evals < 0] = 0  # enforce completely positive by removing negative eigenvalues
     diag = np.diag(evals)
     return v @ diag @ v.conj().T
@@ -54,7 +55,7 @@ def proj_choi_to_trace_non_increasing(choi: np.ndarray) -> np.ndarray:
     pt = partial_trace(choi, dims=[dim, dim], keep=[0])
 
     hermitian = (pt + pt.conj().T) / 2  # enforce Hermiticity
-    d, v = np.linalg.eigh(hermitian)
+    d, v = linalg.eigh(hermitian)
     d[d > 1] = 1  # enforce trace preserving
     D = np.diag(d)
     projection = v @ D @ v.conj().T
@@ -150,7 +151,8 @@ def proj_choi_to_unitary(choi: np.ndarray, check_finite: bool = True) -> np.ndar
     """
     Compute the unitary closest to a quantum process specified by a Choi matrix.
 
-    See the following reference for more details:
+    This function enforces Hermiticity of the Choi matrix. See the following reference for more
+    details:
 
     Interference of Quantum Channels
     Daniel K. L. Oi
@@ -163,10 +165,11 @@ def proj_choi_to_unitary(choi: np.ndarray, check_finite: bool = True) -> np.ndar
     :return: choi matrix corresponding to the closest unitary
     """
     dim = int(np.sqrt(choi.shape[0]))
-    vals, vecs = linalg.eigh(choi, check_finite=check_finite)
+    hermitian_choi = (choi + choi.conj().T) / 2  # enforce Hermiticity
+    vals, vs = linalg.eigh(hermitian_choi, check_finite=check_finite)
 
     # vec corresponding to largest eval =  Kraus OP with largest norm
-    large_eigen_vec = vecs[:, np.argmax(vals)].reshape((dim * dim, 1))
+    large_eigen_vec = vs[:, np.argmax(vals)].reshape((dim * dim, 1))
     kraus = unvec(large_eigen_vec)
 
     U, s, V = linalg.svd(kraus)
