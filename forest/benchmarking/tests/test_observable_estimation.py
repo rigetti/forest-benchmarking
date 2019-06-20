@@ -1796,54 +1796,6 @@ def test_raw_statistics_2q_nontrivial_entangled_state(forest):
     np.testing.assert_allclose(result_std_err, simulated_std_err, atol=3e-2)
 
 
-# def test_corrected_statistics_2q_nontrivial_nonentangled_state(forest):
-#     # testing that we can successfully correct for observed statistics
-#     # in the presence of readout errors, even for 2q nontrivial but
-#     # nonentangled states
-#     # Note: this only tests for exhaustive symmetrization in the presence
-#     #       of uncorrelated errors
-#     qc = get_qc('2q-qvm')
-#     expt = ExperimentSetting(TensorProductState(), sZ(0) * sZ(1))
-#     theta1, theta2 = np.random.uniform(0.0, 2 * np.pi, size=2)
-#     p = Program(RX(theta1, 0), RX(theta2, 1))
-#     p00, p11, q00, q11 = np.random.uniform(0.70, 0.99, size=4)
-#     p.define_noisy_readout(0, p00=p00, p11=p11)
-#     p.define_noisy_readout(1, p00=q00, p11=q11)
-#     obs_expt = ObservablesExperiment(settings=[expt], program=p)
-#
-#     num_simulations = 10
-#
-#     expectations = []
-#     std_errs = []
-#
-#     for sim_num in range(num_simulations):
-#         qc.qam.random_seed = sim_num+1
-#         results = estimate_observables(qc, obs_expt,
-#                                        symmetrization_method=exhaustive_symmetrization,
-#                                        num_shots=1000)
-#         expt_results = list(calibrate_observable_estimates(qc, list(results), noisy_program=p))
-#         expectations.append([res.expectation for res in expt_results])
-#         std_errs.append([res.std_err for res in expt_results])
-#     expectations = np.array(expectations)
-#     std_errs = np.array(std_errs)
-#     result_expectation = np.mean(expectations, axis=0)
-#     result_std_err = np.mean(std_errs, axis=0)
-#
-#     # calculate amplitudes squared of pure state
-#     alph00 = (np.cos(theta1 / 2) * np.cos(theta2 / 2)) ** 2
-#     alph01 = (np.cos(theta1 / 2) * np.sin(theta2 / 2)) ** 2
-#     alph10 = (np.sin(theta1 / 2) * np.cos(theta2 / 2)) ** 2
-#     alph11 = (np.sin(theta1 / 2) * np.sin(theta2 / 2)) ** 2
-#     # calculate Z^{\otimes 2} expectation, and error of the mean
-#     expected_expectation = (alph00 + alph11) - (alph01 + alph10)
-#     expected_std_err = np.sqrt(np.var(expectations))
-#     # compare against simulated results
-#     print(expectations)
-#     print(std_errs)
-#     np.testing.assert_allclose(result_expectation, expected_expectation, atol=3e-2)
-#     np.testing.assert_allclose(result_std_err, expected_std_err, atol=3e-2)
-
-
 def _point_state_fidelity_estimate(v, dim=2):
     """:param v: array of expectation values
     :param dim: dimensionality of the Hilbert space"""
