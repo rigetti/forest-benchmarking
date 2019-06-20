@@ -229,6 +229,7 @@ def _random_2q_programs(n_progs=3):
 
 
 def test_estimate_observables_many_progs(forest):
+    # for "random programs" calculate wfn.expectation see if operator estimation gets it right
     expts = [
         ExperimentSetting(TensorProductState(), o1 * o2)
         for o1, o2 in itertools.product([sI(0), sX(0), sY(0), sZ(0)], [sI(1), sX(1), sY(1), sZ(1)])
@@ -237,6 +238,7 @@ def test_estimate_observables_many_progs(forest):
     qc = get_qc('2q-qvm')
     qc.qam.random_seed = 1
     qc.qam.random_seed = 0
+    # default n_progs in _random_2q_programs is now three
     for prog in _random_2q_programs():
         suite = ObservablesExperiment(expts, program=prog)
         assert len(suite) == 4 * 4
@@ -599,11 +601,12 @@ def test_estimate_observables_uncalibrated_asymmetric_readout(forest):
 
 
 def test_estimate_observables_uncalibrated_symmetric_readout(forest):
+    #
     qc = get_qc('1q-qvm')
     qc.qam.random_seed = 1
-    expt1 = ExperimentSetting(TensorProductState(plusX(0)), sX(0))
-    expt2 = ExperimentSetting(TensorProductState(plusY(0)), sY(0))
-    expt3 = ExperimentSetting(TensorProductState(plusZ(0)), sZ(0))
+    expt1 = ExperimentSetting(TensorProductState(plusX(0)), sX(0)) # prep |+> measure X
+    expt2 = ExperimentSetting(TensorProductState(plusY(0)), sY(0)) # prep |+i> measure Y
+    expt3 = ExperimentSetting(TensorProductState(plusZ(0)), sZ(0)) # prep |0> measure Z
     p = Program()
     p00, p11 = 0.90, 0.80
     p.define_noisy_readout(0, p00=p00, p11=p11)
