@@ -1,5 +1,5 @@
 import numpy as np
-from pyquil.gate_matrices import X, Y, Z, H
+from pyquil.gate_matrices import I, X, Y, Z, H, CNOT
 from forest.benchmarking.operator_tools.superoperator_transformations import kraus2choi
 from forest.benchmarking.operator_tools.validate_superoperator import *
 from forest.benchmarking.operator_tools.project_superoperators import *
@@ -90,3 +90,25 @@ def test_proj_to_cptp():
     assert choi_is_completely_positive(physical_choi, atol=1e-1)
     assert choi_is_cptp(physical_choi, atol=1e-1)
 
+def test_choi_to_unitary():
+    choi_CNOT = kraus2choi(CNOT)
+    ans = proj_choi_to_unitary(choi_CNOT)
+    assert np.allclose(choi_CNOT, ans)
+    choi_Z = kraus2choi(Z)
+    ans = proj_choi_to_unitary(choi_Z)
+    assert np.allclose(choi_Z, ans)
+    choi_H = kraus2choi(H)
+    ans = proj_choi_to_unitary(choi_H)
+    assert np.allclose(choi_H, ans)
+    def bit_flip_kraus(p):
+        M0 = np.sqrt(1 - p) * I
+        M1 = np.sqrt(p) * X
+        return [M0, M1]
+    # close to identity
+    choi_I = kraus2choi(I)
+    ans = proj_choi_to_unitary(kraus2choi(bit_flip_kraus(0.1)))
+    assert np.allclose(choi_I, ans)
+    # close to Pauli X
+    choi_X = kraus2choi(X)
+    ans = proj_choi_to_unitary(kraus2choi(bit_flip_kraus(0.9)))
+    assert np.allclose(choi_X, ans)

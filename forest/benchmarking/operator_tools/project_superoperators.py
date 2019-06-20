@@ -11,8 +11,9 @@ A good reference for these methods is:
       https://arxiv.org/abs/1803.10062
 """
 import numpy as np
+from scipy import linalg
 from forest.benchmarking.utils import partial_trace
-from forest.benchmarking.operator_tools.superoperator_transformations import vec
+from forest.benchmarking.operator_tools.superoperator_transformations import vec, unvec, kraus2choi
 
 
 def proj_choi_to_completely_positive(choi: np.ndarray) -> np.ndarray:
@@ -143,3 +144,33 @@ def proj_choi_to_physical(choi: np.ndarray, make_trace_preserving: bool = True) 
         last_state = new_state
 
     return new_state
+
+
+def proj_choi_to_unitary(choi: np.ndarray, check_finite: bool = True) -> np.ndarray:
+    """
+    Compute the unitary closest to a quantum process specified by a Choi matrix.
+
+    See the following reference for more details:
+
+    Interference of Quantum Channels
+    Daniel K. L. Oi
+    Phys. Rev. Lett. 91, 067902 (2003)
+    https://doi.org/10.1103/PhysRevLett.91.067902
+    https://arxiv.org/abs/quant-ph/0303178
+
+    :param choi: the Choi representation of a quantum process.
+    :param check_finite: check that the input matrices contain only finite numbers.
+    :return: choi matrix corresponding to the closest unitary
+    """
+    dim = int(np.sqrt(choi.shape[0]))
+    vals, vecs = linalg.eigh(choi, check_finite=check_finite)
+
+    # vec corresponding to largest eval =  Kraus OP with largest norm
+    large_eigen_vec = vecs[:, np.argmax(vals)].reshape((dim * dim, 1))
+    kraus = unvec(large_eigen_vec)
+
+    U, s, V = linalg.svd(kraus)
+    unitary = U @ V
+    # pick a global phase convention, we choose the first element
+    phase = np.angle(unitary[0, 0])
+    return kraus2choi(np.exp(-1j * phase) * unitary)
