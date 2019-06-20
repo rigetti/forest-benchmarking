@@ -1068,45 +1068,6 @@ def test_bit_flip_channel_fidelity(forest):
     np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
 
 
-def test_dephasing_channel_fidelity(forest):
-    """
-    We use Eqn (5) of https://arxiv.org/abs/quant-ph/0701138 to compare the fidelity
-    """
-    qc = get_qc('1q-qvm')
-    # prepare experiment settings
-    expt1 = ExperimentSetting(TensorProductState(plusX(0)), sX(0))
-    expt2 = ExperimentSetting(TensorProductState(plusY(0)), sY(0))
-    expt3 = ExperimentSetting(TensorProductState(plusZ(0)), sZ(0))
-    expt_list = [expt1, expt2, expt3]
-
-    # prepare noisy dephasing channel as program for some random value of probability
-    prob = np.random.uniform(0.1, 0.5)
-    # Kraus operators for the dephasing channel
-    kraus_ops = [np.sqrt(1 - prob) * np.array([[1, 0], [0, 1]]),
-                 np.sqrt(prob) * np.array([[1, 0], [0, -1]])]
-    p = Program(Pragma("PRESERVE_BLOCK"), I(0), Pragma("END_PRESERVE_BLOCK"))
-    p.define_noisy_gate("I", [0], kraus_ops)
-
-    # prepare ObservablesExperiment
-    process_exp = ObservablesExperiment(settings=expt_list, program=p)
-    # list to store experiment results
-    num_simulations = 10
-    expts = []
-    for sim_num in range(num_simulations):
-        qc.qam.random_seed = sim_num+1
-        expt_results = []
-        for res in estimate_observables(qc, process_exp, num_shots=1000):
-            expt_results.append(res.expectation)
-        expts.append(expt_results)
-
-    expts = np.array(expts)
-    results = np.mean(expts, axis=0)
-    estimated_fidelity = _point_channel_fidelity_estimate(results)
-    # how close is this channel to the identity operator
-    expected_fidelity = 1 - (2 / 3) * prob
-    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
-
-
 def test_depolarizing_channel_fidelity(forest):
     """
     We use Eqn (5) of https://arxiv.org/abs/quant-ph/0701138 to compare the fidelity
@@ -1200,49 +1161,6 @@ def test_bit_flip_channel_fidelity_readout_error(forest):
     # applying the X gate with probability `prob`, and applying the identity gate
     # with probability `1 - prob`
     kraus_ops = [np.sqrt(1 - prob) * np.array([[1, 0], [0, 1]]), np.sqrt(prob) * np.array([[0, 1], [1, 0]])]
-    p = Program(Pragma("PRESERVE_BLOCK"), I(0), Pragma("END_PRESERVE_BLOCK"))
-    p.define_noisy_gate("I", [0], kraus_ops)
-    # add some readout error
-    p.define_noisy_readout(0, 0.95, 0.82)
-
-    # prepare ObservablesExperiment
-    process_exp = ObservablesExperiment(settings=expt_list, program=p)
-    # list to store experiment results
-    num_simulations = 10
-    expts = []
-    for sim_num in range(num_simulations):
-        qc.qam.random_seed = sim_num+1
-        expt_results = []
-        results = estimate_observables(qc, process_exp,
-                                       symmetrization_method=exhaustive_symmetrization)
-        for res in calibrate_observable_estimates(qc, list(results), noisy_program=p):
-            expt_results.append(res.expectation)
-        expts.append(expt_results)
-
-    expts = np.array(expts)
-    results = np.mean(expts, axis=0)
-    estimated_fidelity = _point_channel_fidelity_estimate(results)
-    # how close is this channel to the identity operator
-    expected_fidelity = 1 - (2 / 3) * prob
-    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
-
-
-def test_dephasing_channel_fidelity_readout_error(forest):
-    """
-    We use Eqn (5) of https://arxiv.org/abs/quant-ph/0701138 to compare the fidelity
-    """
-    qc = get_qc('1q-qvm')
-    # prepare experiment settings
-    expt1 = ExperimentSetting(TensorProductState(plusX(0)), sX(0))
-    expt2 = ExperimentSetting(TensorProductState(plusY(0)), sY(0))
-    expt3 = ExperimentSetting(TensorProductState(plusZ(0)), sZ(0))
-    expt_list = [expt1, expt2, expt3]
-
-    # prepare noisy dephasing channel as program for some random value of probability
-    prob = np.random.uniform(0.1, 0.5)
-    # Kraus operators for the dephasing channel
-    kraus_ops = [np.sqrt(1 - prob) * np.array([[1, 0], [0, 1]]),
-                 np.sqrt(prob) * np.array([[1, 0], [0, -1]])]
     p = Program(Pragma("PRESERVE_BLOCK"), I(0), Pragma("END_PRESERVE_BLOCK"))
     p.define_noisy_gate("I", [0], kraus_ops)
     # add some readout error
