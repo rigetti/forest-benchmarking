@@ -34,7 +34,7 @@ def estimate_confusion_matrix(qc: QuantumComputer, qubit: int, shots: int = 1000
     The confusion matrix will be of the form
         [[ p(0 | 0)     p(0 | 1)]
          [ p(1 | 0)     p(1 | 1)]]
-    where each row sums to one. Note that the matrix need not be symmetrical.
+    where each column sums to one. Note that the matrix need not be symmetrical.
 
     :param qc: The quantum computer to estimate the confusion matrix.
     :param qubit: The actual physical qubit to measure
