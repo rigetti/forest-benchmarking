@@ -53,13 +53,6 @@ def test_all_pauli_z_terms():
             assert PauliTerm(pauli_str1, 0) * PauliTerm(pauli_str2, 1) in a2
 
 
-def test_partial_trace():
-    I = np.asarray([[1, 0], [0, 1]])
-    rho = np.kron(I, I) / 4
-    np.testing.assert_array_equal(I / 2, partial_trace(rho, [1], [2, 2]))
-    np.testing.assert_array_equal(I / 2, partial_trace(rho, [0], [2, 2]))
-
-
 def test_bitstring_prep():
     # no flips
     flip_prog = bitstring_prep([0, 1, 2, 3, 4, 5], [0, 0, 0, 0, 0, 0])
