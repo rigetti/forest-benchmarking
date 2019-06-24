@@ -27,7 +27,7 @@ Further references include:
 """
 from typing import Sequence
 import numpy as np
-from forest.benchmarking.utils import partial_trace
+from forest.benchmarking.operator_tools.calculational import partial_trace
 from forest.benchmarking.operator_tools.superoperator_transformations import choi2kraus
 from forest.benchmarking.operator_tools.validate_operator import (
     is_positive_semidefinite_matrix, is_identity_matrix, is_hermitian_matrix)

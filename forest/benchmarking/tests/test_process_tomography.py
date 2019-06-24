@@ -5,8 +5,8 @@ from requests.exceptions import RequestException
 from rpcq.messages import PyQuilExecutableResponse
 
 from forest.benchmarking.compilation import basic_compile
-from forest.benchmarking.random_operators import haar_rand_unitary
-from forest.benchmarking.superoperator_tools import kraus2choi
+from forest.benchmarking.operator_tools.random_operators import haar_rand_unitary
+from forest.benchmarking.operator_tools.superoperator_transformations import kraus2choi
 from forest.benchmarking.tomography import generate_process_tomography_experiment, \
     pgdb_process_estimate, linear_inv_process_estimate
 from forest.benchmarking.observable_estimation import estimate_observables, ExperimentResult, \

@@ -27,7 +27,7 @@ Further references include:
 """
 from typing import Sequence
 import numpy as np
-from forest.benchmarking.utils import partial_trace
+from forest.benchmarking.operator_tools.calculational import partial_trace
 
 
 def apply_kraus_ops_2_state(kraus_ops: Sequence[np.ndarray], state: np.ndarray) -> np.ndarray:
