@@ -1272,6 +1272,7 @@ def test_unitary_channel_fidelity_readout_error(forest):
     np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
 
 
+@pytest.mark.slow
 def test_2q_unitary_channel_fidelity_readout_error(forest):
     """
     We use Eqn (5) of https://arxiv.org/abs/quant-ph/0701138 to compare the fidelity
