@@ -180,10 +180,12 @@ def generate_monte_carlo_state_dfe_experiment(program: Program, qubits: List[int
     [DFE1]  Practical Characterization of Quantum Devices without Tomography
             Silva et al., PRL 107, 210404 (2011)
             https://doi.org/10.1103/PhysRevLett.107.210404
+            https://arxiv.org/abs/1104.3835
 
     [DFE2]  Direct Fidelity Estimation from Few Pauli Measurements
             Flammia and Liu, PRL 106, 230501 (2011)
             https://doi.org/10.1103/PhysRevLett.106.230501
+            https://arxiv.org/abs/1104.4695
 
     :param program: A program comprised of clifford gates that constructs a state
         for which we estimate the fidelity.
@@ -215,10 +217,12 @@ def generate_monte_carlo_process_dfe_experiment(program: Program, qubits: List[i
     [DFE1]  Practical Characterization of Quantum Devices without Tomography
             Silva et al., PRL 107, 210404 (2011)
             https://doi.org/10.1103/PhysRevLett.107.210404
+            https://arxiv.org/abs/1104.3835
 
     [DFE2]  Direct Fidelity Estimation from Few Pauli Measurements
             Flammia and Liu, PRL 106, 230501 (2011)
             https://doi.org/10.1103/PhysRevLett.106.230501
+            https://arxiv.org/abs/1104.4695
 
     :param program: A program comprised of Clifford group gates that constructs a state
         for which we estimate the fidelity.
