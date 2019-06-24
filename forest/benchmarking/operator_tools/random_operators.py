@@ -15,7 +15,7 @@ from numpy import linalg as la
 from scipy.linalg import sqrtm
 from sympy.combinatorics import Permutation
 from numpy.random import RandomState
-from forest.benchmarking.utils import partial_trace
+from forest.benchmarking.operator_tools.calculational import partial_trace
 
 
 def ginibre_matrix_complex(dim: int, k: int, rs: Optional[RandomState] = None) -> np.ndarray:

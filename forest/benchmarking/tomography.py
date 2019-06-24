@@ -12,7 +12,7 @@ from pyquil.unitary_tools import lifted_pauli as pauli2matrix, lifted_state_oper
 
 import forest.benchmarking.distance_measures as dm
 from forest.benchmarking.utils import all_traceless_pauli_terms
-from forest.benchmarking.superoperator_tools import vec, unvec, proj_choi_to_physical
+from forest.benchmarking.operator_tools import vec, unvec, proj_choi_to_physical
 from forest.benchmarking.operator_tools.project_state_matrix import project_state_matrix_to_physical
 from forest.benchmarking.observable_estimation import ExperimentSetting, ObservablesExperiment, \
     ExperimentResult, SIC0, SIC1, SIC2, SIC3, plusX, minusX, plusY, minusY, plusZ, minusZ, \

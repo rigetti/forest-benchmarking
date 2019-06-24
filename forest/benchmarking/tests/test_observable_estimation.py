@@ -204,7 +204,8 @@ def test_estimate_observables():
             assert np.abs(res.expectation) < 0.1
 
 
-def _random_2q_programs(n_progs=10):
+
+def _random_2q_programs(n_progs=3):
     """Generate random programs that consist of single qubit rotations, a CZ, and single
     qubit rotations.
     """
@@ -228,6 +229,7 @@ def _random_2q_programs(n_progs=10):
 
 
 def test_estimate_observables_many_progs(forest):
+    # for "random programs" calculate wfn.expectation see if operator estimation gets it right
     expts = [
         ExperimentSetting(TensorProductState(), o1 * o2)
         for o1, o2 in itertools.product([sI(0), sX(0), sY(0), sZ(0)], [sI(1), sX(1), sY(1), sZ(1)])
@@ -236,6 +238,7 @@ def test_estimate_observables_many_progs(forest):
     qc = get_qc('2q-qvm')
     qc.qam.random_seed = 1
     qc.qam.random_seed = 0
+    # default n_progs in _random_2q_programs is now three
     for prog in _random_2q_programs():
         suite = ObservablesExperiment(expts, program=prog)
         assert len(suite) == 4 * 4
@@ -598,11 +601,12 @@ def test_estimate_observables_uncalibrated_asymmetric_readout(forest):
 
 
 def test_estimate_observables_uncalibrated_symmetric_readout(forest):
+    #
     qc = get_qc('1q-qvm')
     qc.qam.random_seed = 1
-    expt1 = ExperimentSetting(TensorProductState(plusX(0)), sX(0))
-    expt2 = ExperimentSetting(TensorProductState(plusY(0)), sY(0))
-    expt3 = ExperimentSetting(TensorProductState(plusZ(0)), sZ(0))
+    expt1 = ExperimentSetting(TensorProductState(plusX(0)), sX(0)) # prep |+> measure X
+    expt2 = ExperimentSetting(TensorProductState(plusY(0)), sY(0)) # prep |+i> measure Y
+    expt3 = ExperimentSetting(TensorProductState(plusZ(0)), sZ(0)) # prep |0> measure Z
     p = Program()
     p00, p11 = 0.90, 0.80
     p.define_noisy_readout(0, p00=p00, p11=p11)
@@ -1064,45 +1068,6 @@ def test_bit_flip_channel_fidelity(forest):
     np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
 
 
-def test_dephasing_channel_fidelity(forest):
-    """
-    We use Eqn (5) of https://arxiv.org/abs/quant-ph/0701138 to compare the fidelity
-    """
-    qc = get_qc('1q-qvm')
-    # prepare experiment settings
-    expt1 = ExperimentSetting(TensorProductState(plusX(0)), sX(0))
-    expt2 = ExperimentSetting(TensorProductState(plusY(0)), sY(0))
-    expt3 = ExperimentSetting(TensorProductState(plusZ(0)), sZ(0))
-    expt_list = [expt1, expt2, expt3]
-
-    # prepare noisy dephasing channel as program for some random value of probability
-    prob = np.random.uniform(0.1, 0.5)
-    # Kraus operators for the dephasing channel
-    kraus_ops = [np.sqrt(1 - prob) * np.array([[1, 0], [0, 1]]),
-                 np.sqrt(prob) * np.array([[1, 0], [0, -1]])]
-    p = Program(Pragma("PRESERVE_BLOCK"), I(0), Pragma("END_PRESERVE_BLOCK"))
-    p.define_noisy_gate("I", [0], kraus_ops)
-
-    # prepare ObservablesExperiment
-    process_exp = ObservablesExperiment(settings=expt_list, program=p)
-    # list to store experiment results
-    num_simulations = 10
-    expts = []
-    for sim_num in range(num_simulations):
-        qc.qam.random_seed = sim_num+1
-        expt_results = []
-        for res in estimate_observables(qc, process_exp, num_shots=1000):
-            expt_results.append(res.expectation)
-        expts.append(expt_results)
-
-    expts = np.array(expts)
-    results = np.mean(expts, axis=0)
-    estimated_fidelity = _point_channel_fidelity_estimate(results)
-    # how close is this channel to the identity operator
-    expected_fidelity = 1 - (2 / 3) * prob
-    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
-
-
 def test_depolarizing_channel_fidelity(forest):
     """
     We use Eqn (5) of https://arxiv.org/abs/quant-ph/0701138 to compare the fidelity
@@ -1223,49 +1188,6 @@ def test_bit_flip_channel_fidelity_readout_error(forest):
     np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
 
 
-def test_dephasing_channel_fidelity_readout_error(forest):
-    """
-    We use Eqn (5) of https://arxiv.org/abs/quant-ph/0701138 to compare the fidelity
-    """
-    qc = get_qc('1q-qvm')
-    # prepare experiment settings
-    expt1 = ExperimentSetting(TensorProductState(plusX(0)), sX(0))
-    expt2 = ExperimentSetting(TensorProductState(plusY(0)), sY(0))
-    expt3 = ExperimentSetting(TensorProductState(plusZ(0)), sZ(0))
-    expt_list = [expt1, expt2, expt3]
-
-    # prepare noisy dephasing channel as program for some random value of probability
-    prob = np.random.uniform(0.1, 0.5)
-    # Kraus operators for the dephasing channel
-    kraus_ops = [np.sqrt(1 - prob) * np.array([[1, 0], [0, 1]]),
-                 np.sqrt(prob) * np.array([[1, 0], [0, -1]])]
-    p = Program(Pragma("PRESERVE_BLOCK"), I(0), Pragma("END_PRESERVE_BLOCK"))
-    p.define_noisy_gate("I", [0], kraus_ops)
-    # add some readout error
-    p.define_noisy_readout(0, 0.95, 0.82)
-
-    # prepare ObservablesExperiment
-    process_exp = ObservablesExperiment(settings=expt_list, program=p)
-    # list to store experiment results
-    num_simulations = 10
-    expts = []
-    for sim_num in range(num_simulations):
-        qc.qam.random_seed = sim_num+1
-        expt_results = []
-        results = estimate_observables(qc, process_exp,
-                                       symmetrization_method=exhaustive_symmetrization)
-        for res in calibrate_observable_estimates(qc, list(results), noisy_program=p):
-            expt_results.append(res.expectation)
-        expts.append(expt_results)
-
-    expts = np.array(expts)
-    results = np.mean(expts, axis=0)
-    estimated_fidelity = _point_channel_fidelity_estimate(results)
-    # how close is this channel to the identity operator
-    expected_fidelity = 1 - (2 / 3) * prob
-    np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
-
-
 def test_depolarizing_channel_fidelity_readout_error(forest):
     """
     We use Eqn (5) of https://arxiv.org/abs/quant-ph/0701138 to compare the fidelity
@@ -1350,6 +1272,7 @@ def test_unitary_channel_fidelity_readout_error(forest):
     np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
 
 
+@pytest.mark.slow
 def test_2q_unitary_channel_fidelity_readout_error(forest):
     """
     We use Eqn (5) of https://arxiv.org/abs/quant-ph/0701138 to compare the fidelity
@@ -1790,54 +1713,6 @@ def test_raw_statistics_2q_nontrivial_entangled_state(forest):
     # compare against simulated results
     np.testing.assert_allclose(result_expectation, z_expectation, atol=3e-2)
     np.testing.assert_allclose(result_std_err, simulated_std_err, atol=3e-2)
-
-
-# def test_corrected_statistics_2q_nontrivial_nonentangled_state(forest):
-#     # testing that we can successfully correct for observed statistics
-#     # in the presence of readout errors, even for 2q nontrivial but
-#     # nonentangled states
-#     # Note: this only tests for exhaustive symmetrization in the presence
-#     #       of uncorrelated errors
-#     qc = get_qc('2q-qvm')
-#     expt = ExperimentSetting(TensorProductState(), sZ(0) * sZ(1))
-#     theta1, theta2 = np.random.uniform(0.0, 2 * np.pi, size=2)
-#     p = Program(RX(theta1, 0), RX(theta2, 1))
-#     p00, p11, q00, q11 = np.random.uniform(0.70, 0.99, size=4)
-#     p.define_noisy_readout(0, p00=p00, p11=p11)
-#     p.define_noisy_readout(1, p00=q00, p11=q11)
-#     obs_expt = ObservablesExperiment(settings=[expt], program=p)
-#
-#     num_simulations = 10
-#
-#     expectations = []
-#     std_errs = []
-#
-#     for sim_num in range(num_simulations):
-#         qc.qam.random_seed = sim_num+1
-#         results = estimate_observables(qc, obs_expt,
-#                                        symmetrization_method=exhaustive_symmetrization,
-#                                        num_shots=1000)
-#         expt_results = list(calibrate_observable_estimates(qc, list(results), noisy_program=p))
-#         expectations.append([res.expectation for res in expt_results])
-#         std_errs.append([res.std_err for res in expt_results])
-#     expectations = np.array(expectations)
-#     std_errs = np.array(std_errs)
-#     result_expectation = np.mean(expectations, axis=0)
-#     result_std_err = np.mean(std_errs, axis=0)
-#
-#     # calculate amplitudes squared of pure state
-#     alph00 = (np.cos(theta1 / 2) * np.cos(theta2 / 2)) ** 2
-#     alph01 = (np.cos(theta1 / 2) * np.sin(theta2 / 2)) ** 2
-#     alph10 = (np.sin(theta1 / 2) * np.cos(theta2 / 2)) ** 2
-#     alph11 = (np.sin(theta1 / 2) * np.sin(theta2 / 2)) ** 2
-#     # calculate Z^{\otimes 2} expectation, and error of the mean
-#     expected_expectation = (alph00 + alph11) - (alph01 + alph10)
-#     expected_std_err = np.sqrt(np.var(expectations))
-#     # compare against simulated results
-#     print(expectations)
-#     print(std_errs)
-#     np.testing.assert_allclose(result_expectation, expected_expectation, atol=3e-2)
-#     np.testing.assert_allclose(result_std_err, expected_std_err, atol=3e-2)
 
 
 def _point_state_fidelity_estimate(v, dim=2):

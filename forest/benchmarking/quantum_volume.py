@@ -11,7 +11,7 @@ from pyquil.quil import DefGate, Program
 from rpcq.messages import TargetDevice
 from rpcq._utils import RPCErrorError
 
-from forest.benchmarking.random_operators import haar_rand_unitary
+from forest.benchmarking.operator_tools.random_operators import haar_rand_unitary
 from forest.benchmarking.utils import bit_array_to_int
 import logging
 log = logging.getLogger(__name__)
