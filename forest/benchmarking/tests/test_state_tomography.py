@@ -4,7 +4,7 @@ import pytest
 from functools import partial
 from requests.exceptions import RequestException
 from forest.benchmarking.compilation import basic_compile
-from forest.benchmarking.random_operators import haar_rand_unitary
+from forest.benchmarking.operator_tools.random_operators import haar_rand_unitary
 from forest.benchmarking.tomography import generate_state_tomography_experiment, _R, \
     iterative_mle_state_estimate, estimate_variance, linear_inv_state_estimate
 from pyquil.api import ForestConnection, QuantumComputer, QVM

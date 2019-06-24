@@ -1,6 +1,6 @@
 import numpy as np
 from pyquil.gate_matrices import X, Y, Z, H
-from forest.benchmarking.superoperator_tools import *
+from forest.benchmarking.operator_tools.superoperator_transformations import *
 
 
 # Test philosophy:
