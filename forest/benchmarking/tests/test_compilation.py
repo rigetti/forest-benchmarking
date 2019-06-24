@@ -159,7 +159,7 @@ def n_qubits(request):
     return request.param
 
 
-@pytest.fixture(params=[2, 50, 100])
+@pytest.fixture(params=[2, 50, 67])
 def prog_length(request):
     return request.param
 
