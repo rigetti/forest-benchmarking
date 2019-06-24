@@ -8,7 +8,7 @@ def project_state_matrix_to_physical(rho: np.ndarray) -> np.ndarray:
     Project a possibly unphysical estimated density matrix to the closest (with respect to the
     2-norm) positive semi-definite matrix with trace 1, that is a valid quantum state.
 
-    This is the so called "wizard" method. It is described in the following reference:
+    This comes from the so called "wizard" method. It is described in the following reference:
 
     [MLEWIZ] Efficient Method for Computing the Maximum-Likelihood Quantum State from
              Measurements with Additive Gaussian Noise
