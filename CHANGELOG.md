@@ -18,6 +18,7 @@ estimate corresponding to `|+0> = (1, 0, 1, 0)/sqrt(2)` rather than `|0+>` (gh-1
 - Improvements to Ripple carry adder notebook, added tests for non parametric bit string 
 prep program in utils (gh-98)
 - Added the ablity to project a Choi matrix to the closest unitary (gh-159)
+- Reduced local test run time from 11min to 5min (gh-160) 
 
 v0.6 (June 11, 2019)
 --------------------
