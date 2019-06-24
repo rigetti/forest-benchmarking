@@ -12,7 +12,7 @@ A good reference for these methods is:
 """
 import numpy as np
 from scipy import linalg
-from forest.benchmarking.utils import partial_trace
+from forest.benchmarking.operator_tools.calculational import partial_trace
 from forest.benchmarking.operator_tools.superoperator_transformations import vec, unvec, kraus2choi
 
 
