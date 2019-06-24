@@ -3,11 +3,22 @@ Changelog
 
 v0.7 (June XX, 2019)
 --------------------
+Breaking Changes:
+
+- Major module re-org of superoperator tools into `operator_tools` also moved `random_operators` to the operator tools module. Added type checking in random operators, added new module to check plain old operators are unitary etc (gh-150).
+
 Improvements and Changes:
 
 - Fixed the years in this Change log file 2018 -> 2019
 - Added linear inversion process tomography (gh-142)
-
+- Changed qubit tensor factor ordering of state tomography estimates to match that of process tomography, e.g. 
+tomographizing the plus eigenstate of `X0 * Z1` and passing in `qubits = [0,1]` will yield the state 
+estimate corresponding to `|+0> = (1, 0, 1, 0)/sqrt(2)` rather than `|0+>` (gh-142)
+- Improved the `superoperator_tools` notebook and the `random_operators` notebook (gh-98)
+- Improvements to Ripple carry adder notebook, added tests for non parametric bit string 
+prep program in utils (gh-98)
+- Added the ablity to project a Choi matrix to the closest unitary (gh-159)
+- Reduced local test run time from 11min to 5min (gh-160) 
 
 v0.6 (June 11, 2019)
 --------------------

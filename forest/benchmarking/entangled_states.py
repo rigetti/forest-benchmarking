@@ -49,7 +49,7 @@ def ghz_state_statistics(bitstrings):
     }
 
 
-def create_graph_state(graph: nx.Graph, use_pragmas=True):
+def create_graph_state(graph: nx.Graph, use_pragmas=False):
     """Write a program to create a graph state according to the specified graph
 
     A graph state involves Hadamarding all your qubits and then applying a CZ for each

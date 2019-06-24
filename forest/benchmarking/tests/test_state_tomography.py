@@ -4,10 +4,9 @@ import pytest
 from functools import partial
 from requests.exceptions import RequestException
 from forest.benchmarking.compilation import basic_compile
-from forest.benchmarking.random_operators import haar_rand_unitary
+from forest.benchmarking.operator_tools.random_operators import haar_rand_unitary
 from forest.benchmarking.tomography import generate_state_tomography_experiment, _R, \
-    iterative_mle_state_estimate, project_density_matrix, estimate_variance, \
-    linear_inv_state_estimate
+    iterative_mle_state_estimate, estimate_variance, linear_inv_state_estimate
 from pyquil.api import ForestConnection, QuantumComputer, QVM
 from pyquil.api._compiler import _extract_attribute_dictionary_from_program
 from pyquil.api._qac import AbstractCompiler
@@ -261,18 +260,6 @@ def test_hedged_two_qubit(two_q_tomo_fixture):
     rho_est = iterative_mle_state_estimate(results=results, qubits=qubits, epsilon=.0001, beta=0.5,
                                            tol=1e-3)
     np.testing.assert_allclose(rho_true, rho_est, atol=0.02)
-
-
-def test_project_density_matrix():
-    """
-    Test the wizard method. Example from fig 1 of maximum likelihood minimum effort
-    https://doi.org/10.1103/PhysRevLett.108.070502
-
-    :return:
-    """
-    eigs = np.diag(np.array(list(reversed([3.0 / 5, 1.0 / 2, 7.0 / 20, 1.0 / 10, -11.0 / 20]))))
-    phys = project_density_matrix(eigs)
-    assert np.allclose(phys, np.diag([0, 0, 1.0 / 5, 7.0 / 20, 9.0 / 20]))
 
 
 def test_variance_bootstrap(two_q_tomo_fixture):

@@ -5,14 +5,15 @@ from typing import Callable, Tuple, List, Sequence, Iterator
 import warnings
 
 import numpy as np
-from scipy.linalg import logm, pinv, eigh
+from scipy.linalg import logm, pinv
 
 from pyquil import Program
 from pyquil.unitary_tools import lifted_pauli as pauli2matrix, lifted_state_operator as state2matrix
 
 import forest.benchmarking.distance_measures as dm
 from forest.benchmarking.utils import all_traceless_pauli_terms
-from forest.benchmarking.superoperator_tools import vec, unvec, proj_choi_to_physical
+from forest.benchmarking.operator_tools import vec, unvec, proj_choi_to_physical
+from forest.benchmarking.operator_tools.project_state_matrix import project_state_matrix_to_physical
 from forest.benchmarking.observable_estimation import ExperimentSetting, ObservablesExperiment, \
     ExperimentResult, SIC0, SIC1, SIC2, SIC3, plusX, minusX, plusY, minusY, plusZ, minusZ, \
     TensorProductState, zeros_state
@@ -352,56 +353,6 @@ def state_log_likelihood(state: np.ndarray, results: Iterator[ExperimentResult],
     return ll
 
 
-def project_density_matrix(rho) -> np.ndarray:
-    """
-    Project a possibly unphysical estimated density matrix to the closest (with respect to the
-    2-norm) positive semi-definite matrix with trace 1, that is a valid quantum state.
-
-    This is the so called "wizard" method. It is described in the following reference:
-
-    [MLEWIZ] Efficient Method for Computing the Maximum-Likelihood Quantum State from
-             Measurements with Additive Gaussian Noise
-             Smolin et al.,
-             Phys. Rev. Lett. 108, 070502 (2012)
-             https://doi.org/10.1103/PhysRevLett.108.070502
-             https://arxiv.org/abs/1106.5458
-
-    :param rho: Numpy array containing the density matrix with dimension (N, N)
-    :return rho_projected: The closest positive semi-definite trace 1 matrix to rho.
-    """
-
-    # Rescale to trace 1 if the matrix is not already
-    rho_impure = rho / np.trace(rho)
-
-    dimension = rho_impure.shape[0]  # the dimension of the Hilbert space
-    [eigvals, eigvecs] = eigh(rho_impure)
-
-    # If matrix is already trace one PSD, we are done
-    if np.min(eigvals) >= 0:
-        return rho_impure
-
-    # Otherwise, continue finding closest trace one, PSD matrix
-    eigvals = list(eigvals)
-    eigvals.reverse()
-    eigvals_new = [0.0] * len(eigvals)
-
-    i = dimension
-    accumulator = 0.0  # Accumulator
-    while eigvals[i - 1] + accumulator / float(i) < 0:
-        accumulator += eigvals[i - 1]
-        i -= 1
-    for j in range(i):
-        eigvals_new[j] = eigvals[j] + accumulator / float(i)
-    eigvals_new.reverse()
-
-    # Reconstruct the matrix
-    rho_projected = functools.reduce(np.dot, (eigvecs,
-                                              np.diag(eigvals_new),
-                                              np.conj(eigvecs.T)))
-
-    return rho_projected
-
-
 def _resample_expectations_with_beta(results, prior_counts=1):
     """Resample expectation values by constructing a beta distribution and sampling from it.
 
@@ -455,7 +406,7 @@ def estimate_variance(results: List[ExperimentResult],
         functional is measured. Not applicable if functional is ``dm.purity``.
     :param n_resamples: The number of times to resample.
     :param project_to_physical: Whether to project the estimated state to a physical one
-        with :py:func:`project_density_matrix`.
+        with :py:func:`project_state_matrix_to_physical`.
     """
     if functional != dm.purity:
         if target_state is None:
@@ -468,7 +419,7 @@ def estimate_variance(results: List[ExperimentResult],
         rho = tomo_estimator(resampled_results, qubits)
 
         if project_to_physical:
-            rho = project_density_matrix(rho)
+            rho = project_state_matrix_to_physical(rho)
 
         # Calculate functional of the state
         if functional == dm.purity:
@@ -488,7 +439,7 @@ def linear_inv_process_estimate(results: List[ExperimentResult], qubits: List[in
 
     This is the simplest process tomography post processing. To use this function,
     collect process tomography data with :py:func:`generate_process_tomography_experiment`
-    and :py:func:`~pyquil.operator_estimation.measure_observables`.
+    and :py:func:`~forest.benchmarking.observable_estimation.estimate_observables`.
 
     For more details on this post-processing technique,
     see https://en.wikipedia.org/wiki/Quantum_tomography#Linear_inversion or
@@ -503,7 +454,7 @@ def linear_inv_process_estimate(results: List[ExperimentResult], qubits: List[in
     :param qubits: All qubits that were tomographized. This specifies the order in
         which qubits will be kron'ed together; the first qubit in the list is the left-most
         tensor factor.
-    :return: A point estimate of the quantum state rho.
+    :return: A point estimate of the quantum process represented by a Choi matrix
     """
     # state2matrix and pauli2matrix use pyquil tensor factor ordering where the least significant
     # qubit, e.g. qubit 0, is the right-most tensor factor. We stick with the standard convention
