@@ -50,5 +50,6 @@ def test_sqrtm_psd():
     # sqrt zero = zero
     A = np.zeros((2, 2))
     np.allclose(sqrtm_psd(A), A)
+    # sqrt(A) * sqrt(A) =  A
     A = np.array([[1, 2], [2, 4]])
     np.allclose(sqrtm_psd(A) @ sqrtm_psd(A), A)
