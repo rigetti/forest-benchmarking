@@ -6,7 +6,8 @@ from forest.benchmarking.tests.test_superoperator_transformations import (amplit
 from forest.benchmarking.operator_tools.apply_superoperator import apply_choi_matrix_2_state
 from forest.benchmarking.operator_tools.calculational import (partial_trace,
                                                               outer_product,
-                                                              inner_product)
+                                                              inner_product,
+                                                              sqrtm_psd)
 
 
 def test_partial_trace():
@@ -39,3 +40,15 @@ def test_inner_product():
     # complex
     assert np.isclose(inner_product(v2, v3), 1j)
     assert np.isclose(inner_product(v3, v2), -1j)
+
+
+def test_sqrtm_psd():
+    # test obvious case
+    A = np.diag([2, 1, 0])
+    Asqrt = np.diag([np.sqrt(2), 1, 0])
+    np.allclose(sqrtm_psd(A), Asqrt)
+    # sqrt zero = zero
+    A = np.zeros((2, 2))
+    np.allclose(sqrtm_psd(A), A)
+    A = np.array([[1, 2], [2, 4]])
+    np.allclose(sqrtm_psd(A) @ sqrtm_psd(A), A)
