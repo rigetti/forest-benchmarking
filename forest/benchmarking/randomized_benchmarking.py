@@ -4,6 +4,7 @@ from typing import Iterable, List, Sequence, Tuple, Dict
 import numpy as np
 from lmfit.model import ModelResult
 from numpy import pi
+from tqdm import tqdm
 
 from pyquil.api import BenchmarkConnection, QuantumComputer
 from pyquil.gates import CZ, RX, RZ
@@ -302,17 +303,19 @@ def generate_rb_experiments(bm: BenchmarkConnection, qubit_groups: Sequence[Sequ
 
 
 def acquire_rb_data(qc: QuantumComputer, experiments: Iterable[ObservablesExperiment],
-                    num_shots: int = 500) -> List[List[ExperimentResult]]:
+                    num_shots: int = 500, show_progress_bar: bool = False) \
+        -> List[List[ExperimentResult]]:
     """
     Runs each ObservablesExperiment and returns each group of resulting ExperimentResults
 
     :param qc: a quantum computer, e.g. QVM or QPU, that runs the experiments
     :param experiments: a list of Observables experiments
     :param num_shots: the number of shots to run each group of simultaneous ExperimentSettings
+    :param show_progress_bar: displays a progress bar via tqdm if true.
     :return: a list of ExperimentResults for each ObservablesExperiment
     """
     results = []
-    for expt in experiments:
+    for expt in tqdm(experiments, disable=not show_progress_bar):
         results.append(list(estimate_observables(qc, expt, num_shots)))
     return results
 
