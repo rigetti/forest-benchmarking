@@ -723,7 +723,7 @@ def tomographize(qc, program: Program, qubits: List[int], num_shots=1000, t_type
 
     # if no pauli_num is specified use the maximum
     if pauli_num==None:
-        pauli_num=len(Qubits)
+        pauli_num=len(qubits)
 
     #Generate experiments
     qubit_experiments = generate_state_tomography_experiment(program=program, qubits=qubits)
