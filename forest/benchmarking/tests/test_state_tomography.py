@@ -4,18 +4,17 @@ import pytest
 from functools import partial
 from requests.exceptions import RequestException
 from forest.benchmarking.compilation import basic_compile
-from forest.benchmarking.random_operators import haar_rand_unitary
+from forest.benchmarking.operator_tools.random_operators import haar_rand_unitary
 from forest.benchmarking.tomography import generate_state_tomography_experiment, _R, \
-    iterative_mle_state_estimate, project_density_matrix, estimate_variance, \
-    linear_inv_state_estimate
+    iterative_mle_state_estimate, estimate_variance, linear_inv_state_estimate
 from pyquil.api import ForestConnection, QuantumComputer, QVM
 from pyquil.api._compiler import _extract_attribute_dictionary_from_program
 from pyquil.api._qac import AbstractCompiler
 from pyquil.device import NxDevice
 from pyquil.gates import I, H, CZ
 from pyquil.numpy_simulator import NumpyWavefunctionSimulator
-from pyquil.operator_estimation import measure_observables, ExperimentResult, ExperimentSetting, \
-    zeros_state
+from forest.benchmarking.observable_estimation import estimate_observables, ExperimentResult, \
+    ExperimentSetting, zeros_state, exhaustive_symmetrization, calibrate_observable_estimates
 from pyquil.paulis import sI, sZ, sX
 from pyquil.quil import Program
 from rpcq.messages import PyQuilExecutableResponse
@@ -31,9 +30,9 @@ PLUS = np.array([[1], [1]]) / np.sqrt(2)
 PROJ_PLUS = PLUS @ PLUS.T.conj()
 PROJ_MINUS = ID - PROJ_PLUS
 
-ID_SETTING = ExperimentSetting(in_state=zeros_state([Q0]), out_operator=sI(Q0))
-Z_SETTING = ExperimentSetting(in_state=zeros_state([Q0]), out_operator=sZ(Q0))
-X_SETTING = ExperimentSetting(in_state=zeros_state([Q0]), out_operator=sX(Q0))
+ID_SETTING = ExperimentSetting(in_state=zeros_state([Q0]), observable=sI(Q0))
+Z_SETTING = ExperimentSetting(in_state=zeros_state([Q0]), observable=sZ(Q0))
+X_SETTING = ExperimentSetting(in_state=zeros_state([Q0]), observable=sX(Q0))
 
 # Two qubit defs
 P00 = np.kron(PROJ_ZERO, PROJ_ZERO)
@@ -48,8 +47,8 @@ def test_generate_1q_state_tomography_experiment():
     one_q_exp = generate_state_tomography_experiment(prog, qubits=qubits)
     dimension = 2 ** len(qubits)
 
-    assert [one_q_exp[idx][0].out_operator[qubits[0]] for idx in range(0, dimension ** 2)] == \
-           ['I', 'X', 'Y', 'Z']
+    assert [one_q_exp[idx][0].observable[qubits[0]] for idx in range(0, dimension ** 2-1)] == \
+           ['X', 'Y', 'Z']
 
 
 def test_generate_2q_state_tomography_experiment():
@@ -59,8 +58,8 @@ def test_generate_2q_state_tomography_experiment():
     two_q_exp = generate_state_tomography_experiment(p, qubits=[0, 1])
     dimension = 2 ** 2
 
-    assert [str(two_q_exp[idx][0].out_operator) for idx in list(range(0, dimension ** 2))] == \
-           ['(1+0j)*I', '(1+0j)*X1', '(1+0j)*Y1', '(1+0j)*Z1',
+    assert [str(two_q_exp[idx][0].observable) for idx in list(range(0, dimension ** 2-1))] == \
+           ['(1+0j)*X1', '(1+0j)*Y1', '(1+0j)*Z1',
             '(1+0j)*X0', '(1+0j)*X0*X1', '(1+0j)*X0*Y1', '(1+0j)*X0*Z1',
             '(1+0j)*Y0', '(1+0j)*Y0*X1', '(1+0j)*Y0*Y1', '(1+0j)*Y0*Z1',
             '(1+0j)*Z0', '(1+0j)*Z0*X1', '(1+0j)*Z0*Y1', '(1+0j)*Z0*Z1']
@@ -108,9 +107,9 @@ def test_R_operator_with_hand_calc_example_1_qubit():
 def test_R_operator_fixed_point_2_qubit():
     # Check fixed point of operator. See Eq. 5 in Řeháček et al., PRA 75, 042108 (2007).
     qubits = [0, 1]
-    id_setting = ExperimentSetting(in_state=zeros_state(qubits), out_operator=sI(qubits[0])*sI(
+    id_setting = ExperimentSetting(in_state=zeros_state(qubits), observable=sI(qubits[0])*sI(
         qubits[1]))
-    zz_setting = ExperimentSetting(in_state=zeros_state(qubits), out_operator=sZ(qubits[0])*sI(
+    zz_setting = ExperimentSetting(in_state=zeros_state(qubits), observable=sZ(qubits[0])*sI(
         qubits[1]))
 
     id_result = ExperimentResult(setting=id_setting, expectation=1, total_counts=1)
@@ -164,7 +163,9 @@ def single_q_tomo_fixture():
 
     # Get data from QVM
     tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
-    results = list(measure_observables(qc=qc, tomo_experiment=tomo_expt, n_shots=752))
+    results = list(estimate_observables(qc=qc, obs_expt=tomo_expt, num_shots=500,
+                                        symmetrization_method=exhaustive_symmetrization))
+    results = list(calibrate_observable_estimates(qc, results))
 
     return results, rho_true
 
@@ -175,21 +176,24 @@ def two_q_tomo_fixture():
     qc = get_test_qc(n_qubits=len(qubits))
 
     # Generate random unitary
-    u_rand = haar_rand_unitary(2 ** 1, rs=np.random.RandomState(52))
-    state_prep = Program().defgate("RandUnitary", u_rand)
-    state_prep.inst([("RandUnitary", q) for q in qubits])
+    u_rand1 = haar_rand_unitary(2 ** 1, rs=np.random.RandomState(52))
+    u_rand2 = haar_rand_unitary(2 ** 1, rs=np.random.RandomState(53))
+    state_prep = Program().defgate("RandUnitary1", u_rand1).defgate("RandUnitary2", u_rand2)
+    state_prep.inst(("RandUnitary1", qubits[0])).inst(("RandUnitary2", qubits[1]))
 
     # True state
     wfn = NumpyWavefunctionSimulator(n_qubits=2)
     psi = wfn \
-        .do_gate_matrix(u_rand, qubits=[0]) \
-        .do_gate_matrix(u_rand, qubits=[1]) \
+        .do_gate_matrix(u_rand1, qubits=[0]) \
+        .do_gate_matrix(u_rand2, qubits=[1]) \
         .wf.reshape(-1)
     rho_true = np.outer(psi, psi.T.conj())
 
     # Get data from QVM
     tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
-    results = list(measure_observables(qc=qc, tomo_experiment=tomo_expt, n_shots=752))
+    results = list(estimate_observables(qc=qc, obs_expt=tomo_expt, num_shots=500,
+                                        symmetrization_method=exhaustive_symmetrization))
+    results = list(calibrate_observable_estimates(qc, results))
 
     return results, rho_true
 
@@ -236,7 +240,7 @@ def test_maxent_single_qubit(single_q_tomo_fixture):
 def test_maxent_two_qubit(two_q_tomo_fixture):
     qubits = [0, 1]
     results, rho_true = two_q_tomo_fixture
-    rho_est = iterative_mle_state_estimate(results=results, qubits=qubits, entropy_penalty=.01,
+    rho_est = iterative_mle_state_estimate(results=results, qubits=qubits, entropy_penalty=.001,
                                            tol=1e-5)
 
     np.testing.assert_allclose(rho_true, rho_est, atol=0.02)
@@ -256,18 +260,6 @@ def test_hedged_two_qubit(two_q_tomo_fixture):
     rho_est = iterative_mle_state_estimate(results=results, qubits=qubits, epsilon=.0001, beta=0.5,
                                            tol=1e-3)
     np.testing.assert_allclose(rho_true, rho_est, atol=0.02)
-
-
-def test_project_density_matrix():
-    """
-    Test the wizard method. Example from fig 1 of maximum likelihood minimum effort
-    https://doi.org/10.1103/PhysRevLett.108.070502
-
-    :return:
-    """
-    eigs = np.diag(np.array(list(reversed([3.0 / 5, 1.0 / 2, 7.0 / 20, 1.0 / 10, -11.0 / 20]))))
-    phys = project_density_matrix(eigs)
-    assert np.allclose(phys, np.diag([0, 0, 1.0 / 5, 7.0 / 20, 9.0 / 20]))
 
 
 def test_variance_bootstrap(two_q_tomo_fixture):

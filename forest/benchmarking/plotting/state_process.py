@@ -97,6 +97,7 @@ def plot_pauli_transfer_matrix(ptransfermatrix, ax, labels=None, title='', fonts
     :return: The modified axis object.
     :rtype: AxesSubplot
     """
+    ptransfermatrix = np.real_if_close(ptransfermatrix)
     im = ax.imshow(ptransfermatrix, interpolation="nearest", cmap="RdBu", vmin=-1, vmax=1)
     if labels is None:
         dim_squared = ptransfermatrix.shape[0]
@@ -109,11 +110,12 @@ def plot_pauli_transfer_matrix(ptransfermatrix, ax, labels=None, title='', fonts
     ticklabs = cb.ax.get_yticklabels()
     cb.ax.set_yticklabels(ticklabs, ha='right')
     cb.ax.yaxis.set_tick_params(pad=35)
+    cb.draw_all()
     ax.set_xticks(range(dim_squared))
     ax.set_xlabel("Input Pauli Operator", fontsize=fontsizes)
     ax.set_yticks(range(dim_squared))
     ax.set_ylabel("Output Pauli Operator", fontsize=fontsizes)
-    ax.set_title(title, fontsize= int(np.floor(1.2*fontsizes)))
+    ax.set_title(title, fontsize= int(np.floor(1.2*fontsizes)), pad=15)
     ax.set_xticklabels(labels, rotation=45, fontsize=int(np.floor(0.7*fontsizes)))
     ax.set_yticklabels(labels, fontsize=int(np.floor(0.7*fontsizes)))
     ax.grid(False)

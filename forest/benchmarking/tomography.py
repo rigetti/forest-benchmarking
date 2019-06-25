@@ -1,25 +1,25 @@
 import functools
 import itertools
 from operator import mul
-from typing import Callable, Tuple, List, Sequence
+from typing import Callable, Tuple, List, Sequence, Iterator
 import warnings
 import random
 
 import numpy as np
-from scipy.linalg import logm, pinv, eigh
 import cvxpy as cp
+from scipy.linalg import logm, pinv
 
-import forest.benchmarking.distance_measures as dm
-from forest.benchmarking.superoperator_tools import vec, unvec, proj_choi_to_physical
-from forest.benchmarking.utils import n_qubit_pauli_basis
-from forest.benchmarking.compilation import basic_compile
 from pyquil import Program
-from pyquil.operator_estimation import ExperimentSetting, \
-    TomographyExperiment as PyQuilTomographyExperiment, ExperimentResult, SIC0, SIC1, SIC2, SIC3, \
-    plusX, minusX, plusY, minusY, plusZ, minusZ, TensorProductState, zeros_state
-from pyquil.operator_estimation import group_experiments, measure_observables
-from pyquil.paulis import sI, sX, sY, sZ, PauliSum, PauliTerm, is_identity
 from pyquil.unitary_tools import lifted_pauli as pauli2matrix, lifted_state_operator as state2matrix
+
+from forest.benchmarking.compilation import basic_compile
+import forest.benchmarking.distance_measures as dm
+from forest.benchmarking.utils import all_traceless_pauli_terms
+from forest.benchmarking.operator_tools import vec, unvec, proj_choi_to_physical
+from forest.benchmarking.operator_tools.project_state_matrix import project_state_matrix_to_physical
+from forest.benchmarking.observable_estimation import ExperimentSetting, ObservablesExperiment, \
+    ExperimentResult, SIC0, SIC1, SIC2, SIC3, plusX, minusX, plusY, minusY, plusZ, minusZ, \
+    TensorProductState, zeros_state, estimate_observables, group_settings
 
 MAXITER = "maxiter"
 OPTIMAL = "optimal"
@@ -30,36 +30,34 @@ FRO = 'fro'
 # Generate state and process tomography experiments
 # ==================================================================================================
 def _state_tomo_settings(qubits: Sequence[int]):
-    """Yield settings over itertools.product(I, X, Y, Z).
+    """
+    Yield settings over every non-identity observable in the Pauli basis over the qubits.
 
     Used as a helper function for generate_state_tomography_experiment
 
     :param qubits: The qubits to tomographize.
     """
-    n_qubits = len(qubits)
-    for o_ops in itertools.product([sI, sX, sY, sZ], repeat=n_qubits):
-        o_op = functools.reduce(mul, (op(q) for op, q in zip(o_ops, qubits)), sI())
-
+    for obs in all_traceless_pauli_terms(qubits):
         yield ExperimentSetting(
             in_state=zeros_state(qubits),
-            out_operator=o_op,
+            observable=obs,
         )
 
 
 def generate_state_tomography_experiment(program: Program, qubits: List[int]):
-    """Generate a (pyQuil) TomographyExperiment containing the experimental settings required
+    """
+    Generate a (pyQuil) TomographyExperiment containing the experimental settings required
     to characterize a quantum state.
 
     To collect data, try::
 
-        from pyquil.operator_estimation import measure_observables
-        results = list(measure_observables(qc=qc, tomo_experiment=experiment, n_shots=100_000))
+        from forest.benchmarking.operator_estimation import estimate_observables
+        results = list(estimate_observables(qc=qc, experiment, num_shots=100_000))
 
     :param program: The program to prepare a state to tomographize
     :param qubits: The qubits to tomographize
     """
-    return PyQuilTomographyExperiment(settings=list(_state_tomo_settings(qubits)),
-                                      program=program)
+    return ObservablesExperiment(settings=list(_state_tomo_settings(qubits)), program=program)
 
 
 def _sic_process_tomo_settings(qubits: Sequence[int]):
@@ -72,15 +70,10 @@ def _sic_process_tomo_settings(qubits: Sequence[int]):
     for in_sics in itertools.product([SIC0, SIC1, SIC2, SIC3], repeat=len(qubits)):
         i_state = functools.reduce(mul, (state(q) for state, q in zip(in_sics, qubits)),
                                    TensorProductState())
-        for o_ops in itertools.product([sI, sX, sY, sZ], repeat=len(qubits)):
-            o_op = functools.reduce(mul, (op(q) for op, q in zip(o_ops, qubits)), sI())
-
-            if is_identity(o_op):
-                continue
-
+        for obs in all_traceless_pauli_terms(qubits):
             yield ExperimentSetting(
                 in_state=i_state,
-                out_operator=o_op,
+                observable=obs,
             )
 
 
@@ -95,15 +88,10 @@ def _pauli_process_tomo_settings(qubits):
                                     repeat=len(qubits)):
         i_state = functools.reduce(mul, (state(q) for state, q in zip(states, qubits)),
                                    TensorProductState())
-        for o_ops in itertools.product([sI, sX, sY, sZ], repeat=len(qubits)):
-            o_op = functools.reduce(mul, (op(q) for op, q in zip(o_ops, qubits)), sI())
-
-            if is_identity(o_op):
-                continue
-
+        for obs in all_traceless_pauli_terms(qubits):
             yield ExperimentSetting(
                 in_state=i_state,
-                out_operator=o_op,
+                observable=obs,
             )
 
 
@@ -122,14 +110,14 @@ def generate_process_tomography_experiment(program: Program, qubits: List[int], 
     :param in_basis: A string identifying the input basis. Either "sic" or "pauli". SIC requires
         a smaller number of experiment settings to be run.
     """
-    if in_basis == 'sic':
+    if in_basis.upper() == 'SIC':
         func = _sic_process_tomo_settings
-    elif in_basis == 'pauli':
+    elif in_basis.upper() == 'PAULI':
         func = _pauli_process_tomo_settings
     else:
         raise ValueError(f"Unknown basis {in_basis}")
 
-    return PyQuilTomographyExperiment(settings=list(func(qubits)), program=program)
+    return ObservablesExperiment(settings=list(func(qubits)), program=program)
 
 
 # ==================================================================================================
@@ -156,16 +144,22 @@ def linear_inv_state_estimate(results: List[ExperimentResult],
 
     :param results: A tomographically complete list of results.
     :param qubits: All qubits that were tomographized. This specifies the order in
-        which qubits will be kron'ed together.
+        which qubits will be kron'ed together; the first qubit in the list is the left-most
+        tensor factor.
     :return: A point estimate of the quantum state rho.
     """
+    # state2matrix and pauli2matrix use pyquil tensor factor ordering where the least significant
+    # qubit, e.g. qubit 0, is the right-most tensor factor. We stick with the standard convention
+    # here that the first qubit in the list is the left-most tensor factor, so we have to reverse
+    # the qubits before passing to state2matrix and pauli2matrix
+    qs = qubits[::-1]
     measurement_matrix = np.vstack([
-        vec(pauli2matrix(result.setting.out_operator, qubits=qubits)).T.conj()
-        for result in results
-    ])
+        vec(pauli2matrix(result.setting.observable, qubits=qs)).T.conj() for result in results ])
     expectations = np.array([result.expectation for result in results])
     rho = pinv(measurement_matrix) @ expectations
-    return unvec(rho)
+    # add in the traceful identity term
+    dim = 2**len(qubits)
+    return unvec(rho) + np.eye(dim)/dim
 
 def compressed_sensing_state_estimate(results: List[ExperimentResult],
                               qubits: List[int]) -> np.ndarray:
@@ -304,7 +298,9 @@ def iterative_mle_state_estimate(results: List[ExperimentResult], qubits: List[i
              https://arxiv.org/pdf/1302.3399.pdf
 
     :param results: Measured results from a state tomography experiment
-    :param qubits: Qubits that were tomographized.
+    :param qubits: All qubits that were tomographized. This specifies the order in
+        which qubits will be kron'ed together; the first qubit in the list is the left-most
+        tensor factor.
     :param epsilon: the dilution parameter used in [DIMLE1]. In practice epsilon ~ 1/num_shots
     :param entropy_penalty: the entropy penalty parameter from [DIMLE2], i.e. lambda
     :param beta: The Hedging parameter from [HMLE], i.e. beta
@@ -317,6 +313,12 @@ def iterative_mle_state_estimate(results: List[ExperimentResult], qubits: List[i
     if (entropy_penalty != 0.0) and (beta != 0.0):
         raise ValueError("One can't sensibly do entropy penalty and hedging. Do one or the other"
                          " but not both.")
+
+    # state2matrix and pauli2matrix use pyquil tensor factor ordering where the least significant
+    # qubit, e.g. qubit 0, is the right-most tensor factor. We stick with the standard convention
+    # here that the first qubit in the list is the left-most tensor factor, so we have to reverse
+    # the qubits before passing to state2matrix and pauli2matrix
+    qs = qubits[::-1]
 
     # Identity prop to the size of Hilbert space
     dim = 2**len(qubits)
@@ -331,7 +333,7 @@ def iterative_mle_state_estimate(results: List[ExperimentResult], qubits: List[i
             warnings.warn('Maximum number of iterations reached before convergence.')
             break
         # Vanilla Iterative MLE
-        R = _R(rho, results, qubits)
+        R = _R(rho, results, qs)
         Tk = R - IdH  # Eq 6 of [DIMLE2] with \lambda = 0.
 
         # MaxENT Iterative MLE
@@ -369,7 +371,7 @@ def _R(state, results, qubits):
     Pi_j = measurement operator or projector, with \sum_j Pi_j = Id and Pi_j \geq 0
     Pr_j = Tr[Pi_j \rho]  (up to some normalization of the Pi_j)
 
-    We are working with results whose out_operators are elements of the un-normalized Pauli
+    We are working with results whose observables are elements of the un-normalized Pauli
     basis. Each Pauli P_j can be split into projectors onto the plus and minus eigenspaces
         P_k = Pi_k^+ - Pi_k^-   ;   Pi_k^+ = (I + P_k) / 2   ;   Pi_k^- = (I - P_k) / 2
     where each Pi \geq 0 as required above. Hence for each P_k we associate two Pi_k,
@@ -395,7 +397,7 @@ def _R(state, results, qubits):
     IdH = np.eye(update.shape[0])
 
     for res in results:
-        op_matrix = pauli2matrix(res.setting.out_operator, qubits)
+        op_matrix = pauli2matrix(res.setting.observable, qubits)
         meas_exp = res.expectation
         pred_exp = np.trace(op_matrix @ state)
 
@@ -409,7 +411,8 @@ def _R(state, results, qubits):
     return update / len(results)
 
 
-def state_log_likelihood(state, results, qubits) -> float:
+def state_log_likelihood(state: np.ndarray, results: Iterator[ExperimentResult],
+                         qubits: Sequence[int]) -> float:
     """
     The log Likelihood function used in the diluted MLE tomography routine.
 
@@ -417,13 +420,21 @@ def state_log_likelihood(state, results, qubits) -> float:
 
     :param state: The state (given as a density matrix) that we think we have.
     :param results: Measured results from a state tomography experiment
-    :param qubits: Qubits that were tomographized.
+    :param qubits: All qubits that were tomographized. This specifies the order in
+        which qubits will be kron'ed together; the first qubit in the list is the left-most
+        tensor factor. This should agree with the provided state.
     :return: The log likelihood that our state is the one we believe it is.
     """
+    # state2matrix and pauli2matrix use pyquil tensor factor ordering where the least significant
+    # qubit, e.g. qubit 0, is the right-most tensor factor. We stick with the standard convention
+    # here that the first qubit in the list is the left-most tensor factor, so we have to reverse
+    # the qubits before passing to state2matrix and pauli2matrix
+    qs = qubits[::-1]
+
     ll = 0
     for res in results:
         n = res.total_counts
-        op_matrix = pauli2matrix(res.setting.out_operator, qubits)
+        op_matrix = pauli2matrix(res.setting.observable, qs)
         meas_exp = res.expectation
         pred_exp = np.real(np.trace(op_matrix @ state))
 
@@ -435,56 +446,6 @@ def state_log_likelihood(state, results, qubits) -> float:
             ll += f_j * np.log10(pr_j)
 
     return ll
-
-
-def project_density_matrix(rho) -> np.ndarray:
-    """
-    Project a possibly unphysical estimated density matrix to the closest (with respect to the
-    2-norm) positive semi-definite matrix with trace 1, that is a valid quantum state.
-
-    This is the so called "wizard" method. It is described in the following reference:
-
-    [MLEWIZ] Efficient Method for Computing the Maximum-Likelihood Quantum State from
-             Measurements with Additive Gaussian Noise
-             Smolin et al.,
-             Phys. Rev. Lett. 108, 070502 (2012)
-             https://doi.org/10.1103/PhysRevLett.108.070502
-             https://arxiv.org/abs/1106.5458
-
-    :param rho: Numpy array containing the density matrix with dimension (N, N)
-    :return rho_projected: The closest positive semi-definite trace 1 matrix to rho.
-    """
-
-    # Rescale to trace 1 if the matrix is not already
-    rho_impure = rho / np.trace(rho)
-
-    dimension = rho_impure.shape[0]  # the dimension of the Hilbert space
-    [eigvals, eigvecs] = eigh(rho_impure)
-
-    # If matrix is already trace one PSD, we are done
-    if np.min(eigvals) >= 0:
-        return rho_impure
-
-    # Otherwise, continue finding closest trace one, PSD matrix
-    eigvals = list(eigvals)
-    eigvals.reverse()
-    eigvals_new = [0.0] * len(eigvals)
-
-    i = dimension
-    accumulator = 0.0  # Accumulator
-    while eigvals[i - 1] + accumulator / float(i) < 0:
-        accumulator += eigvals[i - 1]
-        i -= 1
-    for j in range(i):
-        eigvals_new[j] = eigvals[j] + accumulator / float(i)
-    eigvals_new.reverse()
-
-    # Reconstruct the matrix
-    rho_projected = functools.reduce(np.dot, (eigvecs,
-                                              np.diag(eigvals_new),
-                                              np.conj(eigvecs.T)))
-
-    return rho_projected
 
 
 def _resample_expectations_with_beta(results, prior_counts=1):
@@ -540,7 +501,7 @@ def estimate_variance(results: List[ExperimentResult],
         functional is measured. Not applicable if functional is ``dm.purity``.
     :param n_resamples: The number of times to resample.
     :param project_to_physical: Whether to project the estimated state to a physical one
-        with :py:func:`project_density_matrix`.
+        with :py:func:`project_state_matrix_to_physical`.
     """
     if functional != dm.purity:
         if target_state is None:
@@ -553,7 +514,7 @@ def estimate_variance(results: List[ExperimentResult],
         rho = tomo_estimator(resampled_results, qubits)
 
         if project_to_physical:
-            rho = project_density_matrix(rho)
+            rho = project_state_matrix_to_physical(rho)
 
         # Calculate functional of the state
         if functional == dm.purity:
@@ -567,6 +528,45 @@ def estimate_variance(results: List[ExperimentResult],
 # ==================================================================================================
 # PROCESS tomography: estimation methods and helper functions
 # ==================================================================================================
+def linear_inv_process_estimate(results: List[ExperimentResult], qubits: List[int]) -> np.ndarray:
+    """
+    Estimate a quantum process using linear inversion.
+
+    This is the simplest process tomography post processing. To use this function,
+    collect process tomography data with :py:func:`generate_process_tomography_experiment`
+    and :py:func:`~forest.benchmarking.observable_estimation.estimate_observables`.
+
+    For more details on this post-processing technique,
+    see https://en.wikipedia.org/wiki/Quantum_tomography#Linear_inversion or
+    see section 3.5 of
+
+    [WOOD] Initialization and characterization of open quantum systems
+           C. Wood,
+           PhD thesis from University of Waterloo, (2015).
+           http://hdl.handle.net/10012/9557
+
+    :param results: A tomographically complete list of results.
+    :param qubits: All qubits that were tomographized. This specifies the order in
+        which qubits will be kron'ed together; the first qubit in the list is the left-most
+        tensor factor.
+    :return: A point estimate of the quantum process represented by a Choi matrix
+    """
+    # state2matrix and pauli2matrix use pyquil tensor factor ordering where the least significant
+    # qubit, e.g. qubit 0, is the right-most tensor factor. We stick with the standard convention
+    # here that the first qubit in the list is the left-most tensor factor, so we have to reverse
+    # the qubits before passing to state2matrix and pauli2matrix
+    qs = qubits[::-1]
+    measurement_matrix = np.vstack([
+        vec(np.kron(state2matrix(result.setting.in_state, qs).conj(),
+                    pauli2matrix(result.setting.observable, qs))).conj().T
+        for result in results
+    ])
+    expectations = np.array([result.expectation for result in results])
+    rho = pinv(measurement_matrix) @ expectations
+    # add in identity term
+    dim = 2 ** len(qubits)
+    return unvec(rho) + np.eye(dim**2) / dim
+
 
 def _extract_from_results(results: List[ExperimentResult], qubits: List[int]):
     """
@@ -589,7 +589,7 @@ def _extract_from_results(results: List[ExperimentResult], qubits: List[int]):
         # matrix. This is simply the density matrix of the state that was prepared.
         in_state_matrix = state2matrix(result.setting.in_state, qubits=qubits)
         # 'lift' the result's ExperimentSetting output PauliTerm to the corresponding matrix.
-        operator = pauli2matrix(result.setting.out_operator, qubits=qubits)
+        operator = pauli2matrix(result.setting.observable, qubits=qubits)
         proj_plus = (np.eye(2 ** len(qubits)) + operator) / 2
         proj_minus = (np.eye(2 ** len(qubits)) - operator) / 2
 
@@ -735,15 +735,15 @@ def tomographize(qc, program: Program, qubits: List[int], num_shots=1000, t_type
         print("Cannot sample more Pauli matrices thatn d^2!")
         return None
     exp_list = random.sample(list(qubit_experiments), pauli_num)
-    input_exp = PyQuilTomographyExperiment(settings=exp_list, program=program)
+    input_exp = ObservablesExperiment(settings=exp_list, program=program)
 
     #Group experiments if possible to minimize QPU runs
-    input_exp = group_experiments(input_exp)
+    input_exp = group_settings(input_exp)
 
     #NOTE: Change qvm depending on whether we are simulating qvm
     qc.compiler.quil_to_native_quil = basic_compile
 
-    results = list(measure_observables(qc=qc, tomo_experiment=input_exp, n_shots=num_shots))
+    results = list(estimate_observables(qc=qc, obs_expt=input_exp, num_shots=num_shots))
     
     if t_type == 'compressed_sensing':
         return compressed_sensing_state_estimate(results=results, qubits=qubits)

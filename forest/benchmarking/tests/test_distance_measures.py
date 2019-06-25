@@ -1,6 +1,6 @@
-import forest.benchmarking.random_operators as rand_ops
-from forest.benchmarking.superoperator_tools import kraus2pauli_liouville, \
-    kraus2superop, kraus2choi, superop2choi
+import forest.benchmarking.operator_tools.random_operators as rand_ops
+from forest.benchmarking.operator_tools.superoperator_transformations import (
+    kraus2pauli_liouville, kraus2superop, kraus2choi, superop2choi)
 import numpy.random
 from scipy.linalg import fractional_matrix_power as matpow
 import forest.benchmarking.distance_measures as dm
