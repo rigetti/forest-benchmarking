@@ -46,14 +46,21 @@ def _exhaustive_dfe(program: Program, qubits: Sequence[int], in_states,
     """
     n_qubits = len(qubits)
     for i_states in itertools.product(in_states, repeat=n_qubits):
+        # distinguish between a Z eigenstate and None
         i_st = functools.reduce(mul, (op(q) for op, q in zip(i_states, qubits) if op is not None),
+                                TensorProductState())
+
+        # explicitly initialize the in_state with None set to zero, i.e. plus Z eigenstate.
+        in_state_with_zeros =  functools.reduce(mul,
+                                                (plusZ(q) if op is None else op(q)
+                                                 for op, q in zip(i_states, qubits)),
                                 TensorProductState())
 
         if len(i_st) == 0:
             continue
 
         yield ExperimentSetting(
-            in_state=i_st,
+            in_state=in_state_with_zeros,
             observable=benchmarker.apply_clifford_to_pauli(program, _state_to_pauli(i_st)),
         )
 
@@ -151,19 +158,26 @@ def _monte_carlo_dfe(program: Program, qubits: Sequence[int], in_states: list, n
     """
     all_st_inds = np.random.randint(len(in_states), size=(n_terms, len(qubits)))
     for st_inds in all_st_inds:
-        i_st = functools.reduce(mul, (in_states[si](qubits[i])
-                                      for i, si in enumerate(st_inds)
-                                      if in_states[si] is not None), TensorProductState())
-
-        while len(i_st) == 0:
-            # pick a new one
-            second_try_st_inds = np.random.randint(len(in_states), size=len(qubits))
+        # begin loop in case the state ends up being trivial (all chosen states are None)
+        while True:
             i_st = functools.reduce(mul, (in_states[si](qubits[i])
-                                          for i, si in enumerate(second_try_st_inds)
+                                          for i, si in enumerate(st_inds)
                                           if in_states[si] is not None), TensorProductState())
+            if len(i_st) > 0:
+                # this choice is not trivial so continue
+                break
+
+            # pick new state indices and try again
+            st_inds = np.random.randint(len(in_states), size=len(qubits))
+
+        # explicitly initialize the in_state with None set to zero, i.e. plus Z eigenstate.
+        in_state_with_zeros =  functools.reduce(mul, (plusZ(qubits[i]) if in_states[si] is None
+                                                      else in_states[si](qubits[i])
+                                                      for i, si in enumerate(st_inds)),
+                                TensorProductState())
 
         yield ExperimentSetting(
-            in_state=i_st,
+            in_state=in_state_with_zeros,
             observable=benchmarker.apply_clifford_to_pauli(program, _state_to_pauli(i_st)),
         )
 
