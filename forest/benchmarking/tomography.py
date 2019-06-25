@@ -164,7 +164,9 @@ def linear_inv_state_estimate(results: List[ExperimentResult],
 def compressed_sensing_state_estimate(results: List[ExperimentResult],
                               qubits: List[int]) -> np.ndarray:
     """
-    Estimate a quantum state using compressed sensing
+    Estimate a quantum state using compressed sensing.
+
+    Specifically by constrained trace minimization a.k.a. the matrix Dantzig selector.
 
     [FLAMMIA] Quantum Tomography via Compressed Sensing: Error Bounds, Sample Complexity, and Efficient Estimators
            Steven T. Flammia et. al.
@@ -176,23 +178,24 @@ def compressed_sensing_state_estimate(results: List[ExperimentResult],
         which qubits will be kron'ed together.
     :return: A point estimate of the quantum state rho.
     """
-    pauli_num = len(results)
-    qubit_num = len(qubits)
-    d = 2 ** qubit_num
+    num_pauli = len(results)
+    num_qubit = len(qubits)
+    d = 2 ** num_qubit
     pauli_list = []
     expectation_list = []
-    y = np.zeros((m,1))
+    y = np.zeros((num_pauli, 1))
 
-    for i in range(pauli_num):
+    for i in range(num_pauli):
         #Convert the Pauli term into a tensor
         r = results[i]
-        p_tensor = pauli2matrix(r.setting.out_operator, qubits)
+        p_tensor = pauli2matrix(r.setting.observable, qubits)
         e = r.expectation
         #A[i] = e * scale_factor
         pauli_list.append(p_tensor)
         expectation_list.append(e)
 
-    s = cp.Variable((d,d),complex = True)
+    # The objective and constraint in terms of Eqn (3) and (34) in [FLAMMIA
+    s = cp.Variable((d, d), complex = True)
     obj = cp.Minimize(cp.norm(s, 'nuc'))
     constraints = [cp.trace(s) == 1]
 
@@ -221,28 +224,32 @@ def lasso_state_estimate(results: List[ExperimentResult],
         which qubits will be kron'ed together.
     :return: A point estimate of the quantum state rho.
     """
-    pauli_num = len(results)
-    qubit_num = len(qubits)
-    d = 2 ** qubit_num
+    num_pauli = len(results)
+    num_qubit = len(qubits)
+    d = 2 ** num_qubit
     pauli_list = []
     expectation_list = []
-    y = np.zeros((m,1))
-    
-    mu = 4 * pauli_num / np.sqrt(1000 * pauli_num)
-            
-    for i in range(m):
+    y = np.zeros((num_pauli, 1))
+
+
+    for i in range(num_pauli):
         #Convert the Pauli term into a tensor
         r = results[i]
-        p_tensor = pauli2matrix(r.setting.out_operator, qubits)
+        p_tensor = pauli2matrix(r.setting.observable, qubits)
         e = r.expectation
         y[i] = e
         pauli_list.append(p_tensor)
         expectation_list.append(e)
-    
-    x = cp.Variable((d,d),complex = True)
-    A = cp.vstack([cp.trace(cp.matmul(pauli_list[i], x)) * np.sqrt(d / m) for i in range(m)])
-    
-    #Minimize trace norm
+
+    x = cp.Variable((d, d), complex=True)
+    A = cp.vstack([cp.trace(cp.matmul(pauli_list[i], x)) * np.sqrt(d / num_pauli)
+                   for i in range(num_pauli)])
+
+    # look at section V. A of [FLAMMIA] for more information related to mu
+    mu = 4 * num_pauli / np.sqrt(1000 * num_pauli)
+
+    # The equation below is Eqn. (4) and Eqn. (35) from [FLAMMIA]
+    # Minimize trace norm
     obj = cp.Minimize(0.5 * cp.norm((A - y), 2) + mu * cp.norm(x, 'nuc'))
     constraints = [cp.trace(x) == 1]
 
