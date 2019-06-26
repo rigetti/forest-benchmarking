@@ -224,29 +224,22 @@ def lasso_state_estimate(results: List[ExperimentResult],
         which qubits will be kron'ed together.
     :return: A point estimate of the quantum state rho.
     """
-    num_pauli = len(results)
-    num_qubit = len(qubits)
-    d = 2 ** num_qubit
-    pauli_list = []
-    expectation_list = []
-    y = np.zeros((num_pauli, 1))
+    n_pauli = len(results)
+    n_qubits = len(qubits)
+    d = 2 ** n_qubits
 
-
-    for i in range(num_pauli):
-        #Convert the Pauli term into a tensor
-        r = results[i]
-        p_tensor = pauli2matrix(r.setting.observable, qubits)
-        e = r.expectation
-        y[i] = e
-        pauli_list.append(p_tensor)
-        expectation_list.append(e)
+    # Convert the Pauli term into a matrix
+    pauli_list = [pauli2matrix(r.setting.observable, qubits) for r in results]
+    # shape of y is (num_pauli,1)
+    y = np.array([[r.expectation] for r in results])
 
     x = cp.Variable((d, d), complex=True)
-    A = cp.vstack([cp.trace(cp.matmul(pauli_list[i], x)) * np.sqrt(d / num_pauli)
-                   for i in range(num_pauli)])
+    A = cp.vstack([cp.trace(cp.matmul(pauli_list[i], x)) * np.sqrt(d / n_pauli)
+                   for i in range(n_pauli)])
 
     # look at section V. A of [FLAMMIA] for more information related to mu
-    mu = 4 * num_pauli / np.sqrt(1000 * num_pauli)
+    num_experiments = (results[0].total_counts) * n_pauli
+    mu = 4 * n_pauli / np.sqrt(num_experiments)
 
     # The equation below is Eqn. (4) and Eqn. (35) from [FLAMMIA]
     # Minimize trace norm
