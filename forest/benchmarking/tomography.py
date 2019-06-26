@@ -164,9 +164,9 @@ def linear_inv_state_estimate(results: List[ExperimentResult],
 def compressed_sensing_state_estimate(results: List[ExperimentResult],
                               qubits: List[int]) -> np.ndarray:
     """
-    Estimate a quantum state using compressed sensing.
+    Estimate a quantum state using compressed sensing via the matrix Dantzig selector.
 
-    Specifically by constrained trace minimization a.k.a. the matrix Dantzig selector.
+    The matrix Dantzig selector is constrained trace minimization. See [QTvCS] for more information.
 
     [QTvCS] Quantum Tomography via Compressed Sensing: Error Bounds, Sample Complexity, and ...
             Flammia et. al.
@@ -182,7 +182,6 @@ def compressed_sensing_state_estimate(results: List[ExperimentResult],
     n_pauli = len(results)
     n_qubits = len(qubits)
     d = 2 ** n_qubits
-
 
     # Convert the Pauli term into a matrix
     pauli_list = [pauli2matrix(r.setting.observable, qubits) for r in results]
@@ -206,7 +205,10 @@ def compressed_sensing_state_estimate(results: List[ExperimentResult],
 def lasso_state_estimate(results: List[ExperimentResult],
                               qubits: List[int]) -> np.ndarray:
     """
-    Estimate a quantum state using compressed sensing
+    Estimate a quantum state using compressed sensing via a matrix Lasso.
+
+    For more information see https://en.wikipedia.org/wiki/Lasso_(statistics) and the reference
+    [QTvCS].
 
     [QTvCS] Quantum Tomography via Compressed Sensing: Error Bounds, Sample Complexity, and ...
             Flammia et. al.
