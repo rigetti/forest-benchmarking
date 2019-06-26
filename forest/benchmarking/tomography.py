@@ -168,45 +168,39 @@ def compressed_sensing_state_estimate(results: List[ExperimentResult],
 
     Specifically by constrained trace minimization a.k.a. the matrix Dantzig selector.
 
-    [FLAMMIA] Quantum Tomography via Compressed Sensing: Error Bounds, Sample Complexity, and Efficient Estimators
-           Steven T. Flammia et. al.
-           (2012).
-           https://arxiv.org/pdf/1205.2300.pdf
+    [QTvCS] Quantum Tomography via Compressed Sensing: Error Bounds, Sample Complexity, and ...
+            Flammia et. al.
+            New J. Phys. 14, 095022 (2012)
+            https://dx.doi.org/10.1088/1367-2630/14/9/095022
+            https://arxiv.org/pdf/1205.2300.pdf
 
     :param results: A tomographically complete list of results.
     :param qubits: All qubits that were tomographized. This specifies the order in
         which qubits will be kron'ed together.
     :return: A point estimate of the quantum state rho.
     """
-    num_pauli = len(results)
-    num_qubit = len(qubits)
-    d = 2 ** num_qubit
-    pauli_list = []
-    expectation_list = []
-    y = np.zeros((num_pauli, 1))
+    n_pauli = len(results)
+    n_qubits = len(qubits)
+    d = 2 ** n_qubits
 
-    for i in range(num_pauli):
-        #Convert the Pauli term into a tensor
-        r = results[i]
-        p_tensor = pauli2matrix(r.setting.observable, qubits)
-        e = r.expectation
-        #A[i] = e * scale_factor
-        pauli_list.append(p_tensor)
-        expectation_list.append(e)
 
-    # The objective and constraint in terms of Eqn (3) and (34) in [FLAMMIA
-    s = cp.Variable((d, d), complex = True)
-    obj = cp.Minimize(cp.norm(s, 'nuc'))
-    constraints = [cp.trace(s) == 1]
+    # Convert the Pauli term into a matrix
+    pauli_list = [pauli2matrix(r.setting.observable, qubits) for r in results]
+    # a list of expectations
+    y_list = [r.expectation for r in results]
 
-    for i in range(len(pauli_list)):
-        trace_bool = cp.trace(cp.matmul(pauli_list[i], s)) - expectation_list[i] == 0
-        constraints.append(trace_bool)
+    # The objective and constraint in terms of Eqn (3) and (34) in [QTvCS]
+    x = cp.Variable((d, d), complex = True)
+    obj = cp.Minimize(cp.norm(x, 'nuc'))
+    # A[i] = y[i] * scale_factor
+    constraints = [cp.trace(cp.matmul(pauli_list[i], x)) - y_list[i] == 0 for i in range(n_pauli)]
+    constraints.insert(0, cp.trace(x) == 1)
 
     # Form and solve problem.
     prob = cp.Problem(obj, constraints)
     prob.solve()
-    rho = s.value
+    rho = x.value
+
     return rho
 
 def lasso_state_estimate(results: List[ExperimentResult],
@@ -214,10 +208,11 @@ def lasso_state_estimate(results: List[ExperimentResult],
     """
     Estimate a quantum state using compressed sensing
 
-    [FLAMMIA] Quantum Tomography via Compressed Sensing: Error Bounds, Sample Complexity, and Efficient Estimators
-           Steven T. Flammia et. al.
-           (2012).
-           https://arxiv.org/pdf/1205.2300.pdf
+    [QTvCS] Quantum Tomography via Compressed Sensing: Error Bounds, Sample Complexity, and ...
+            Flammia et. al.
+            New J. Phys. 14, 095022 (2012)
+            https://dx.doi.org/10.1088/1367-2630/14/9/095022
+            https://arxiv.org/pdf/1205.2300.pdf
 
     :param results: A tomographically complete list of results.
     :param qubits: All qubits that were tomographized. This specifies the order in
@@ -230,18 +225,20 @@ def lasso_state_estimate(results: List[ExperimentResult],
 
     # Convert the Pauli term into a matrix
     pauli_list = [pauli2matrix(r.setting.observable, qubits) for r in results]
+
     # shape of y is (num_pauli,1)
     y = np.array([[r.expectation] for r in results])
 
     x = cp.Variable((d, d), complex=True)
+    # Eqn 1 of [QTvCS]
     A = cp.vstack([cp.trace(cp.matmul(pauli_list[i], x)) * np.sqrt(d / n_pauli)
                    for i in range(n_pauli)])
 
-    # look at section V. A of [FLAMMIA] for more information related to mu
+    # look at section V. A of [QTvCS] for more information related to mu
     num_experiments = (results[0].total_counts) * n_pauli
     mu = 4 * n_pauli / np.sqrt(num_experiments)
 
-    # The equation below is Eqn. (4) and Eqn. (35) from [FLAMMIA]
+    # The equation below is Eqn. (4) and Eqn. (35) from [QTvCS]
     # Minimize trace norm
     obj = cp.Minimize(0.5 * cp.norm((A - y), 2) + mu * cp.norm(x, 'nuc'))
     constraints = [cp.trace(x) == 1]
