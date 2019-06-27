@@ -115,11 +115,14 @@ def _CNOT(q1, q2):
     return p
 
 
-def _T(q1):
+def _T(q1, dagger=False):
     """
     A T in terms of RZ(theta)
     """
-    return Program(RZ(np.pi/4, q1))
+    if dagger:
+        return Program(RZ(-np.pi / 4, q1))
+    else:
+        return Program(RZ(np.pi / 4, q1))
 
 
 def _SWAP(q1, q2):
@@ -148,12 +151,12 @@ def _CCNOT(q1, q2, q3):
     p = Program()
     p.inst(_H(q3))
     p.inst(_CNOT(q2, q3))
-    p.inst(_T(q3).dagger())
+    p.inst(_T(q3, dagger=True))
     p.inst(_SWAP(q2, q3))
     p.inst(_CNOT(q1, q2))
     p.inst(_T(q2))
     p.inst(_CNOT(q3, q2))
-    p.inst(_T(q2).dagger())
+    p.inst(_T(q2, dagger=True))
     p.inst(_CNOT(q1, q2))
     p.inst(_SWAP(q2, q3))
     p.inst(_T(q2))
@@ -161,7 +164,7 @@ def _CCNOT(q1, q2, q3):
     p.inst(_CNOT(q1, q2))
     p.inst(_H(q3))
     p.inst(_T(q1))
-    p.inst(_T(q2).dagger())
+    p.inst(_T(q2, dagger=True))
     p.inst(_CNOT(q1, q2))
 
     return p
@@ -179,15 +182,28 @@ def basic_compile(program):
     new_prog.inst(program.defined_gates)
     for inst in program:
         if isinstance(inst, Gate):
-            if inst.name in ['RZ', 'CZ', 'I']:
+            # TODO: this is only a stopgap while the noisy QVM does not support modifiers.
+            # dagger this gate if odd number of daggers. Ignore controlled for now.
+            needs_dagger = inst.modifiers.count('DAGGER') % 2 == 1
+            angle_param = None
+            if len(inst.params) > 0 :
+                angle_param = inst.params[0]
+                if needs_dagger:
+                    angle_param = -angle_param
+                
+            if inst.name in ['CZ', 'I']:
                 new_prog += inst
+            elif inst.name == 'RZ':
+                # in case dagger
+                new_prog += RZ(angle_param, inst.qubits[0])
             elif inst.name == 'RX':
                 if is_magic_angle(inst.params[0]):
-                    new_prog += inst
+                    # in case dagger
+                    new_prog += RX(angle_param, inst.qubits[0])
                 else:
-                    new_prog += _RX(inst.params[0], inst.qubits[0])
+                    new_prog += _RX(angle_param, inst.qubits[0])
             elif inst.name == 'RY':
-                new_prog += _RY(inst.params[0], inst.qubits[0])
+                new_prog += _RY(angle_param, inst.qubits[0])
             elif inst.name == 'CNOT':
                 new_prog += _CNOT(*inst.qubits)
             elif inst.name == 'CCNOT':
@@ -195,7 +211,7 @@ def basic_compile(program):
             elif inst.name == 'SWAP':
                 new_prog += _SWAP(*inst.qubits)
             elif inst.name == 'T':
-                new_prog += _T(inst.qubits[0])
+                new_prog += _T(inst.qubits[0], needs_dagger)
             elif inst.name == "H":
                 new_prog += _H(inst.qubits[0])
             elif inst.name == "X":
