@@ -72,7 +72,7 @@ def test_monte_carlo_process_dfe(benchmarker: BenchmarkConnection):
         for oneq_state in setting.in_state.states:
             prog += _one_q_state_prep(oneq_state)
         prog += process
-
+        print(setting.observable)
         expectation = wfnsim.reset().do_program(prog).expectation(setting.observable)
         assert_almost_equal(expectation, 1., decimal=7)
 
@@ -90,7 +90,7 @@ def test_monte_carlo_state_dfe(benchmarker: BenchmarkConnection):
         for oneq_state in setting.in_state.states:
             prog += _one_q_state_prep(oneq_state)
         prog += process
-
+        print(setting.observable)
         expectation = wfnsim.reset().do_program(prog).expectation(setting.observable)
         assert_almost_equal(expectation, 1., decimal=7)
 
