@@ -180,6 +180,9 @@ def basic_compile(program):
     new_prog = Program()
     new_prog.num_shots = program.num_shots
     new_prog.inst(program.defined_gates)
+
+    daggered_defgates = []
+
     for inst in program:
         if isinstance(inst, Gate):
             # TODO: this is only a stopgap while the noisy QVM does not support modifiers.
@@ -193,6 +196,8 @@ def basic_compile(program):
                 
             if inst.name in ['CZ', 'I']:
                 new_prog += inst
+            elif 'CONTROLLED' in inst.modifiers:
+                raise ValueError(f"Controlled gates are not currently supported.")
             elif inst.name == 'RZ':
                 # in case dagger
                 new_prog += RZ(angle_param, inst.qubits[0])
@@ -217,6 +222,9 @@ def basic_compile(program):
             elif inst.name == "X":
                 new_prog += _X(inst.qubits[0])
             elif inst.name in [gate.name for gate in new_prog.defined_gates]:
+                if needs_dagger and inst.name not in daggered_defgates:
+                    new_prog.defgate(inst.name + 'DAG', inst.matrix.T.conj())
+                    daggered_defgates.append(inst.name)
                 new_prog += inst
             else:
                 raise ValueError(f"Unknown gate instruction {inst}")
