@@ -13,7 +13,7 @@ Running DFE
 Data structures
 ---------------
 
-.. currentmodule:: forest.benchmarking.dfe
+.. currentmodule:: forest.benchmarking.direct_fidelity_estimation
 .. autoclass:: dfe_experiment
 .. autoclass:: dfe_experiment_data
 .. autoclass:: dfe_calibration_data

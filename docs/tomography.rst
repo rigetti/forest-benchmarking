@@ -81,7 +81,7 @@ Finally, we analyze our data with one of the analysis routines::
 API Reference
 -------------
 
-.. currentmodule:: forest.benchmarking.state_tomography
+.. currentmodule:: forest.benchmarking.tomography
 .. autosummary::
     :toctree: autogen
     :template: autosumm.rst
