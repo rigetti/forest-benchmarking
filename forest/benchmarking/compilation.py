@@ -3,7 +3,7 @@ from math import pi
 import numpy as np
 from typing import Tuple
 
-from pyquil.gates import RX, RZ, CZ
+from pyquil.gates import RX, RZ, CZ, I
 from pyquil.quil import Program
 from pyquil.quilbase import Gate
 
@@ -193,11 +193,14 @@ def basic_compile(program):
                 angle_param = inst.params[0]
                 if needs_dagger:
                     angle_param = -angle_param
-                
-            if inst.name in ['CZ', 'I']:
-                new_prog += inst
-            elif 'CONTROLLED' in inst.modifiers:
+
+            if 'CONTROLLED' in inst.modifiers:
                 raise ValueError(f"Controlled gates are not currently supported.")
+
+            if inst.name == 'CZ':
+                new_prog += CZ(*inst.qubits) # remove dag modifiers
+            elif inst.name == 'I':
+                new_prog += I(inst.qubits[0]) # remove dag modifiers
             elif inst.name == 'RZ':
                 # in case dagger
                 new_prog += RZ(angle_param, inst.qubits[0])
