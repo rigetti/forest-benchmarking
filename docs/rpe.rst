@@ -11,7 +11,7 @@ Write about RPE
 API Reference
 -------------
 
-.. currentmodule:: forest.benchmarking.rpe
+.. currentmodule:: forest.benchmarking.robust_phase_estimation
 .. autosummary::
     :toctree: autogen
     :template: autosumm.rst

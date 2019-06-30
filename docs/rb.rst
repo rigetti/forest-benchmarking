@@ -17,7 +17,7 @@ Unitary RB
 API Reference
 -------------
 
-.. currentmodule:: forest.benchmarking.rb
+.. currentmodule:: forest.benchmarking.randomized_benchmarking
 .. autosummary::
     :toctree: autogen
     :template: autosumm.rst
