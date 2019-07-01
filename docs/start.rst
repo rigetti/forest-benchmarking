@@ -1,14 +1,15 @@
 Quick start guide
 =================
 
+Below we will assume that you are developing in a jupyter notebook.
+
 
 Getting ready to benchmark (QVM)
 --------------------------------
-We will assume that you are developing in a jupyter notebook.
 
 First thing you need to do is open up a terminal and run:
 
-##
+.. code-block:: bash
 
 	$ quilc -S
 	$ qvm -S

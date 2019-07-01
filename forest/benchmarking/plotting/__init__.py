@@ -1,1 +1,4 @@
-from .hinton import hinton
+from .hinton import hinton, hinton_real
+from .state_process import (plot_pauli_bar_rep_of_state,
+                            plot_pauli_rep_of_state,
+                            plot_pauli_transfer_matrix)

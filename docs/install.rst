@@ -18,7 +18,15 @@ Step 1. Install pyQuil and the Forest SDK
 
 	pip install pyquil
 
-The SDK which includes the Rigetti Quil Compiler (quilc), and the Quantum Virtual Machine (qvm). `Request the Forest SDK here <http://rigetti.com/forest>`__. You'll receive an email right away with the download links for macOS, Linux (.deb), Linux (.rpm), and Linux (bare-bones).
+Next you must install the SDK which includes the Rigetti Quil Compiler (quilc), and the Quantum
+Virtual Machine (qvm). `Request the Forest SDK here <http://rigetti.com/forest>`__. You'll
+receive an email right away with the download links for macOS, Linux (.deb), Linux (.rpm), and Linux (bare-bones).
+
+If you dont already have Jupyter or Jupyter lab now would be a good time to install that too.
+
+::
+
+    pip install jupyterlab
 
 
 Step 2. Install forest-benchmarking
@@ -47,8 +55,8 @@ Step 2. Install forest-benchmarking
 
 
 
-Step 3. Build the docs
-----------------------
+Step 3. Build the docs (optional)
+---------------------------------
 We use sphinx to build the documentation. To do this, first  install the requirements
 
 ::
@@ -56,7 +64,6 @@ We use sphinx to build the documentation. To do this, first  install the require
 	pip install sphinx
 	pip install sphinx_rtd_theme
 	pip install nbsphinx
-	pip install recommonmark
 	
 then navigate into Forest-Benchmarkings top-level directory and run:
 
@@ -65,21 +72,3 @@ then navigate into Forest-Benchmarkings top-level directory and run:
 		sphinx-build -b html docs/ docs/_build
 
 To view the docs navigate to the newly-created docs/_build directory and open the index.html file in a browser.
-
-
-
-pip install pypandoc.
-from pypandoc.pandoc_download import download_pandoc
-
-
-:math:`\ket{k}`
-
-.. math::
-
-   \begin{aligned}
-        P = \begin{pmatrix}
-               p(0 | 0)   & p(0 | 1)   & \cdots & p(0 | {d-1})  \\
-               p(1 | 0)   & p(1 | 1)   & \cdots & p(1 | {d-1})  \\
-               \vdots       &              &        & \vdots          \\
-               p(d-1 | 0) & p(d-1 | 1) & \cdots & p(d-1 | {d-1})
-           \end{pmatrix}.\end{aligned}
