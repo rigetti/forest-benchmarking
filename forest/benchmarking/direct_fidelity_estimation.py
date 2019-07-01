@@ -364,6 +364,6 @@ def estimate_dfe(results: List[ExperimentResult], kind: str) -> Tuple[float, flo
         mean_est = (d**2 * p_mean + d)/(d**2+d)
         var_est = d**2/(d+1)**2 * (d**2-1)**2/d**4 * np.sum(std_errs**2) / len(expectations) ** 2
     else:
-        raise ValueError('DFEdata can only be of kind \'state\' or \'process\'.')
+        raise ValueError('Kind can only be \'state\' or \'process\'.')
 
     return mean_est, np.sqrt(var_est)
