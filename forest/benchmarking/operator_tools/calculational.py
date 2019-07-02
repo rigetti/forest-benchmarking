@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.linalg import eigh
 
 
 def partial_trace(rho, keep, dims, optimize=False):
@@ -64,3 +65,22 @@ def inner_product(bra1: np.ndarray, bra2: np.ndarray) -> complex:
     if not (cols1 == cols2 == 1 and rows1 > 1 and rows2 > 1):
         raise ValueError("The vectors do not have the correct dimensions.")
     return np.transpose(bra1.conj()) @ bra2
+
+
+# code from https://github.com/scipy/scipy/pull/4775/files
+# Algorithm 9.1.1. in Gene H. Golub, Charles F. van Loan, Matrix Computations 4th ed.
+def sqrtm_psd(matrix: np.ndarray, check_finite: bool =True) -> np.ndarray:
+    """
+    Calculates the square root of a matrix that is positive semidefinite.
+
+    :param matrix: the matrix to square root
+    :param check_finite: Whether to check that the input matrices contain only finite numbers.
+    :return: sqrt(matrix)
+    """
+    w, v = eigh(matrix, check_finite=check_finite)
+    # As we further know that your matrix is positive semidefinite,
+    # we can guard against precision errors by doing
+    w = np.maximum(w, 0)
+    w = np.sqrt(w)
+    matrix_sqrt = (v * w).dot(v.conj().T)
+    return matrix_sqrt
