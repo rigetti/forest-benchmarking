@@ -107,7 +107,7 @@ QUANTUM_GATES = {'I': I,
                  'RZ': RZ,
                  'CZ': CZ,
                  'CNOT': CNOT,
-                 # 'CCNOT': CCNOT,
+                 'CCNOT': CCNOT,
                  # 'CPHASE00': CPHASE00,
                  # 'CPHASE01': CPHASE01,
                  # 'CPHASE10': CPHASE10,
@@ -121,8 +121,8 @@ QUANTUM_GATES = {'I': I,
 
 def _generate_random_program(n_qubits, length):
     """Randomly sample gates and arguments (qubits, angles)"""
-    if n_qubits < 2:
-        raise ValueError("Please request n_qubits >= 2 so we can use 2-qubit gates.")
+    if n_qubits < 3:
+        raise ValueError("Please request n_qubits >= 3 so we can use 3-qubit gates.")
 
     gates = list(QUANTUM_GATES.values())
     prog = Program()
@@ -154,7 +154,7 @@ def _generate_random_program(n_qubits, length):
     return prog
 
 
-@pytest.fixture(params=list(range(2, 5)))
+@pytest.fixture(params=list(range(3, 5)))
 def n_qubits(request):
     return request.param
 
