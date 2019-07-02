@@ -33,7 +33,7 @@ def _state_to_pauli(state: TensorProductState) -> PauliTerm:
 def _exhaustive_dfe(program: Program, qubits: Sequence[int], in_states,
                     benchmarker: BenchmarkConnection) -> Iterable[ExperimentSetting]:
     """
-    Yield experiments over itertools.product(in_paulis).
+    Yield experiments over itertools.product(in_states).
 
     Used as a helper function for generate_exhaustive_xxx_dfe_experiment routines.
 
@@ -182,7 +182,8 @@ def _monte_carlo_dfe(program: Program, qubits: Sequence[int], in_states: list, n
         )
 
 
-def generate_monte_carlo_state_dfe_experiment(program: Program, qubits: List[int], benchmarker: BenchmarkConnection,
+def generate_monte_carlo_state_dfe_experiment(program: Program, qubits: List[int],
+                                              benchmarker: BenchmarkConnection,
                                               n_terms=200) -> ObservablesExperiment:
     """
     Estimate state fidelity by sampled direct fidelity estimation.
