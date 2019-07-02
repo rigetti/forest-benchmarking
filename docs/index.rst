@@ -2,7 +2,7 @@ Welcome to the Docs for Forest-Benchmarking
 ===========================================
 
 Forest-Benchmarking is an **open source** library for performing quantum characterization, verification, and validation
-(QCVV) of quantum computers using the Rigetti Forest Software Development Kit.
+(QCVV) of quantum computers using pyQuil.
 
 
 
@@ -26,7 +26,7 @@ Contents
 
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
    :caption: QVCC Routines:
 
    tomography
@@ -53,21 +53,21 @@ Contents
 
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
    :caption: Visualization
 
    plotting
 
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
    :caption: Fitting
 
    fit
 
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
    :caption: Basic Compilation
 
    compilation
@@ -95,13 +95,13 @@ Contents
 
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
    :caption: Entangled States
 
    ent_states
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
    :caption: Utils
 
    utils
