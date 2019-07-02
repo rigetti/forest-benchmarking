@@ -1,8 +1,10 @@
 Direct Fidelity Estimation
 ==========================
 
-Direct fidelity estimation uses partial tomography to quickly certify a quantum state
-or a quantum process at lower cost than full tomography.
+Direct fidelity estimation (DFE) uses knowledge about the target state or process to perform a
+target measurements to quickly certify a quantum state or a quantum process at lower cost than full
+tomography.
+
 
 Running DFE
 -----------

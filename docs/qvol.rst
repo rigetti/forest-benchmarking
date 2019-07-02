@@ -2,11 +2,13 @@
 Quantum Volume
 ==============
 
-The quantum volume is holistic quantum computer performance measure (see https://arxiv
-.org/abs/1811.12926).
+The quantum volume is holistic quantum computer performance measure (see `arXiv:1811.12926
+<https://arxiv.org/abs/1811.12926>`_).
 
-Roughly the logarithm (base 2) of quantum volume $V_Q$, quantifies the largest random circuit of
-equal width and depth that the computer successfully implements and is certifiably quantum. So if you have 64 qubits and the best log-QV you have measured is $\\log_2V_Q = 3$ the effectively you only have an 8 qubit device!
+Roughly the logarithm (base 2) of quantum volume :math:`V_Q`, quantifies the largest random
+circuit of equal width and depth that the computer successfully implements and is certifiably
+quantum. So if you have 64 qubits and the best log-QV you have measured is :math:`\log_2 V_Q = 3`
+then effectively you only have an 8 qubit device!
 
 
 .. autosummary::

@@ -17,6 +17,9 @@ First thing you need to do is open up a terminal and run:
 
 Inside the notebook we need to get some basic pyQuil object
 
+.. todo:: very minimal examples of importing get_qc, get_benchmarker, and run the major benchmarks
+(tomo, dfe, rb, t1)
+
 .. code:: python
 
 	from pyquil import get_qc
@@ -24,13 +27,11 @@ Inside the notebook we need to get some basic pyQuil object
 	from forest.benchmarking.compilation import basic_compile
 	qc.compiler.quil_to_native_quil = basic_compile
 
-qvm object
-quilc
-basic compiler
-get qc
+
 
 Getting ready to benchmark (QPU)
 --------------------------------
+.. todo:: QMI then re log into qcs and document getting forest benchmarking working
+
 1. log into qcs
 2. ?
-3. ? 

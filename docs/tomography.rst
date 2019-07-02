@@ -2,7 +2,7 @@ Tomography
 ==========
 
 Tomography involves making many projective measurements of a quantum state or process and using
-them to reconstruct the initial full state or process.
+them to reconstruct the initial-state or process.
 
 Running State Tomography
 ------------------------

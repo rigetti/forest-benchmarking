@@ -2,9 +2,8 @@
 
 Spectroscopic and Analog Measurements of Qubits
 ===============================================
-
 The protocols in the module ``qubit_spectroscopy`` are closer to analog protocols than gate based
- QCVV protocols.
+QCVV protocols.
 
 Overview
 ---------

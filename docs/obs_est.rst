@@ -18,6 +18,7 @@ Data structures
     :toctree: autogen
     :template: autosumm.rst
 
+    _OneQState
     TensorProductState
     ExperimentSetting
     estimate_observables

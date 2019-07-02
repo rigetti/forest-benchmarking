@@ -1,5 +1,4 @@
-.. currentmodule:: forest.benchmarking.operator_tools.project_state
-
+.. currentmodule:: forest.benchmarking.operator_tools.project_state_matrix
 
 Project State to physical
 =========================

@@ -2,8 +2,8 @@
 Basic Compilation
 =================
 
-Rigetti's native compiler ``quilc`` is a highly advanced compiler and world class complier. It
-has many features to optimized the performance of quantum  algorithms.
+Rigetti's native compiler ``quilc`` is a highly advanced and world class complier. It
+has many features to optimize the performance of quantum  algorithms.
 
 In QCVV we need to be certain that the circuit we wish to run is the one that is run. For this
 reason we have built the module ``compilation`` it's functionality is rudimentary but easy to
