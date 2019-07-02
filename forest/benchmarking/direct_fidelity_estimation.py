@@ -33,7 +33,7 @@ def _state_to_pauli(state: TensorProductState) -> PauliTerm:
 def _exhaustive_dfe(program: Program, qubits: Sequence[int], in_states,
                     benchmarker: BenchmarkConnection) -> Iterable[ExperimentSetting]:
     """
-    Yield experiments over itertools.product(in_paulis).
+    Yield experiments over itertools.product(in_states).
 
     Used as a helper function for generate_exhaustive_xxx_dfe_experiment routines.
 
@@ -46,14 +46,21 @@ def _exhaustive_dfe(program: Program, qubits: Sequence[int], in_states,
     """
     n_qubits = len(qubits)
     for i_states in itertools.product(in_states, repeat=n_qubits):
+        # distinguish between a Z eigenstate and None
         i_st = functools.reduce(mul, (op(q) for op, q in zip(i_states, qubits) if op is not None),
+                                TensorProductState())
+
+        # explicitly initialize the in_state with None set to zero, i.e. plus Z eigenstate.
+        in_state_with_zeros =  functools.reduce(mul,
+                                                (plusZ(q) if op is None else op(q)
+                                                 for op, q in zip(i_states, qubits)),
                                 TensorProductState())
 
         if len(i_st) == 0:
             continue
 
         yield ExperimentSetting(
-            in_state=i_st,
+            in_state=in_state_with_zeros,
             observable=benchmarker.apply_clifford_to_pauli(program, _state_to_pauli(i_st)),
         )
 
@@ -151,24 +158,32 @@ def _monte_carlo_dfe(program: Program, qubits: Sequence[int], in_states: list, n
     """
     all_st_inds = np.random.randint(len(in_states), size=(n_terms, len(qubits)))
     for st_inds in all_st_inds:
-        i_st = functools.reduce(mul, (in_states[si](qubits[i])
-                                      for i, si in enumerate(st_inds)
-                                      if in_states[si] is not None), TensorProductState())
-
-        while len(i_st) == 0:
-            # pick a new one
-            second_try_st_inds = np.random.randint(len(in_states), size=len(qubits))
+        # begin loop in case the state ends up being trivial (all chosen states are None)
+        while True:
             i_st = functools.reduce(mul, (in_states[si](qubits[i])
-                                          for i, si in enumerate(second_try_st_inds)
+                                          for i, si in enumerate(st_inds)
                                           if in_states[si] is not None), TensorProductState())
+            if len(i_st) > 0:
+                # this choice is not trivial so continue
+                break
+
+            # pick new state indices and try again
+            st_inds = np.random.randint(len(in_states), size=len(qubits))
+
+        # explicitly initialize the in_state with None set to zero, i.e. plus Z eigenstate.
+        in_state_with_zeros =  functools.reduce(mul, (plusZ(qubits[i]) if in_states[si] is None
+                                                      else in_states[si](qubits[i])
+                                                      for i, si in enumerate(st_inds)),
+                                TensorProductState())
 
         yield ExperimentSetting(
-            in_state=i_st,
+            in_state=in_state_with_zeros,
             observable=benchmarker.apply_clifford_to_pauli(program, _state_to_pauli(i_st)),
         )
 
 
-def generate_monte_carlo_state_dfe_experiment(program: Program, qubits: List[int], benchmarker: BenchmarkConnection,
+def generate_monte_carlo_state_dfe_experiment(program: Program, qubits: List[int],
+                                              benchmarker: BenchmarkConnection,
                                               n_terms=200) -> ObservablesExperiment:
     """
     Estimate state fidelity by sampled direct fidelity estimation.
@@ -180,10 +195,12 @@ def generate_monte_carlo_state_dfe_experiment(program: Program, qubits: List[int
     [DFE1]  Practical Characterization of Quantum Devices without Tomography
             Silva et al., PRL 107, 210404 (2011)
             https://doi.org/10.1103/PhysRevLett.107.210404
+            https://arxiv.org/abs/1104.3835
 
     [DFE2]  Direct Fidelity Estimation from Few Pauli Measurements
             Flammia and Liu, PRL 106, 230501 (2011)
             https://doi.org/10.1103/PhysRevLett.106.230501
+            https://arxiv.org/abs/1104.4695
 
     :param program: A program comprised of clifford gates that constructs a state
         for which we estimate the fidelity.
@@ -215,10 +232,12 @@ def generate_monte_carlo_process_dfe_experiment(program: Program, qubits: List[i
     [DFE1]  Practical Characterization of Quantum Devices without Tomography
             Silva et al., PRL 107, 210404 (2011)
             https://doi.org/10.1103/PhysRevLett.107.210404
+            https://arxiv.org/abs/1104.3835
 
     [DFE2]  Direct Fidelity Estimation from Few Pauli Measurements
             Flammia and Liu, PRL 106, 230501 (2011)
             https://doi.org/10.1103/PhysRevLett.106.230501
+            https://arxiv.org/abs/1104.4695
 
     :param program: A program comprised of Clifford group gates that constructs a state
         for which we estimate the fidelity.
@@ -346,6 +365,6 @@ def estimate_dfe(results: List[ExperimentResult], kind: str) -> Tuple[float, flo
         mean_est = (d**2 * p_mean + d)/(d**2+d)
         var_est = d**2/(d+1)**2 * (d**2-1)**2/d**4 * np.sum(std_errs**2) / len(expectations) ** 2
     else:
-        raise ValueError('DFEdata can only be of kind \'state\' or \'process\'.')
+        raise ValueError('Kind can only be \'state\' or \'process\'.')
 
     return mean_est, np.sqrt(var_est)
