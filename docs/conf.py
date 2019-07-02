@@ -146,7 +146,10 @@ latex_elements = {
 
     # Additional stuff for the LaTeX preamble.
     #
-    'preamble': '',
+    'preamble': r'''
+    \usepackage{amsmath}
+    \usepackage{amssymb}
+    '''
 
     # Latex figure (float) alignment
     #
@@ -189,7 +192,7 @@ texinfo_documents = [
 # Additional stuff for the LaTeX preamble.
 #####################################################
 # add LaTeX macros
-latex_elements['preamble'] = r'\usepackage{amsmath}\n\usepackage{amssymb}\n'
+# latex_elements['preamble'] = r'\usepackage{amsmath}\n\usepackage{amssymb}\n'
 
 with open('latex_macros.sty', "r") as f:
 
