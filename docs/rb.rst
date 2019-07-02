@@ -8,14 +8,6 @@ compose to the identity to observe how performance degrades with increasing circ
 
 .. todo:: Talk some more about stuff.
 
-Unitary RB
-----------
-
-.. todo:: Talk about unitarity RB.
-
-
-
-
 
 Gates and Sequences
 -------------------
@@ -44,8 +36,6 @@ Standard and Interleaved RB
     z_obs_stats_to_survival_statistics
     fit_rb_results
 
-
-.. rubric:: Unitary RB
 
 Unitarity or Purity RB
 ----------------------
