@@ -44,16 +44,30 @@ class _OneQState:
     qubit: int
 
     def __str__(self):
+        if self.label in ['X', 'Y', 'Z']:
+            if self.index == 0:
+                eigen_state = '+'
+            else:
+                eigen_state = '-'
+            return f'{self.label}{eigen_state}_{self.qubit}'
+        # otherwise use standard numerical index
         return f'{self.label}{self.index}_{self.qubit}'
 
     @classmethod
     def from_str(cls, s):
-        ma = re.match(r'\s*(\w+)(\d+)_(\d+)\s*', s)
+        ma = re.match(r'\s*(\w+)([\d+-])_(\d+)\s*', s)
         if ma is None:
             raise ValueError(f"Couldn't parse '{s}'")
+        index = ma.group(2)
+        if index == '+':
+            index = int(0)
+        elif index == '-':
+            index = int(1)
+        else:
+            index = int(index)
         return _OneQState(
             label=ma.group(1),
-            index=int(ma.group(2)),
+            index=index,
             qubit=int(ma.group(3)),
         )
 
@@ -233,8 +247,7 @@ class ObservablesExperiment:
 
     def __init__(self,
                  settings: Union[List[ExperimentSetting], List[List[ExperimentSetting]]],
-                 program: Program,
-                 qubits: List[int] = None):
+                 program: Program):
         if len(settings) == 0:
             settings = []
         else:
@@ -244,10 +257,6 @@ class ObservablesExperiment:
 
         self._settings = settings  # type: List[List[ExperimentSetting]]
         self.program = program
-        if qubits is not None:
-            warnings.warn("The 'qubits' parameter has been deprecated and will be removed"
-                          "in a future release of pyquil")
-        self.qubits = qubits
 
     def __len__(self):
         return len(self._settings)
@@ -674,71 +683,6 @@ class ExperimentResult:
     calibration_expectation: Union[float, complex] = None
     calibration_std_err: Union[float, complex] = None
     calibration_counts: int = None
-
-    def __init__(self, setting: ExperimentSetting,
-                 expectation: Union[float, complex],
-                 total_counts: int,
-                 stddev: Union[float, complex] = None,
-                 std_err: Union[float, complex] = None,
-                 raw_expectation: Union[float, complex] = None,
-                 raw_stddev: float = None,
-                 raw_std_err: float = None,
-                 calibration_expectation: Union[float, complex] = None,
-                 calibration_stddev: Union[float, complex] = None,
-                 calibration_std_err: Union[float, complex] = None,
-                 calibration_counts: int = None):
-
-        object.__setattr__(self, 'setting', setting)
-        object.__setattr__(self, 'expectation', expectation)
-        object.__setattr__(self, 'total_counts', total_counts)
-        object.__setattr__(self, 'raw_expectation', raw_expectation)
-        object.__setattr__(self, 'calibration_expectation', calibration_expectation)
-        object.__setattr__(self, 'calibration_counts', calibration_counts)
-
-        if stddev is not None:
-            warnings.warn("'stddev' has been renamed to 'std_err'")
-            std_err = stddev
-        object.__setattr__(self, 'std_err', std_err)
-
-        if raw_stddev is not None:
-            warnings.warn("'raw_stddev' has been renamed to 'raw_std_err'")
-            raw_std_err = raw_stddev
-        object.__setattr__(self, 'raw_std_err', raw_std_err)
-
-        if calibration_stddev is not None:
-            warnings.warn("'calibration_stddev' has been renamed to 'calibration_std_err'")
-            calibration_std_err = calibration_stddev
-        object.__setattr__(self, 'calibration_std_err', calibration_std_err)
-
-    def get_stddev(self) -> Union[float, complex]:
-        warnings.warn("'stddev' has been renamed to 'std_err'")
-        return self.std_err
-
-    def set_stddev(self, value: Union[float, complex]):
-        warnings.warn("'stddev' has been renamed to 'std_err'")
-        object.__setattr__(self, 'std_err', value)
-
-    stddev = property(get_stddev, set_stddev)
-
-    def get_raw_stddev(self) -> float:
-        warnings.warn("'raw_stddev' has been renamed to 'raw_std_err'")
-        return self.raw_std_err
-
-    def set_raw_stddev(self, value: float):
-        warnings.warn("'raw_stddev' has been renamed to 'raw_std_err'")
-        object.__setattr__(self, 'raw_std_err', value)
-
-    raw_stddev = property(get_raw_stddev, set_raw_stddev)
-
-    def get_calibration_stddev(self) -> Union[float, complex]:
-        warnings.warn("'calibration_stddev' has been renamed to 'calibration_std_err'")
-        return self.calibration_std_err
-
-    def set_calibration_stddev(self, value: Union[float, complex]):
-        warnings.warn("'calibration_stddev' has been renamed to 'calibration_std_err'")
-        object.__setattr__(self, 'calibration_std_err', value)
-
-    calibration_stddev = property(get_calibration_stddev, set_calibration_stddev)
 
     def __str__(self):
         return f'{self.setting}: {self.expectation} +- {self.std_err}'

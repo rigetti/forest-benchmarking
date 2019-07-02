@@ -172,7 +172,7 @@ def test_experiment_result_compat():
         std_err=0.05,
         total_counts=100,
     )
-    assert str(er) == 'X0_0→(1+0j)*Z0: 0.9 +- 0.05'
+    assert str(er) == 'X+_0→(1+0j)*Z0: 0.9 +- 0.05'
 
 
 def test_experiment_result():
@@ -182,7 +182,7 @@ def test_experiment_result():
         std_err=0.05,
         total_counts=100,
     )
-    assert str(er) == 'X0_0→(1+0j)*Z0: 0.9 +- 0.05'
+    assert str(er) == 'X+_0→(1+0j)*Z0: 0.9 +- 0.05'
 
 
 def test_estimate_observables():
