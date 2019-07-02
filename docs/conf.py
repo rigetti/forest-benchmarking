@@ -16,7 +16,7 @@ import os
 import sys
 # sys.path.insert(0, os.path.abspath('.'))
 sys.path.insert(0, os.path.abspath('../'))
-sys.path.insert(0, os.path.abspath('../forest.benchmarking/'))
+sys.path.insert(0, os.path.abspath('../forest/benchmarking/'))
 
 
 # -- Project information -----------------------------------------------------
