@@ -15,9 +15,9 @@ API Reference
     :toctree: autogen
     :template: autosumm.rst
 
-    prepare_state
-    generate_single_depth_experiment
-    generate_2q_single_depth_experiment
+    bloch_rotation_to_eigenvectors
+    get_change_of_basis_from_eigvecs
+    change_of_basis_matrix_to_quil
     generate_rpe_experiments
     get_additive_error_factor
     num_trials
@@ -28,10 +28,11 @@ API Reference
     :toctree: autogen
     :template: autosumm.rst
 
-    p_max
-    xci
+    _p_max
+    _xci
     get_variance_upper_bound
+    estimate_phase_from_moments
     robust_phase_estimate
-    plot_RPE_iterations
+    plot_rpe_iterations
 
 
