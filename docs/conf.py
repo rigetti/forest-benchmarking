@@ -12,15 +12,17 @@
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
-# import os
-# import sys
+import os
+import sys
 # sys.path.insert(0, os.path.abspath('.'))
+sys.path.insert(0, os.path.abspath('../'))
+sys.path.insert(0, os.path.abspath('../forest/benchmarking/'))
 
 
 # -- Project information -----------------------------------------------------
 
 project = 'Forest-Benchmarking'
-copyright = '2018, Rigetti Computing'
+copyright = '2019, Rigetti Computing'
 author = 'Rigetti Computing'
 
 import forest.benchmarking as fb
@@ -44,14 +46,20 @@ release = VERSION
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.autosummary',
-    'sphinx.ext.mathjax',
     'sphinx_autodoc_typehints',
+    'sphinx.ext.doctest',
+    'sphinx.ext.todo',
+    'sphinx.ext.intersphinx',
+    'sphinx.ext.mathjax',
+    'nbsphinx',
 ]
+
+mathjax_path = "https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML"
 
 autosummary_generate = True
 
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ['_templates']
+templates_path = ['_templates/']
 
 # The suffix(es) of source filenames.
 # You can specify multiple suffix as a list of string:
@@ -72,7 +80,7 @@ language = None
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path .
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', '**.ipynb_checkpoints']
 
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = 'sphinx'
@@ -83,7 +91,7 @@ pygments_style = 'sphinx'
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'alabaster'
+html_theme = 'sphinx_rtd_theme'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
@@ -95,6 +103,9 @@ html_theme = 'alabaster'
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
+
+# If true, `todo` and `todoList` produce output, else they produce nothing.
+todo_include_todos = True
 
 # Custom sidebar templates, must be a dictionary that maps document names
 # to template names.
@@ -134,7 +145,12 @@ latex_elements = {
 
     # Additional stuff for the LaTeX preamble.
     #
-    # 'preamble': '',
+    'preamble': r'''
+    %\usepackage[utf8]{inputenc}
+    %\usepackage[T1]{fontenc}
+    \usepackage{amsmath}
+    \usepackage{amssymb}
+    '''
 
     # Latex figure (float) alignment
     #
@@ -172,4 +188,25 @@ texinfo_documents = [
 ]
 
 
+
 # -- Extension configuration -------------------------------------------------
+
+# Additional stuff for the LaTeX preamble.
+#####################################################
+# add LaTeX macros
+# latex_elements['preamble'] = r'\usepackage{amsmath}\n\usepackage{amssymb}\n'
+
+with open('latex_macros.sty', "r") as f:
+
+    try:
+        imgmath_latex_preamble  # check whether this is alread$
+    except NameError:
+        imgmath_latex_preamble = ""
+
+    for macro in f:
+        # used when building latex and pdf versions
+        latex_elements['preamble'] += macro + '\n'
+        # used when building html version
+        imgmath_latex_preamble += macro + '\n'
+
+#####################################################

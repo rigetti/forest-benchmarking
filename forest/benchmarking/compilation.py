@@ -176,7 +176,13 @@ def is_magic_angle(angle):
             or np.isclose(angle, 0.0))
 
 
-def basic_compile(program):
+def basic_compile(program: Program):
+    """
+    A rudimentary but predictable compiler.
+
+    :param program:
+    :return:
+    """
     new_prog = Program()
     new_prog.num_shots = program.num_shots
     new_prog.inst(program.defined_gates)
