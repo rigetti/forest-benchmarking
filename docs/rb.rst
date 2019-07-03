@@ -63,7 +63,7 @@ Analysis Helper functions for RB
     coherence_angle
     gamma
     interleaved_gate_fidelity_bounds
-    gate_infidelity_to_irb_decay
-    irb_decay_to_gate_infidelity
-    average_gate_infidelity_to_rb_decay
-    rb_decay_to_gate_fidelity
+    gate_error_to_irb_decay
+    irb_decay_to_gate_error
+    average_gate_error_to_rb_decay
+    rb_decay_to_gate_error
