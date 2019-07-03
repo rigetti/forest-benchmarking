@@ -1,5 +1,5 @@
 from .fitting import (fit_result_to_json,
-                      make_figure,
+                      plot_figure_for_fit,
                       base_param_decay,
                       fit_base_param_decay,
                       decay_constant_param_decay,
