@@ -24,6 +24,8 @@ scikit-learn
 # doc dependencies
 sphinx
 sphinx-autodoc-typehints
+sphinx_rtd_theme
+nbsphinx
 
 # for testing examples
 nbval
