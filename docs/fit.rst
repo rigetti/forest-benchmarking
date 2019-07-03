@@ -13,7 +13,7 @@ General Functions
     :template: autosumm.rst
 
     fit_result_to_json
-    make_figure
+    plot_figure_for_fit
 
 Fits
 -----------------
