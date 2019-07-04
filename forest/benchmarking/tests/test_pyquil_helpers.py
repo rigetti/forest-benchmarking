@@ -6,22 +6,29 @@ import pytest
 
 from pyquil import Program, get_qc, list_quantum_computers
 from pyquil.api import QVM, QuantumComputer, local_qvm
-from pyquil.tests.utils import DummyCompiler
-from pyquil.api._quantum_computer import (_symmetrization, _flip_array_to_prog,
-                                          _construct_orthogonal_array,
-                                          _construct_strength_two_orthogonal_array,
-                                          _construct_strength_three_orthogonal_array,
-                                          _parse_name, _get_qvm_with_topology,
-                                          _measure_bitstrings,
-                                          _consolidate_symmetrization_outputs,
-                                          _check_min_num_trials_for_symmetrized_readout)
 from pyquil.device import NxDevice, gates_in_isa
 from pyquil.gates import *
-from pyquil.quilbase import Declare, MemoryReference
 from pyquil.noise import decoherence_noise_with_asymmetric_ro
 from pyquil.pyqvm import PyQVM
-from pyquil.tests.utils import DummyCompiler
-from rpcq.messages import ParameterAref, PyQuilExecutableResponse
+
+from forest.benchmarking.pyquil_helpers import (_symmetrization,
+                                                _flip_array_to_prog,
+                                                _construct_orthogonal_array,
+                                                _construct_strength_two_orthogonal_array,
+                                                _construct_strength_three_orthogonal_array,
+                                                _measure_bitstrings, _consolidate_symmetrization_outputs,
+                                                _check_min_num_trials_for_symmetrized_readout)
+
+
+class DummyCompiler(AbstractCompiler):
+    def get_version_info(self):
+        return {}
+
+    def quil_to_native_quil(self, program: Program):
+        return program
+
+    def native_quil_to_executable(self, nq_program: Program):
+        return nq_program
 
 
 def test_flip_array_to_prog():
