@@ -2,6 +2,7 @@
 
 [![pipeline status](https://gitlab.com/rigetti/forest-benchmarking/badges/master/pipeline.svg)](https://gitlab.com/rigetti/forest-benchmarking/commits/master)
 [![Build Status](https://semaphoreci.com/api/v1/rigetti/forest-benchmarking/branches/master/shields_badge.svg)](https://semaphoreci.com/rigetti/forest-benchmarking)
+[![Documentation Status](https://readthedocs.org/projects/forest-benchmarking/badge/?version=latest)](https://forest-benchmarking.readthedocs.io/en/latest/?badge=latest)
 
 A library for quantum characterization, verification, validation (QCVV), and benchmarking using [pyQuil](https://github.com/rigetti/pyquil).
 

@@ -1,34 +1,37 @@
 Direct Fidelity Estimation
 ==========================
 
-Direct fidelity estimation uses partial tomography to quickly certify a quantum state
-or a quantum process at lower cost than full tomography.
+Direct fidelity estimation (DFE) uses knowledge about the target state or process to perform a
+target measurements to quickly certify a quantum state or a quantum process at lower cost than full
+tomography.
+
 
 Running DFE
 -----------
 
-.. todo:: Put a mini tutorial here.
+.. todo:: Put an overview or mini tutorial here.
 
 
-Data structures
----------------
-
-.. currentmodule:: forest.benchmarking.dfe
-.. autoclass:: dfe_experiment
-.. autoclass:: dfe_experiment_data
-.. autoclass:: dfe_calibration_data
-
-
-Functions
+State DFE
 ---------
+.. currentmodule:: forest.benchmarking.direct_fidelity_estimation
 .. autosummary::
     :toctree: autogen
     :template: autosumm.rst
 
-    calibrate_readout_imperfections
-    generate_state_dfe_experiment
-    generate_process_dfe_experiment
+    generate_exhaustive_state_dfe_experiment
+    generate_monte_carlo_state_dfe_experiment
     acquire_dfe_data
-    direct_fidelity_estimate
-    ratio_variance
+    estimate_dfe
 
+
+Process DFE
+-----------
+.. autosummary::
+    :toctree: autogen
+    :template: autosumm.rst
+
+    generate_exhaustive_process_dfe_experiment
+    generate_monte_carlo_process_dfe_experiment
+    acquire_dfe_data
+    estimate_dfe
