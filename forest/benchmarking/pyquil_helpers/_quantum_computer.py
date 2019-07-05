@@ -43,7 +43,6 @@ from pyquil.quil import Program, validate_supported_quil
 from forest.benchmarking.pyquil_helpers._symmetrization_helpers import ( _symmetrization,
                                                                          _consolidate_symmetrization_outputs,
                                                                          _measure_bitstrings,
-                                                                         _construct_orthogonal_array,
                                                                          _check_min_num_trials_for_symmetrized_readout
                                                                          )
 
