@@ -3,6 +3,7 @@ from math import pi, log
 from typing import List, Tuple
 import itertools
 from pyquil.quil import Program
+from pyquil.gates import RX, MEASURE
 import numpy as np
 
 
