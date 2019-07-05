@@ -4,7 +4,7 @@ import networkx as nx
 import numpy as np
 import pytest
 
-from pyquil import Program, get_qc, list_quantum_computers
+from pyquil import Program
 from pyquil.api import QVM, local_qvm
 from pyquil.device import NxDevice, gates_in_isa
 from pyquil.gates import *
@@ -13,6 +13,7 @@ from pyquil.pyqvm import PyQVM
 from pyquil.api._qac import AbstractCompiler
 
 from forest.benchmarking.pyquil_helpers import (QuantumComputer,
+                                                get_qc,
                                                 _symmetrization,
                                                 _flip_array_to_prog,
                                                 _construct_orthogonal_array,

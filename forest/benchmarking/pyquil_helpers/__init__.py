@@ -1,4 +1,4 @@
-from ._quantum_computer import QuantumComputer
+from ._quantum_computer import QuantumComputer, get_qc, list_quantum_computers
 
 from ._symmetrization_helpers import (_symmetrization,
                                       _flip_array_to_prog,
