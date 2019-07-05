@@ -1057,7 +1057,7 @@ def calibrate_observable_estimates(qc: QuantumComputer, expt_results: List[Exper
     The old estimates are moved to raw_* and the calibration results themselves for the given
     observable are recorded as calibration_*
 
-    Calibration is done by measuring expectation values of eigenstates of the obervable which
+    Calibration is done by measuring expectation values of eigenstates of the observable which
     ideally should yield either +/- 1 but in practice will have magnitude less than 1.
 
     :param qc: a quantum computer object on which to run the programs necessary to calibrate each
