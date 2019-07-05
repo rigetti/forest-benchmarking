@@ -11,7 +11,7 @@ from pyquil.quilbase import Pragma
 from pyquil.paulis import PauliTerm
 
 from forest.benchmarking.utils import transform_pauli_moments_to_bit
-from forest.benchmarking.analysis.fitting import fit_decay_constant_param_decay, \
+from forest.benchmarking.analysis.fitting import fit_decay_time_param_decay, \
     fit_decaying_cosine, fit_shifted_cosine
 from forest.benchmarking.observable_estimation import ObservablesExperiment, ExperimentResult, \
     ExperimentSetting, estimate_observables, minusZ, plusZ, minusY
@@ -147,8 +147,8 @@ def fit_t1_results(times: Sequence[float], z_expectations: Sequence[float],
         probability_one, _ = transform_pauli_moments_to_bit(np.asarray(-1 * z_expectations), 0)
         weights = None
 
-    return fit_decay_constant_param_decay(np.asarray(times), probability_one, weights,
-                                          param_guesses)
+    return fit_decay_time_param_decay(np.asarray(times), probability_one, weights,
+                                      param_guesses)
 
 
 # ==================================================================================================

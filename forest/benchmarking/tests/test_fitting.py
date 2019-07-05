@@ -1,7 +1,7 @@
 import numpy as np
 
 from forest.benchmarking.analysis.fitting import fit_shifted_cosine, \
-    fit_decay_constant_param_decay, fit_decaying_cosine
+    fit_decay_time_param_decay, fit_decaying_cosine
 
 
 def test_shifted_cosine():
@@ -24,7 +24,7 @@ def test_fit_decay_constant_param_decay():
     times = np.linspace(0, 2 * mock_t1['T1'], mock_t1['num_points'])
     data = np.asarray([np.exp(-1 * t / mock_t1['T1']) for t in times])
 
-    fit = fit_decay_constant_param_decay(times, data)
+    fit = fit_decay_time_param_decay(times, data)
 
     assert np.isclose(fit.params['decay_constant'], mock_t1['T1'])
 
