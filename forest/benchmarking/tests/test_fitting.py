@@ -16,7 +16,7 @@ def test_shifted_cosine():
     assert np.isclose(2 * np.pi / fit.params['frequency'], mock_rabi['rabi_per'])
 
 
-def test_fit_decay_constant_param_decay():
+def test_fit_decay_time_param_decay():
     num_points_sampled = 30
     true_t1 = 15  # us
     mock_t1 = {'T1': true_t1, 'num_points': num_points_sampled}
@@ -26,7 +26,7 @@ def test_fit_decay_constant_param_decay():
 
     fit = fit_decay_time_param_decay(times, data)
 
-    assert np.isclose(fit.params['decay_constant'], mock_t1['T1'])
+    assert np.isclose(fit.params['decay_time'], mock_t1['T1'])
 
 
 def test_decaying_sinusoid():
@@ -42,6 +42,6 @@ def test_decaying_sinusoid():
 
     fit = fit_decaying_cosine(times, data)
 
-    assert np.isclose(fit.params['decay_constant'], mock_t2['T2'])
+    assert np.isclose(fit.params['decay_time'], mock_t2['T2'])
     assert np.isclose(fit.params['frequency'], mock_t2['qubit_detuning'])
 
