@@ -365,8 +365,8 @@ def fit_rabi_results(angles: Sequence[float], z_expectations: Sequence[float],
 # ==================================================================================================
 #   CZ phase Ramsey
 # ==================================================================================================
-def generate_cz_phase_ramsey_experiment(cz_qubits: Sequence[int], measure_qubit: int,
-                                        angles: Sequence[float]) -> List[ObservablesExperiment]:
+def generate_cz_phase_ramsey_experiments(cz_qubits: Sequence[int], measure_qubit: int,
+                                         angles: Sequence[float]) -> List[ObservablesExperiment]:
     """
     Return ObservablesExperiments containing programs that constitute a CZ phase ramsey experiment.
 

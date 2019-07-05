@@ -59,5 +59,5 @@ CZ phase Ramsey
     :toctree: autogen
     :template: autosumm.rst
 
-    generate_cz_phase_ramsey_experiment
+    generate_cz_phase_ramsey_experiments
     fit_cz_phase_ramsey_results
