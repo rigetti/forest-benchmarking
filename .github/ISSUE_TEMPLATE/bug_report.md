@@ -7,13 +7,14 @@ assignees: ''
 
 ---
 
+
 Tell us the versions of your environment (ensure you are running the latest):
----
-forest benchmarking version: 
-pyQuil version:  
-qvm version:
-quilc version: 
----
+
+- [ ] forest benchmarking version: 
+- [ ] pyQuil version:  
+- [ ] qvm version:
+- [ ] quilc version: 
+
 
 **Describe the bug**
 A clear and concise description of what the bug is.
@@ -25,7 +26,6 @@ A clear and concise description of what the bug is.
 2. get that
 3. ...
 4. See error
-
 
 
 **Possible solutions**
