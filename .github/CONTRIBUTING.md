@@ -22,7 +22,7 @@ contributors:
   
 * Documentation. Public functions *must* have docstrings. Documentation 
   should also be provided as comments to your code. Finally please include 
-  references to to the relavent papers and equations in those papers.
+  references to to the relevant papers and equations in those papers.
   The recomended reference style guide is:
   
   [TOPX]  Cool title about topic X \
