@@ -4,10 +4,9 @@ import json
 import logging
 import re
 import sys
-import warnings
 from json import JSONEncoder
 from operator import mul
-from typing import List, Union, Iterable, Tuple, Dict, Callable
+from typing import List, Union, Iterable, Tuple, Dict, Callable, Sequence
 from copy import copy
 
 import numpy as np
@@ -1151,3 +1150,32 @@ def ratio_variance(a: Union[float, np.ndarray],
     :param var_b: Variance in 'B'
     """
     return var_a / b**2 + (a**2 * var_b) / b**4
+
+
+def get_results_by_qubit_groups(results: Iterable[ExperimentResult],
+                                qubit_groups: Sequence[Sequence[int]]) \
+        -> Dict[Tuple[int, ...], List[ExperimentResult]]:
+    """
+    Organizes ExperimentResults by the group of qubits on which the observable of the result acts.
+
+    The qubit_groups are assumed to be disjoint. Each experiment result will be assigned to a
+    qubit group key if the observable of the result.setting acts on a subset of the qubits in
+    the group. If the result does not act on a subset of qubits of any given group then the
+    result is ignored.
+
+    :param qubit_groups: disjoint groups of qubits for which you want the pertinent results.
+    :param results: ExperimentResults from running an ObservablesExperiment
+    :return: a dictionary whose keys are individual groups of qubits (as sorted tuples). The
+        corresponding value is the list of experiment results whose observables measure some
+        subset of that qubit group. The result order is maintained within each group.
+    """
+    qubit_groups = [tuple(sorted(group)) for group in qubit_groups]
+    results_by_qubit_group = {group: [] for group in qubit_groups}
+    for res in results:
+        res_qs = res.setting.observable.get_qubits()
+
+        for group in qubit_groups:
+            if set(res_qs).issubset(set(group)):
+                results_by_qubit_group[group].append(res)
+
+    return results_by_qubit_group
