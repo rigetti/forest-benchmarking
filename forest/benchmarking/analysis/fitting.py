@@ -44,24 +44,25 @@ def fit_base_param_decay(x: np.ndarray, y: np.ndarray, weights: np.ndarray = Non
     return decay_model.fit(y, x=x, params=params, weights=weights)
 
 
-def decay_constant_param_decay(x: np.ndarray,  amplitude: float, decay_constant: float,
-                               offset: float = 0.0) -> np.ndarray:
+def decay_time_param_decay(x: np.ndarray, amplitude: float, decay_time: float,
+                           offset: float = 0.0) -> np.ndarray:
     """
     Model an exponential decay parameterized by a decay constant with constant e as the base.
 
     :param x: The independent variable with respect to which decay is calculated.
     :param amplitude: The amplitude of the decay curve.
-    :param decay_constant: The decay constant - e.g. T1 - of the decay curve.
+    :param decay_time: The inverse decay rate - e.g. T1 - of the decay curve.
     :param offset: The offset of the curve, (typically take to be 0.0).
     :return: Exponential decay fit function, parameterized with a decay constant
     """
-    return np.asarray(amplitude * np.exp(-1 * (x - offset) / decay_constant))
+    return np.asarray(amplitude * np.exp(-1 * (x - offset) / decay_time))
 
 
-def fit_decay_constant_param_decay(x: np.ndarray, y: np.ndarray, weights: np.ndarray = None,
-                                   param_guesses: tuple = (1., 10, 0)) -> ModelResult:
+def fit_decay_time_param_decay(x: np.ndarray, y: np.ndarray, weights: np.ndarray = None,
+                               param_guesses: tuple = (1., 10, 0)) -> ModelResult:
     """
-    Fit experimental data x, y to an exponential decay parameterized by a decay constant.
+    Fit experimental data x, y to an exponential decay parameterized by a decay time, or inverse
+    decay rate.
 
     :param x: The independent variable, e.g. depth or time
     :param y: The dependent variable, e.g. survival probability
@@ -70,26 +71,26 @@ def fit_decay_constant_param_decay(x: np.ndarray, y: np.ndarray, weights: np.nda
     :return: a lmfit Model
     """
     _check_data(x, y, weights)
-    decay_model = Model(decay_constant_param_decay)
-    params = decay_model.make_params(amplitude=param_guesses[0], decay_constant=param_guesses[1],
+    decay_model = Model(decay_time_param_decay)
+    params = decay_model.make_params(amplitude=param_guesses[0], decay_time=param_guesses[1],
                                      offset=param_guesses[2])
     return decay_model.fit(y, x=x, params=params, weights=weights)
 
 
-def decaying_cosine(x: np.ndarray, amplitude: float, decay_constant: float, offset: float,
+def decaying_cosine(x: np.ndarray, amplitude: float, decay_time: float, offset: float,
                     baseline: float, frequency: float) -> np.ndarray:
     """
     Calculate exponentially decaying sinusoid at a series of points.
 
     :param x: The independent variable with respect to which decay is calculated.
     :param amplitude: The amplitude of the decaying sinusoid.
-    :param decay_constant: The decay constant - e.g. T2 - of the decay curve.
+    :param decay_time: The inverse decay rate - e.g. T2 - of the decay curve.
     :param offset: The argument offset of the sinusoidal curve, o for sin(x - o)
     :param baseline: The baseline of the sinusoid, e.g. b for sin(x) + b
     :param frequency: The frequency of the sinusoid, e.g. f for sin(f x)
     :return: The exponentially decaying sinusoid evaluated at the point(s) x
     """
-    return amplitude * np.exp(-1 * x / decay_constant) * np.cos(frequency * (x - offset)) + baseline
+    return amplitude * np.exp(-1 * x / decay_time) * np.cos(frequency * (x - offset)) + baseline
 
 
 def fit_decaying_cosine(x: np.ndarray, y: np.ndarray, weights: np.ndarray = None,
@@ -105,7 +106,7 @@ def fit_decaying_cosine(x: np.ndarray, y: np.ndarray, weights: np.ndarray = None
     """
     _check_data(x, y, weights)
     decay_model = Model(decaying_cosine)
-    params = decay_model.make_params(amplitude=param_guesses[0], decay_constant=param_guesses[1],
+    params = decay_model.make_params(amplitude=param_guesses[0], decay_time=param_guesses[1],
                                      offset=param_guesses[2], baseline=param_guesses[3],
                                      frequency=param_guesses[4])
     return decay_model.fit(y, x=x, params=params, weights=weights)
