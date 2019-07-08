@@ -226,6 +226,9 @@ def _abbrev_program(program: Program, max_len=10):
 
 class ObservablesExperiment:
     """
+    A data structure for experiments involving estimation of the expectation of various
+    observables measured on a core program, possibly with a collection of different preparations.
+
     Many near-term quantum algorithms involve:
      - some limited state preparation, e.g. prepare a Pauli eigenstate
      - enacting a quantum process (like in tomography) or preparing a variational ansatz state
@@ -1054,11 +1057,13 @@ def calibrate_observable_estimates(qc: QuantumComputer, expt_results: List[Exper
     """
     Calibrates the expectation and std_err of the input expt_results and updates those estimates.
 
-    The old estimates are moved to raw_* and the calibration results themselves for the given
-    observable are recorded as calibration_*
-
-    Calibration is done by measuring expectation values of eigenstates of the observable which
-    ideally should yield either +/- 1 but in practice will have magnitude less than 1.
+    The input expt_results should be estimated with symmetrized readout error for this to work
+    properly. Calibration is done by measuring expectation values of eigenstates of the
+    observable, which ideally should yield either +/- 1 but in practice will have magnitude less
+    than 1. For default exhaustive_symmetrization the calibration expectation magnitude
+    averaged over all eigenvectors is recorded as calibration_expectation. The original
+    expectation is moved to raw_expectation and replaced with the old value scaled by the inverse
+    calibration expectation.
 
     :param qc: a quantum computer object on which to run the programs necessary to calibrate each
         result.
