@@ -18,12 +18,13 @@ Data structures
     :toctree: autogen
     :template: autosumm.rst
 
-    _OneQState
-    TensorProductState
-    ExperimentSetting
-    estimate_observables
     ObservablesExperiment
+    ExperimentSetting
     ExperimentResult
+    TensorProductState
+    _OneQState
+    to_json
+    read_json
 
 
 Functions
@@ -32,10 +33,10 @@ Functions
     :toctree: autogen
     :template: autosumm.rst
 
-    generate_experiment_programs
-    group_settings
-    group_settings_clique_removal
     estimate_observables
     calibrate_observable_estimates
+    generate_experiment_programs
+    group_settings
+    shots_to_obs_moments
     ratio_variance
 
