@@ -11,7 +11,7 @@ from pyquil.quilbase import Pragma
 from pyquil.paulis import PauliTerm
 
 from forest.benchmarking.utils import transform_pauli_moments_to_bit
-from forest.benchmarking.analysis.fitting import fit_decay_constant_param_decay, \
+from forest.benchmarking.analysis.fitting import fit_decay_time_param_decay, \
     fit_decaying_cosine, fit_shifted_cosine
 from forest.benchmarking.observable_estimation import ObservablesExperiment, ExperimentResult, \
     ExperimentSetting, estimate_observables, minusZ, plusZ, minusY
@@ -109,23 +109,6 @@ def generate_t1_experiments(qubits: Sequence[int], times: Sequence[float]) \
     return expts
 
 
-def acquire_t1_data(qc: QuantumComputer, experiments: Sequence[ObservablesExperiment],
-                    num_shots: int = 500) -> List[List[ExperimentResult]]:
-    """
-    Acquire data to measure the T1 decay time for each of the input experiments.
-
-    This simply calls the standard data acquisition method but is included to keep consistency
-    with other routines in forest-benchmarking which offer named data acquisition methods.
-
-    :param qc: The QuantumComputer to run the experiment on
-    :param experiments: the ObservablesExperiments to run on the given qc
-    :param num_shots: the number of shots to collect for each experiment.
-    :return: a list of ExperimentResults for each ObservablesExperiment, returned in order of the
-        input sequence of experiments.
-    """
-    return acquire_qubit_spectroscopy_data(qc, experiments, num_shots)
-
-
 def fit_t1_results(times: Sequence[float], z_expectations: Sequence[float],
                    z_std_errs: Sequence[float] = None, param_guesses: tuple = (1.0, 15, 0.0)) \
         -> ModelResult:
@@ -164,8 +147,8 @@ def fit_t1_results(times: Sequence[float], z_expectations: Sequence[float],
         probability_one, _ = transform_pauli_moments_to_bit(np.asarray(-1 * z_expectations), 0)
         weights = None
 
-    return fit_decay_constant_param_decay(np.asarray(times), probability_one, weights,
-                                          param_guesses)
+    return fit_decay_time_param_decay(np.asarray(times), probability_one, weights,
+                                      param_guesses)
 
 
 # ==================================================================================================
@@ -245,23 +228,6 @@ def generate_t2_echo_experiments(qubits: Sequence[int], times: Sequence[float],
         expts.append(ObservablesExperiment(settings, program))
 
     return expts
-
-
-def acquire_t2_data(qc: QuantumComputer, experiments: Sequence[ObservablesExperiment],
-                    num_shots: int = 500) -> List[List[ExperimentResult]]:
-    """
-    Execute experiments to measure the T2 time of one or more qubits.
-
-    This simply calls the standard data acquisition method but is included to keep consistency
-    with other routines in forest-benchmarking which offer named data acquisition methods.
-
-    :param qc: The QuantumComputer to run the experiment on
-    :param experiments: the ObservablesExperiments to run on the given qc
-    :param num_shots: the number of shots to collect for each experiment.
-    :return: a list of ExperimentResults for each ObservablesExperiment, returned in order of the
-        input sequence of experiments.
-    """
-    return acquire_qubit_spectroscopy_data(qc, experiments, num_shots)
 
 
 def fit_t2_results(times: Sequence[float], y_expectations: Sequence[float],
@@ -344,23 +310,6 @@ def generate_rabi_experiments(qubits: Sequence[int], angles: Sequence[float]) \
     return expts
 
 
-def acquire_rabi_data(qc: QuantumComputer, experiments: Sequence[ObservablesExperiment],
-                      num_shots: int = 500) -> List[List[ExperimentResult]]:
-    """
-    Execute Rabi experiments.
-
-    This simply calls the standard data acquisition method but is included to keep consistency
-    with other routines in forest-benchmarking which offer named data acquisition methods.
-
-    :param qc: The QuantumComputer to run the experiment on
-    :param experiments: the ObservablesExperiments to run on the given qc
-    :param num_shots: the number of shots to collect for each experiment.
-    :return: a list of ExperimentResults for each ObservablesExperiment, returned in order of the
-        input sequence of experiments.
-    """
-    return acquire_qubit_spectroscopy_data(qc, experiments, num_shots)
-
-
 def fit_rabi_results(angles: Sequence[float], z_expectations: Sequence[float],
                      z_std_errs: Sequence[float] = None, param_guesses: tuple = (-.5, 0, .5, 1.)) \
         -> ModelResult:
@@ -416,8 +365,8 @@ def fit_rabi_results(angles: Sequence[float], z_expectations: Sequence[float],
 # ==================================================================================================
 #   CZ phase Ramsey
 # ==================================================================================================
-def generate_cz_phase_ramsey_experiment(cz_qubits: Sequence[int], measure_qubit: int,
-                                        angles: Sequence[float]) -> List[ObservablesExperiment]:
+def generate_cz_phase_ramsey_experiments(cz_qubits: Sequence[int], measure_qubit: int,
+                                         angles: Sequence[float]) -> List[ObservablesExperiment]:
     """
     Return ObservablesExperiments containing programs that constitute a CZ phase ramsey experiment.
 
@@ -440,23 +389,6 @@ def generate_cz_phase_ramsey_experiment(cz_qubits: Sequence[int], measure_qubit:
         expts.append(ObservablesExperiment([settings], program))
 
     return expts
-
-
-def acquire_cz_phase_ramsey_data(qc: QuantumComputer, experiments: Sequence[ObservablesExperiment],
-                                 num_shots: int = 500) -> List[List[ExperimentResult]]:
-    """
-    Execute experiments to measure the RZ incurred as a result of a CZ gate.
-
-    This simply calls the standard data acquisition method but is included to keep consistency
-    with other routines in forest-benchmarking which offer named data acquisition methods.
-
-    :param qc: The QuantumComputer to run the experiment on
-    :param experiments: the ObservablesExperiments to run on the given qc
-    :param num_shots: the number of shots to collect for each experiment.
-    :return: a list of ExperimentResults for each ObservablesExperiment, returned in order of the
-        input sequence of experiments.
-    """
-    return acquire_qubit_spectroscopy_data(qc, experiments, num_shots)
 
 
 def fit_cz_phase_ramsey_results(angles: Sequence[float], y_expectations: Sequence[float],
