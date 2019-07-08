@@ -1152,6 +1152,44 @@ def ratio_variance(a: Union[float, np.ndarray],
     return var_a / b**2 + (a**2 * var_b) / b**4
 
 
+def merge_disjoint_experiments(experiments: List[ObservablesExperiment]) -> ObservablesExperiment:
+    """
+    Merges the list of experiments into a single experiment that runs the sum of the individual
+    experiment programs and contains all of the combined experiment settings.
+
+    A group of ObservablesExperiments whose programs operate on disjoint sets of qubits can be
+    'parallelized' so that the total number of runs can be reduced after grouping the settings.
+    Settings which act on disjoint sets of qubits can be automatically estimated from the same
+    run on the quantum computer.
+
+    If any experiment programs act on a shared qubit they cannot be thoughtlessly composed since
+    the order of operations on the shared qubit may have a significant impact on the program
+    behaviour; therefore we do not recommend using this method if this is the case.
+
+    Even when the individual experiments act on disjoint sets of qubits you must be
+    careful not to associate 'parallel' with 'simultaneous' execution. Physically the gates
+    specified in a pyquil Program occur as soon as resources are available; meanwhile, measurement
+    happens only after all gates. There is no specification of the exact timing of gates beyond
+    their causal relationships. Therefore, while grouping experiments into parallel operation can
+    be quite beneficial for time savings, do not depend on any simultaneous execution of gates on
+    different qubits, and be wary of the fact that measurement happens only after all gates have
+    finished.
+
+    Note that to get the time saving benefits you need to call `group_settings` on the ouput
+    experiment.
+
+    :param experiments: a group of experiments to combine into a single experiment
+    :return: a single experiment that runs the summed program and all settings.
+    """
+    # get a flat list of all settings, to be regrouped later
+    parallel_settings = [setting for expt in experiments
+                         for simult_settings in expt
+                         for setting in simult_settings]
+    parallel_prog = sum([expt.program for expt in experiments], Program())
+
+    return ObservablesExperiment(parallel_settings, parallel_prog)
+
+
 def get_results_by_qubit_groups(results: Iterable[ExperimentResult],
                                 qubit_groups: Sequence[Sequence[int]]) \
         -> Dict[Tuple[int, ...], List[ExperimentResult]]:

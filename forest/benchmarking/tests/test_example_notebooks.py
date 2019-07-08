@@ -189,9 +189,8 @@ def test_tomography_process_nb():
     assert output_str.find('failed') is -1
 
 
-# Notebook fails at the moment will fix on the tomography branch
 # ~4 sec
-# def test_tomography_state_nb():
-#    output_str = run_notebook('tomography_state.ipynb')
-#    print(output_str)
-#    assert check_for_failure_and_empty_output(output_str)
+def test_tomography_state_nb():
+   output_str = run_notebook('tomography_state.ipynb')
+   print(output_str)
+   assert check_for_failure_and_empty_output(output_str)
