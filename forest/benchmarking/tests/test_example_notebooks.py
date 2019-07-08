@@ -186,7 +186,7 @@ def test_superoperator_tools_nb():
 def test_tomography_process_nb():
     output_str = run_notebook('tomography_process.ipynb')
     print(output_str)
-    assert output_str.find('failed') is -1
+    assert check_for_failure_and_empty_output(output_str)
 
 
 # ~4 sec
