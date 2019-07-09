@@ -30,16 +30,19 @@ def _state_to_pauli(state: TensorProductState) -> PauliTerm:
     return term
 
 
-def _exhaustive_dfe(program: Program, qubits: Sequence[int], in_states,
-                    benchmarker: BenchmarkConnection) -> Iterable[ExperimentSetting]:
+def _exhaustive_dfe(benchmarker: BenchmarkConnection, program: Program, qubits: Sequence[int],
+                    in_states) -> Iterable[ExperimentSetting]:
     """
     Yield experiments over itertools.product(in_states).
 
     Used as a helper function for generate_exhaustive_xxx_dfe_experiment routines.
 
-    :param program: A program comprised of clifford gates
+    :param benchmarker: object returned from pyquil.api.get_benchmarker() used to conjugate each 
+        Pauli by the Clifford program
+    :param program: A program comprised of Clifford gates
     :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
-        used in ``program``.
+        used in ``program``, in which case it is assumed the identity acts on these qubits. 
+        Note that we assume qubits are initialized to the |0> state.
     :param in_states: Use these single-qubit Pauli operators in every itertools.product()
         to generate an exhaustive list of DFE experiments.
     :return: experiment setting iterator for exhaustive dfe settings
@@ -65,9 +68,8 @@ def _exhaustive_dfe(program: Program, qubits: Sequence[int], in_states,
         )
 
 
-def generate_exhaustive_process_dfe_experiment(program: Program, qubits: list,
-                                               benchmarker: BenchmarkConnection) \
-        -> ObservablesExperiment:
+def generate_exhaustive_process_dfe_experiment(benchmarker: BenchmarkConnection, program: Program,
+                                               qubits: list) -> ObservablesExperiment:
     """
     Estimate process fidelity by exhaustive direct fidelity estimation (DFE).
 
@@ -88,24 +90,24 @@ def generate_exhaustive_process_dfe_experiment(program: Program, qubits: list,
             https://doi.org/10.1103/PhysRevLett.106.230501
             https://arxiv.org/abs/1104.4695
 
+    :param benchmarker: object returned from pyquil.api.get_benchmarker() used to conjugate each 
+        Pauli by the Clifford program
     :param program: A program comprised of Clifford group gates that defines the process for
         which we estimate the fidelity.
     :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
-        used in ``program``.
-    :param benchmarker: A ``BenchmarkConnection`` object to be used in experiment design
+        used in ``program``, in which case it is assumed the identity acts on these qubits. 
+        Note that we assume qubits are initialized to the |0> state.
     :return: an ObservablesExperiment that constitutes a process DFE experiment.
     """
-    expr = ObservablesExperiment(list(
-        _exhaustive_dfe(program=program,
-                        qubits=qubits,
-                        in_states=[None, plusX, minusX, plusY, minusY, plusZ, minusZ],
-                        benchmarker=benchmarker)),
+    expt = ObservablesExperiment(
+        list(_exhaustive_dfe(benchmarker=benchmarker, program=program, qubits=qubits,
+                             in_states=[None, plusX, minusX, plusY, minusY, plusZ, minusZ])),
         program=program)
-    return expr
+    return expt
 
 
-def generate_exhaustive_state_dfe_experiment(program: Program, qubits: list,
-                                             benchmarker: BenchmarkConnection) -> ObservablesExperiment:
+def generate_exhaustive_state_dfe_experiment(benchmarker: BenchmarkConnection, program: Program,
+                                             qubits: list) -> ObservablesExperiment:
     """
     Estimate state fidelity by exhaustive direct fidelity estimation.
 
@@ -126,31 +128,35 @@ def generate_exhaustive_state_dfe_experiment(program: Program, qubits: list,
             https://doi.org/10.1103/PhysRevLett.106.230501
             https://arxiv.org/abs/1104.4695
 
+    :param benchmarker: object returned from pyquil.api.get_benchmarker() used to conjugate each 
+        Pauli by the Clifford program
     :param program: A program comprised of Clifford group gates that constructs a state
         for which we estimate the fidelity.
     :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
-        used in ``program``.
-    :param benchmarker: A ``BenchmarkConnection`` object to be used in experiment design
+        used in ``program``, in which case it is assumed the identity acts on these qubits. 
+        Note that we assume qubits are initialized to the |0> state.
     :return: an ObservablesExperiment that constitutes a state DFE experiment.
     """
-    expr = ObservablesExperiment(list(
-        _exhaustive_dfe(program=program,
-                        qubits=qubits,
-                        in_states=[None, plusZ],
-                        benchmarker=benchmarker)),
+    expt = ObservablesExperiment(
+        list(_exhaustive_dfe(benchmarker=benchmarker, program=program, qubits=qubits,
+                             in_states=[None, plusZ])),
         program=program)
-    return expr
+    return expt
 
 
-def _monte_carlo_dfe(program: Program, qubits: Sequence[int], in_states: list, n_terms: int,
-                     benchmarker: BenchmarkConnection) -> Iterable[ExperimentSetting]:
-    """Yield experiments over itertools.product(in_paulis).
+def _monte_carlo_dfe(benchmarker: BenchmarkConnection, program: Program, qubits: Sequence[int],
+                     in_states: list, n_terms: int) -> Iterable[ExperimentSetting]:
+    """
+    Yield experiments over itertools.product(in_paulis).
 
     Used as a helper function for generate_monte_carlo_xxx_dfe_experiment routines.
 
+    :param benchmarker: object returned from pyquil.api.get_benchmarker() used to conjugate each 
+        Pauli by the Clifford program
     :param program: A program comprised of clifford gates
     :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
-        used in ``program``.
+        used in ``program``, in which case it is assumed the identity acts on these qubits. 
+        Note that we assume qubits are initialized to the |0> state.
     :param in_states: Use these single-qubit Pauli operators in every itertools.product()
         to generate an exhaustive list of DFE experiments.
     :param n_terms: Number of preparation and measurement settings to be chosen at random
@@ -182,9 +188,9 @@ def _monte_carlo_dfe(program: Program, qubits: Sequence[int], in_states: list, n
         )
 
 
-def generate_monte_carlo_state_dfe_experiment(program: Program, qubits: List[int],
-                                              benchmarker: BenchmarkConnection,
-                                              n_terms=200) -> ObservablesExperiment:
+def generate_monte_carlo_state_dfe_experiment(benchmarker: BenchmarkConnection, program: Program,
+                                              qubits: List[int], n_terms=200) \
+        -> ObservablesExperiment:
     """
     Estimate state fidelity by sampled direct fidelity estimation.
 
@@ -205,23 +211,23 @@ def generate_monte_carlo_state_dfe_experiment(program: Program, qubits: List[int
     :param program: A program comprised of clifford gates that constructs a state
         for which we estimate the fidelity.
     :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
-        used in ``program``.
+        used in ``program``, in which case it is assumed the identity acts on these qubits. 
+        Note that we assume qubits are initialized to the |0> state.
     :param benchmarker: The `BenchmarkConnection` object used to design experiments
     :param n_terms: Number of randomly chosen observables to measure. This number should be 
         a constant less than ``2**len(qubits)``, otherwise ``exhaustive_state_dfe`` is more efficient.
     :return: an ObservablesExperiment that constitutes a state DFE experiment.
     """
-    expr = ObservablesExperiment(list(
-        _monte_carlo_dfe(program=program, qubits=qubits,
-                         in_states=[None, plusZ],
-                         n_terms=n_terms, benchmarker=benchmarker)),
+    expt = ObservablesExperiment(
+        list(_monte_carlo_dfe(benchmarker=benchmarker, program=program, qubits=qubits,
+                              in_states=[None, plusZ], n_terms=n_terms)),
         program=program)
-    return expr
+    return expt
 
 
-def generate_monte_carlo_process_dfe_experiment(program: Program, qubits: List[int],
-                                                benchmarker: BenchmarkConnection,
-                                                n_terms: int = 200) -> ObservablesExperiment:
+def generate_monte_carlo_process_dfe_experiment(benchmarker: BenchmarkConnection, program: Program,
+                                                qubits: List[int], n_terms: int = 200) \
+        -> ObservablesExperiment:
     """
     Estimate process fidelity by randomly sampled direct fidelity estimation.
 
@@ -242,42 +248,44 @@ def generate_monte_carlo_process_dfe_experiment(program: Program, qubits: List[i
     :param program: A program comprised of Clifford group gates that constructs a state
         for which we estimate the fidelity.
     :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
-        used in ``program``.
+        used in ``program``, in which case it is assumed the identity acts on these qubits. 
+        Note that we assume qubits are initialized to the |0> state.
     :param benchmarker: The `BenchmarkConnection` object used to design experiments
     :param n_terms: Number of randomly chosen observables to measure. This number should be 
         a constant less than ``2**len(qubits)``, otherwise ``exhaustive_process_dfe`` is more efficient.
     :return: an ObservablesExperiment that constitutes a process DFE experiment.
     """
-    expr = ObservablesExperiment(list(
-        _monte_carlo_dfe(program=program, qubits=qubits,
-                         in_states=[None, plusX, minusX, plusY, minusY, plusZ, minusZ],
-                         n_terms=n_terms, benchmarker=benchmarker)),
+    expt = ObservablesExperiment(
+        list(_monte_carlo_dfe(benchmarker=benchmarker, program=program, qubits=qubits,
+                              in_states=[None, plusX, minusX, plusY, minusY, plusZ, minusZ],
+                              n_terms=n_terms)),
         program=program)
-    return expr
+    return expt
 
 
-def acquire_dfe_data(qc: QuantumComputer, expr: ObservablesExperiment, num_shots=10_000,
-                     active_reset=False, mitigate_readout_errors=True) -> List[ExperimentResult]:
+def acquire_dfe_data(qc: QuantumComputer, expt: ObservablesExperiment, num_shots: int = 10_000,
+                     active_reset: bool = False, mitigate_readout_errors: bool = True) \
+        -> List[ExperimentResult]:
     """
     Acquire data necessary for direct fidelity estimate (DFE).
 
     :param qc: A quantum computer object where the experiment will run.
-    :param expr: An ObservablesExperiment object describing the experiments to be run.
+    :param expt: An ObservablesExperiment object describing the experiments to be run.
     :param num_shots: The number of shots to be taken in each experiment. If
         mitigate_readout_errors is set to True then this same number of shots will be used for
         each round of symmetrized data collection and each calibration of an observable.
-    :param active_reset: Boolean flag indicating whether experiments should terminate with an
-        active reset instruction (this can make experiments a lot faster).
+    :param active_reset: Boolean flag indicating whether experiments should begin with an
+        active reset instruction (this can make the collection of experiments run a lot faster).
     :param mitigate_readout_errors: Boolean flag indicating whether bias due to imperfect
         readout should be corrected
     :return: results from running the given DFE experiment. These can be passed to estimate_dfe
     """
     if mitigate_readout_errors:
-        res = list(estimate_observables(qc, expr, num_shots=num_shots, active_reset=active_reset,
+        res = list(estimate_observables(qc, expt, num_shots=num_shots, active_reset=active_reset,
                                         symmetrization_method=exhaustive_symmetrization))
         res = list(calibrate_observable_estimates(qc, res, num_shots=num_shots))
     else:
-        res = list(estimate_observables(qc, expr, num_shots=num_shots, active_reset=active_reset))
+        res = list(estimate_observables(qc, expt, num_shots=num_shots, active_reset=active_reset))
 
     return res
 
@@ -355,11 +363,11 @@ def estimate_dfe(results: List[ExperimentResult], kind: str) -> Tuple[float, flo
     expectations = [res.expectation for res in results]
     std_errs = np.asarray([res.std_err for res in results])
 
-    if kind == 'state':
+    if kind.lower() == 'state':
         # introduce bias due to measuring the identity
         mean_est = (d-1)/d * np.mean(expectations) + 1.0/d
         var_est = (d-1)**2/d**2 * np.sum(std_errs**2) / len(expectations) ** 2
-    elif kind == 'process':
+    elif kind.lower() == 'process':
         # introduce bias due to measuring the identity
         p_mean = (d**2-1)/d**2 * np.mean(expectations) + 1.0/d**2
         mean_est = (d**2 * p_mean + d)/(d**2+d)
@@ -368,3 +376,57 @@ def estimate_dfe(results: List[ExperimentResult], kind: str) -> Tuple[float, flo
         raise ValueError('Kind can only be \'state\' or \'process\'.')
 
     return mean_est, np.sqrt(var_est)
+
+
+def do_dfe(qc: QuantumComputer, benchmarker: BenchmarkConnection, program: Program,
+           qubits: List[int], kind: str, mc_n_terms: int = None, num_shots: int = 1_000,
+           active_reset: bool = False, mitigate_readout_errors: bool = True) \
+        -> Tuple[Tuple[float, float], ObservablesExperiment, List[ExperimentResult]]:
+    """
+    A wrapper around experiment generation, data acquisition, and estimation that runs a DFE 
+    experiment and returns the (fidelity, std_err) pair along with the experiment and results.
+
+    :param qc: A quantum computer object on which the experiment will run.
+    :param benchmarker: object returned from pyquil.api.get_benchmarker() used to conjugate each
+        Pauli by the Clifford program
+    :param program: A program comprised of Clifford group gates that either constructs the
+        state or defines the process for which we estimate the fidelity, depending on whether
+        ``kind`` is 'state' or 'process' respectively.
+    :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
+        used in ``program``, in which case it is assumed the identity acts on these qubits. 
+        Note that we assume qubits are initialized to the |0> state.
+    :param kind: A string describing the kind of DFE to do ('state' or 'process')
+    :param mc_n_terms: Number of randomly chosen observables to measure for Monte Carlo DFE.
+        By default, when this is None, we do exhaustive DFE. The number should be a constant less
+        than ``2**len(qubits)``, otherwise exhaustive DFE is more efficient.
+    :param num_shots: The number of shots to be taken for each experiment setting.
+    :param active_reset: Boolean flag indicating whether experiments should begin with an
+        active reset instruction (this can make the collection of experiments run a lot faster).
+    :param mitigate_readout_errors: Boolean flag indicating whether bias due to imperfect
+        readout should be corrected
+    :return: The estimated fidelity of the state prepared by or process represented by the input
+        ``program``, as implemented on the provided ``qc``, along with the standard error of the
+        estimate. The experiment and corresponding results are also returned. 
+    """
+    if kind.lower not in ['state', 'process']:
+        raise ValueError('Kind must be either \'state\' or \'process\'.')
+
+    if mc_n_terms is None:
+        if kind.lower() == 'state':
+            expt = generate_exhaustive_state_dfe_experiment(benchmarker, program, qubits)
+        else:
+            expt = generate_exhaustive_process_dfe_experiment(benchmarker, program, qubits)
+    else:
+        if kind.lower() == 'state':
+            expt = generate_monte_carlo_state_dfe_experiment(benchmarker, program, qubits,
+                                                             mc_n_terms)
+        else:
+            expt = generate_monte_carlo_process_dfe_experiment(benchmarker, program, qubits,
+                                                               mc_n_terms)
+
+    results = list( acquire_dfe_data(qc, expt, num_shots, active_reset=active_reset,
+                                     mitigate_readout_errors=mitigate_readout_errors))
+
+    fid, std_err = estimate_dfe(results, kind)
+
+    return (fid, std_err), expt, results
