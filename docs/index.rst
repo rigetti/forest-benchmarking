@@ -49,7 +49,7 @@ Contents
    :maxdepth: 1
    :caption: Tutorials
 
-   examples/tomography_state
+    examples/dfe_example
 
 
 .. toctree::
@@ -82,6 +82,7 @@ Contents
    :maxdepth: 1
    :caption: Operator and Superoperator tools
 
+   superoperator_representations
    operator_tools/rand_ops
    operator_tools/app_superop
    operator_tools/calc

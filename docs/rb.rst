@@ -1,4 +1,4 @@
-.. currentmodule:: forest.benchmarking.randomized_benchmarking
+.. module:: forest.benchmarking.randomized_benchmarking
 
 Randomized Benchmarking
 =======================
@@ -21,6 +21,7 @@ Gates and Sequences
     generate_rb_sequence
     merge_sequences
     generate_rb_experiment_sequences
+    group_sequences_into_parallel_experiments
 
 
 Standard and Interleaved RB
@@ -31,8 +32,6 @@ Standard and Interleaved RB
     :template: autosumm.rst
 
     generate_rb_experiments
-    group_sequences_into_parallel_experiments
-    acquire_rb_data
     z_obs_stats_to_survival_statistics
     fit_rb_results
 
@@ -49,8 +48,16 @@ Unitarity or Purity RB
     estimate_purity_err
     fit_unitarity_results
     unitarity_to_rb_decay
-    unitarity_guess
-    fit_unitarity
+
+
+Data Acquisition
+----------------
+.. autosummary::
+    :toctree: autogen
+    :template: autosumm.rst
+
+    acquire_rb_data
+    get_stats_by_qubit_group
 
 
 Analysis Helper functions for RB
@@ -67,3 +74,5 @@ Analysis Helper functions for RB
     irb_decay_to_gate_error
     average_gate_error_to_rb_decay
     rb_decay_to_gate_error
+    unitarity_to_rb_decay
+    get_stats_by_qubit_group

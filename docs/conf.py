@@ -46,12 +46,13 @@ release = VERSION
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.autosummary',
-    'sphinx_autodoc_typehints',
+    # 'sphinx_autodoc_typehints',
     'sphinx.ext.doctest',
     'sphinx.ext.todo',
     'sphinx.ext.intersphinx',
     'sphinx.ext.mathjax',
     'nbsphinx',
+    'nbsphinx_link',
 ]
 
 mathjax_path = "https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML"

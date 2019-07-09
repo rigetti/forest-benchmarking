@@ -26,6 +26,7 @@ sphinx
 sphinx-autodoc-typehints
 sphinx_rtd_theme
 nbsphinx
+nbsphinx_link
 
 # for testing examples
 nbval
