@@ -6,11 +6,9 @@ Direct fidelity estimation (DFE) uses knowledge about the ideal target state or 
 a tailored set of measurements to quickly certify a quantum state or a quantum process at lower
 cost than full tomography.
 
+.. toctree::
 
-Running DFE
------------
-
-.. todo:: Put an overview or mini tutorial here.
+    dfe_example
 
 .. autosummary::
     :toctree: autogen

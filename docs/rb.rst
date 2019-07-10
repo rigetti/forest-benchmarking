@@ -6,7 +6,17 @@ Randomized Benchmarking
 Randomized benchmarking involves running long sequences of random Clifford group gates which
 compose to the identity to observe how performance degrades with increasing circuit depth.
 
-.. todo:: Talk some more about stuff.
+.. toctree::
+
+    rb_example
+    urb_example
+    irb_example
+
+.. autosummary::
+    :toctree: autogen
+    :template: autosumm.rst
+
+    do_rb
 
 
 Gates and Sequences

@@ -49,7 +49,7 @@ Contents
    :maxdepth: 1
    :caption: Tutorials
 
-    examples/dfe_example
+    rb_example
 
 
 .. toctree::
