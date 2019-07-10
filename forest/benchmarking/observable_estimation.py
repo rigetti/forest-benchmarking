@@ -4,11 +4,11 @@ import json
 import logging
 import re
 import sys
-import warnings
 from json import JSONEncoder
 from operator import mul
 from typing import List, Union, Iterable, Tuple, Dict, Callable
 from copy import copy
+from tqdm import tqdm
 
 import numpy as np
 from math import pi
@@ -843,17 +843,21 @@ def exhaustive_symmetrization(programs: List[Program], meas_qubits: List[List[in
 
 
 def _measure_bitstrings(qc: QuantumComputer, programs: List[Program], meas_qubits: List[List[int]],
-                        num_shots = 500, use_compiler = False) -> List[np.ndarray]:
+                        num_shots = 500, use_compiler = False, show_progress_bar: bool = False) \
+        -> List[np.ndarray]:
     """
     Wrapper for appending measure instructions onto each program, running the program,
     and accumulating the resulting bitarrays.
 
-    By default each program is assumed to be native quil.
+    By default each program is assumed to be native quil, so the quil to native quil step is not
+    performed by the compiler.
 
     :param qc: a quantum computer object on which to run each program
     :param programs: a list of programs to run
     :param meas_qubits: groups of qubits to measure for each program
     :param num_shots: the number of shots to run for each program
+    :param use_compiler: if true, the compiler is used to compile quil to native quil.
+    :param show_progress_bar: displays a progress bar via tqdm if true.
     :return: a len(programs) long list of num_shots by num_meas_qubits bit arrays of results for
         each program.
     """
@@ -861,7 +865,7 @@ def _measure_bitstrings(qc: QuantumComputer, programs: List[Program], meas_qubit
                                               'program, one list of qubits per program.'
 
     results = []
-    for program, qubits in zip(programs, meas_qubits):
+    for program, qubits in zip(tqdm(programs, disable=not show_progress_bar), meas_qubits):
         if len(qubits) == 0:
             # corresponds to measuring identity; no program needs to be run.
             results.append(np.array([[]]))
@@ -966,7 +970,8 @@ def consolidate_symmetrization_outputs(outputs: List[np.ndarray], flip_arrays: L
 
 def estimate_observables(qc: QuantumComputer, obs_expt: ObservablesExperiment,
                          num_shots: int = 500, symmetrization_method: Callable = None,
-                         active_reset: bool = False) -> Iterable[ExperimentResult]:
+                         active_reset: bool = False, show_progress_bar: bool = False)\
+        -> Iterable[ExperimentResult]:
     """
     Standard wrapper for estimating the observables in an ObservableExperiment.
 
@@ -990,6 +995,7 @@ def estimate_observables(qc: QuantumComputer, obs_expt: ObservablesExperiment,
         remove unwanted classical correlations in the qubit measurement readout.
     :param active_reset: whether or not to begin the program by actively resetting. If true,
         execution of each of the returned programs in a loop on the QPU will generally be faster.
+    :param show_progress_bar: displays a progress bar via tqdm if true.
     :return: all of the ExperimentResults which hold an estimate of each observable of obs_expt
     """
     programs, meas_qubits = generate_experiment_programs(obs_expt, active_reset)
@@ -997,10 +1003,12 @@ def estimate_observables(qc: QuantumComputer, obs_expt: ObservablesExperiment,
     if symmetrization_method is not None:
         programs, symm_qubits, flip_arrays, prog_groups = symmetrization_method(programs,
                                                                                 meas_qubits)
-        symm_outputs = _measure_bitstrings(qc, programs, symm_qubits, num_shots)
+        symm_outputs = _measure_bitstrings(qc, programs, symm_qubits, num_shots,
+                                           show_progress_bar=show_progress_bar)
         results = consolidate_symmetrization_outputs(symm_outputs, flip_arrays, prog_groups)
     else:
-        results = _measure_bitstrings(qc, programs, meas_qubits, num_shots)
+        results = _measure_bitstrings(qc, programs, meas_qubits, num_shots,
+                                      show_progress_bar=show_progress_bar)
 
     assert len(results) == len(meas_qubits) == len(obs_expt)
     for bitarray, meas_qs, settings in zip(results, meas_qubits, obs_expt):

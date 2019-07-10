@@ -8,6 +8,7 @@ import numpy as np
 from scipy.linalg import logm, pinv
 
 from pyquil import Program
+from pyquil.api import QuantumComputer
 from pyquil.unitary_tools import lifted_pauli as pauli2matrix, lifted_state_operator as state2matrix
 
 import forest.benchmarking.distance_measures as dm
@@ -16,7 +17,8 @@ from forest.benchmarking.operator_tools import vec, unvec, proj_choi_to_physical
 from forest.benchmarking.operator_tools.project_state_matrix import project_state_matrix_to_physical
 from forest.benchmarking.observable_estimation import ExperimentSetting, ObservablesExperiment, \
     ExperimentResult, SIC0, SIC1, SIC2, SIC3, plusX, minusX, plusY, minusY, plusZ, minusZ, \
-    TensorProductState, zeros_state
+    TensorProductState, zeros_state, group_settings
+from forest.benchmarking.direct_fidelity_estimation import acquire_dfe_data # TODO: replace
 
 MAXITER = "maxiter"
 OPTIMAL = "optimal"
@@ -612,3 +614,57 @@ def _grad_cost(A, n, estimate, eps=1e-6):
     p = np.clip(p, a_min=eps, a_max=None)
     eta = n / p
     return unvec(-A.conj().T @ eta)
+
+
+def do_tomography(qc: QuantumComputer, program: Program, qubits: List[int], kind: str,
+                  num_shots: int = 1_000, active_reset: bool = False,
+                  group_tpb_settings: bool = True, mitigate_readout_errors: bool = True,
+                  show_progress_bar: bool = False) \
+        -> Tuple[np.ndarray, ObservablesExperiment, List[ExperimentResult]]:
+    """
+    A wrapper around experiment generation, data acquisition, and estimation that runs a tomography
+    experiment and returns the state or process estimate along with the experiment and results.
+
+    :param qc: A quantum computer object on which the experiment will run.
+    :param program: A program that either constructs the state or defines the process to be
+        estimated, depending on whether ``kind`` is 'state' or 'process' respectively.
+    :param qubits: The qubits on which the estimated state or process are supported. This can be a
+        superset of the qubits used in ``program``, in which case it is assumed the identity
+        acts on these extra qubits. Note that we assume qubits are initialized to the |0> state.
+    :param kind: A string describing the kind of tomography to do ('state' or 'process')
+    :param num_shots: The number of shots to run for each experiment setting.
+    :param active_reset: Boolean flag indicating whether experiments should begin with an
+        active reset instruction (this can make the collection of experiments run a lot faster).
+    :param group_tpb_settings: if true, compatible settings will be formed into groups that can
+        be estimated concurrently from the same shot data. This will speed up the data
+        acquisition time by reducing the total number of runs, but be aware that grouped settings
+        will have non-zero covariance.
+    :param mitigate_readout_errors: Boolean flag indicating whether bias due to imperfect
+        readout should be corrected
+    :param show_progress_bar: displays a progress bar via tqdm if true.
+    :return: The estimated state prepared by or process represented by the input ``program``,
+        as implemented on the provided ``qc``, along with the experiment and corresponding
+        results.
+    """
+    if kind.lower() == 'state':
+        expt = generate_state_tomography_experiment(program, qubits)
+    elif kind.lower() == 'process':
+        expt = generate_process_tomography_experiment(program, qubits)
+    else:
+        raise ValueError('Kind must be either \'state\' or \'process\'.')
+
+    if group_tpb_settings:
+        expt = group_settings(expt)
+
+    results = list(acquire_dfe_data(qc, expt, num_shots, active_reset=active_reset,
+                                    mitigate_readout_errors=mitigate_readout_errors,
+                                    show_progress_bar=show_progress_bar))
+
+    if kind.lower() == 'state':
+        # estimate the state matrix
+        est = iterative_mle_state_estimate(results, qubits)
+    else:
+        # estimate the process represented by a choi matrix
+        est = pgdb_process_estimate(results, qubits)
+
+    return est, expt, results
