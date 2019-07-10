@@ -47,13 +47,6 @@ Contents
 
 .. toctree::
    :maxdepth: 1
-   :caption: Tutorials
-
-    rb_example
-
-
-.. toctree::
-   :maxdepth: 1
    :caption: Visualization
 
    plotting
@@ -106,3 +99,11 @@ Contents
    :caption: Utils
 
    utils
+
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Tutorials
+   :glob:
+
+   examples/*

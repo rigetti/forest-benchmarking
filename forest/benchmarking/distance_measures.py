@@ -171,7 +171,9 @@ def quantum_chernoff_bound(rho: np.ndarray,
 
 def hilbert_schmidt_ip(A: np.ndarray, B: np.ndarray, tol: float = 1000) -> float:
     r"""
-    Computes the Hilbert-Schmidt (HS) inner product between two operators A and B as
+    Computes the Hilbert-Schmidt (HS) inner product between two operators A and B.
+
+    This inner product is defined as
         HS = (A|B) = Tr[A^\dagger B]
     where |B) = vec(B) and (A| is the dual vector to |A).
 

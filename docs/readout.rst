@@ -1,4 +1,5 @@
-.. currentmodule:: forest.benchmarking.readout
+.. module:: forest.benchmarking.readout
+
 Readout Error Estimation
 ========================
 

@@ -1,4 +1,5 @@
 .. module:: forest.benchmarking.classical_logic
+
 Classical Logic
 ===============
 

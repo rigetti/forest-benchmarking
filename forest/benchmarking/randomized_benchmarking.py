@@ -254,14 +254,16 @@ def generate_rb_experiments(benchmarker: BenchmarkConnection, qubit_groups: Sequ
 
     The number of ObservablesExperiments returned is equal to len(depths). A particular
     ObservablesExperiment consists of
-        - a program, which is a random sequence of Clifford gates compiled down to native gates.
-            If len(qubit_groups) > 1 then the program is actually the sum of len(qubit_groups) many
-            separate random sequences; each sequence acts only on the group of qubits in a
-            particular element of the input 'qubit_groups' list.
-        - settings; for each group within qubit_groups there will be settings which dictate that
-            each qubit in that group is initialized to the |0> state and that some observable
-            which is a tensor product of Z and I factors is measured for that group. All of these
-            settings are initialized within the ObservablesExperiment to be run in parallel.
+
+    - a program, which is a random sequence of Clifford gates compiled down to native gates.
+        If len(qubit_groups) > 1 then the program is actually the sum of len(qubit_groups) many
+        separate random sequences; each sequence acts only on the group of qubits in a
+        particular element of the input 'qubit_groups' list.
+        
+    - settings; for each group within qubit_groups there will be settings which dictate that
+        each qubit in that group is initialized to the |0> state and that some observable
+        which is a tensor product of Z and I factors is measured for that group. All of these
+        settings are initialized within the ObservablesExperiment to be run in parallel.
 
     Specifying a interleaved_gate will generate a Clifford sequence which alternates depth many
     times between a random Clifford and the specified gate. The gate itself should be a Program

@@ -1,4 +1,5 @@
-.. currentmodule:: forest.benchmarking.quantum_volume
+.. module:: forest.benchmarking.quantum_volume
+
 Quantum Volume
 ==============
 

@@ -60,6 +60,7 @@ We can then collect data::
 
     from forest.benchmarking.observable_estimation import estimate_observables
     results = list(estimate_observables(qc, exp_desc))
+
 Estimate the State
 ~~~~~~~~~~~~~~~~~~
 
@@ -78,8 +79,8 @@ Finally, we analyze our data with one of the analysis routines::
 .. module:: forest.benchmarking.tomography
 
 .. toctree::
-    tomo_state_example
-    tomo_proc_example
+    examples/tomo_state_example
+    examples/tomo_proc_example
 
 .. autosummary::
     :toctree: autogen

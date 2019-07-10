@@ -317,18 +317,28 @@ def fit_rabi_results(angles: Sequence[float], z_expectations: Sequence[float],
     Wrapper for fitting the results of a rabi experiment on a qubit; simply extracts key parameters
     and passes on to the standard fit.
 
-    Note the following interpretation of the model fit parameters:
-    x: the independent variable is the angle that we specify when writing a gate instruction. If
+    Note the following interpretation of the model fit parameters
+
+    x
+        the independent variable is the angle that we specify when writing a gate instruction. If
         our gates are incorrectly calibrated then a given control angle will result in a different
         angle than intended by the multiplicative 'frequency' of the model
-    amplitude: this will have magnitude (p1_given_1 - p1_given_0) / 2 where
+
+    amplitude
+        this will have magnitude (p1_given_1 - p1_given_0) / 2 where
         p1_given_1 is the probability of measuring 1 when the qubit is in the |1> state.
         p1_given_0 is the probability of measuring 1 when the qubit is in the |0> state.
-    offset: This is the offset phase, in radians, with respect to the true rotation frequency.
+
+    offset
+        this is the offset phase, in radians, with respect to the true rotation frequency.
         e.g. if our gate is mis-calibrated resulting in an offset 'off' then we require a control
         angle of RX(-off / frequency) to correct the offset
-    baseline: this is the amplitude + p1_given_0
-    frequency: The ratio of the actual angle rotated over the intended control angle
+
+    baseline
+        this is the amplitude + p1_given_0
+
+    frequency
+        the ratio of the actual angle rotated over the intended control angle
         e.g. If our gates are incorrectly calibrated to apply an over-rotation then
         frequency will be greater than 1; the intended control angle will be smaller than the
         true angle rotated.
@@ -399,20 +409,30 @@ def fit_cz_phase_ramsey_results(angles: Sequence[float], y_expectations: Sequenc
     and passes on to the standard fit.
 
     Note the following interpretation of the model fit:
-    x: the independent variable is the control angle that we specify when writing a gate
+
+    x
+        the independent variable is the control angle that we specify when writing a gate
         instruction. If our gates are incorrectly calibrated then a given control angle will
         result in a different angle than intended by the multiplicative 'frequency' of the model
-    amplitude: this will have magnitude (p1_given_1 - p1_given_0) / 2 where
+
+    amplitude
+        this will have magnitude (p1_given_1 - p1_given_0) / 2 where
         p1_given_1 is the probability of measuring 1 when the qubit is in the |1> state.
         p1_given_0 is the probability of measuring 1 when the qubit is in the |0> state.
-    offset: This is the offset phase, in radians, with respect to the true rotation frequency.
+
+    offset
+        this is the offset phase, in radians, with respect to the true rotation frequency.
         e.g. say that our RZ gate is perfectly calibrated and the CZ gate imparts an effective
         RZ(pi/5) rotation to the measure qubit; in this case offset is pi/5, and frequency is one,
         so the offset phase could be corrected by applying the gate RZ(-pi/5, qubit) after CZ. If
         our RZ gate was instead found to be mis-calibrated, a correction using our mis-calibrated
         RZ gate would require a control angle of RZ(-pi/5 / frequency, qubit)
-    baseline: this is the amplitude + p1_given_0
-    frequency: The ratio of the actual angle rotated over the intended control angle
+
+    baseline
+        this is the amplitude + p1_given_0
+
+    frequency
+        the ratio of the actual angle rotated over the intended control angle
         e.g. If our gates are incorrectly calibrated to apply an over-rotation then
         frequency will be greater than 1; the intended control angle will be smaller than the
         true angle rotated.

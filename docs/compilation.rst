@@ -1,4 +1,5 @@
 .. currentmodule:: forest.benchmarking.compilation
+
 Basic Compilation
 =================
 

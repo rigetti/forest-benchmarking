@@ -47,9 +47,8 @@ to the square root of the dimension of ``vec(A)``. Column stacking
 corresponds to how matrices are stored in memory for column major
 storage conventions.
 
-Similarly we can define a row vectorization to be row stacking $ {}(A) =
-(a\_{11}, a\_{12}, , a\_{1m}, a\_{21},,
-a\_{mm})^T\ :math:`. Note that `\ {}(A) = {}(A^T)$. In any case we will
+Similarly we can define a row vectorization to be row stacking :math:`{\rm vec_r}(A) = (a_{11}, a_{12}, \ldots, a_{1m}, a_{21},\ldots, a_{mm})^T`
+. Note that :math:`{\rm vec}(A) = {\rm vec_r}(A^T)`. In any case we will
 **not** use this row convention.
 
 Matrix multiplication in vectorized form
@@ -83,7 +82,7 @@ so
 
     |\rho'\rangle \rangle = \mathcal U |\rho\rangle\rangle,
 
- where :math:`\mathcal U = U^*\otimes U`. The nice thing about this is
+where :math:`\mathcal U = U^*\otimes U`. The nice thing about this is
 the operator (the state) has become a vector and the superoperator (the
 left right action of :math:`U`) has become an operator.
 
@@ -124,13 +123,16 @@ standard basis.
 
 With respect to these indicies some useful operations are [GRAPTN]:
 
-| Transpose :math:`T`:
+Transpose :math:`T`:
 :math:`\mathcal Q_{m,\mu;n,\nu} \mapsto \mathcal Q_{n,\nu;m,\mu},`
-| SWAP:
+
+SWAP:
 :math:`\mathcal Q_{m,\mu;n,\nu} \mapsto \mathcal Q_{\mu,m;\nu,n},`
-| Row-reshuffling :math:`R_r`:
+
+Row-reshuffling :math:`R_r`:
 :math:`\mathcal Q_{m,\mu;n,\nu} \mapsto \mathcal Q_{m,n;\mu,\nu},`
-| Col-reshuffling :math:`R`:
+
+Col-reshuffling :math:`R`:
 :math:`\mathcal Q_{m,\mu;n,\nu} \mapsto \mathcal Q_{\nu,\mu;n,m}.`
 
 The importance of understanding reshuffling can be understood as
@@ -277,7 +279,8 @@ Kraus operators.
 
 Consider the set of Kraus operators :math:`\{ M_k \}`. The corresponding
 quantum operation is
-:math:`\mathcal E (\rho) = \sum_k M_k \rho M_k^\dagger `.
+
+.. math:: \mathcal E (\rho) = \sum_k M_k \rho M_k^\dagger
 
 Using the vec operator (see Eq. 1) this implies a superoperator
 
@@ -570,9 +573,8 @@ Pauli Channels
 Pauli channels are nice because they are diagonal in two representations
 and they have the *depolarlizing channel* as a speical case.
 
-| In the operator sum representation a single qubit Pauli channel is
+In the operator sum representation a single qubit Pauli channel is
 defined as
-| 
 
 .. math:: \mathcal E(\rho) = (1-p_x-p_y-p_z) I \rho I + p_x X\rho X + p_y Y \rho Y + p_z Z \rho Z
 
@@ -828,20 +830,17 @@ References
 | arXiv:1509.02921, (2015)
 | https://arxiv.org/abs/1509.02921
 
-| [QN] Quantum Nescimus. Improving the characterization of quantum
-systems from limited information
+| [QN] Quantum Nescimus. Improving the characterization of quantum systems from limited information
 | Harper,
 | PhD thesis University of Sydney, 2018
 | https://ses.library.usyd.edu.au/handle/2123/17896
 
-| [GRAPTN] Tensor networks and graphical calculus for open quantum
-systems
+| [GRAPTN] Tensor networks and graphical calculus for open quantum systems
 | Wood et al.,
 | Quant. Inf. Comp. 15, 0579-0811 (2015)
 | https://arxiv.org/abs/1111.6950
 
-| [SVDMAT] Singular value decomposition and matrix reorderings in
-quantum information theory
+| [SVDMAT] Singular value decomposition and matrix reorderings in quantum information theory
 | Miszczak,
 | Int. J. Mod. Phys. C 22, No. 9, 897 (2011)
 | https://dx.doi.org/10.1142/S0129183111016683

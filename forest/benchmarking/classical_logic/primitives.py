@@ -3,7 +3,7 @@ from pyquil import Program
 
 
 def CNOT_X_basis(control, target) -> Program:
-    """
+    r"""
     The CNOT in the X basis, i.e.
 
     CNOTX = |+X+| * I + |-X-| * Z
@@ -22,7 +22,7 @@ def CNOT_X_basis(control, target) -> Program:
 
 
 def CCNOT_X_basis(control1, control2, target) -> Program:
-    """
+    r"""
     The CCNOT (Toffoli) in the X basis, i.e.
 
     CCNOTX = |+X+| * |+X+| * I +

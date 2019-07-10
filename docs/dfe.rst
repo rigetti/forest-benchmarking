@@ -1,4 +1,5 @@
 .. module:: forest.benchmarking.direct_fidelity_estimation
+
 Direct Fidelity Estimation
 ==========================
 
@@ -8,7 +9,7 @@ cost than full tomography.
 
 .. toctree::
 
-    dfe_example
+    examples/dfe_example
 
 .. autosummary::
     :toctree: autogen

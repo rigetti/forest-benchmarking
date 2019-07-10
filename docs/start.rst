@@ -17,8 +17,7 @@ First thing you need to do is open up a terminal and run:
 
 Inside the notebook we need to get some basic pyQuil object
 
-.. todo:: very minimal examples of importing get_qc, get_benchmarker, and run the major benchmarks
-(tomo, dfe, rb, t1)
+.. todo:: very minimal examples of importing get_qc, get_benchmarker, and run the major benchmarks (tomo, dfe, rb, t1)
 
 .. code:: python
 

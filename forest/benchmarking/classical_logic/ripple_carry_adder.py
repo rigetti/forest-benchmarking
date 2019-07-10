@@ -100,7 +100,7 @@ def get_qubit_registers_for_adder(qc: QuantumComputer, num_length: int,
     :param qc: the quantum resource on which an adder program will be executed.
     :param num_length: the length of the bitstring representation of one summand
     :param qubits: the available qubits on which to run the adder program.
-    :returns the necessary registers and ancilla labels for implementing an adder
+    :return: the necessary registers and ancilla labels for implementing an adder
         program to add the numbers a and b. The output can be passed directly to adder()
     """
     if qubits is None:
