@@ -9,7 +9,7 @@ from pyquil import Program
 from pyquil.api import BenchmarkConnection, QuantumComputer
 from forest.benchmarking.observable_estimation import ExperimentResult, ExperimentSetting, \
     ObservablesExperiment, TensorProductState, estimate_observables, plusX, minusX, plusY, minusY,\
-    plusZ, minusZ, exhaustive_symmetrization, calibrate_observable_estimates
+    plusZ, minusZ, exhaustive_symmetrization, calibrate_observable_estimates, group_settings
 from pyquil.paulis import PauliTerm, sI, sX, sY, sZ
 
 
@@ -264,8 +264,8 @@ def generate_monte_carlo_process_dfe_experiment(benchmarker: BenchmarkConnection
 
 
 def acquire_dfe_data(qc: QuantumComputer, expt: ObservablesExperiment, num_shots: int = 10_000,
-                     active_reset: bool = False, mitigate_readout_errors: bool = True) \
-        -> List[ExperimentResult]:
+                     active_reset: bool = False, mitigate_readout_errors: bool = True,
+                     show_progress_bar: bool = False) -> List[ExperimentResult]:
     """
     Acquire data necessary for direct fidelity estimate (DFE).
 
@@ -278,14 +278,17 @@ def acquire_dfe_data(qc: QuantumComputer, expt: ObservablesExperiment, num_shots
         active reset instruction (this can make the collection of experiments run a lot faster).
     :param mitigate_readout_errors: Boolean flag indicating whether bias due to imperfect
         readout should be corrected
+    :param show_progress_bar: displays a progress bar via tqdm if true.
     :return: results from running the given DFE experiment. These can be passed to estimate_dfe
     """
     if mitigate_readout_errors:
         res = list(estimate_observables(qc, expt, num_shots=num_shots, active_reset=active_reset,
-                                        symmetrization_method=exhaustive_symmetrization))
+                                        symmetrization_method=exhaustive_symmetrization,
+                                        show_progress_bar=show_progress_bar))
         res = list(calibrate_observable_estimates(qc, res, num_shots=num_shots))
     else:
-        res = list(estimate_observables(qc, expt, num_shots=num_shots, active_reset=active_reset))
+        res = list(estimate_observables(qc, expt, num_shots=num_shots, active_reset=active_reset,
+                                        show_progress_bar=show_progress_bar))
 
     return res
 
@@ -380,7 +383,8 @@ def estimate_dfe(results: List[ExperimentResult], kind: str) -> Tuple[float, flo
 
 def do_dfe(qc: QuantumComputer, benchmarker: BenchmarkConnection, program: Program,
            qubits: List[int], kind: str, mc_n_terms: int = None, num_shots: int = 1_000,
-           active_reset: bool = False, mitigate_readout_errors: bool = True) \
+           active_reset: bool = False, group_tpb_settings: bool = False,
+           mitigate_readout_errors: bool = True, show_progress_bar: bool = False) \
         -> Tuple[Tuple[float, float], ObservablesExperiment, List[ExperimentResult]]:
     """
     A wrapper around experiment generation, data acquisition, and estimation that runs a DFE 
@@ -402,11 +406,16 @@ def do_dfe(qc: QuantumComputer, benchmarker: BenchmarkConnection, program: Progr
     :param num_shots: The number of shots to be taken for each experiment setting.
     :param active_reset: Boolean flag indicating whether experiments should begin with an
         active reset instruction (this can make the collection of experiments run a lot faster).
+    :param group_tpb_settings: if true, compatible settings will be formed into groups that can
+        be estimated concurrently from the same shot data. This will speed up the data
+        acquisition time by reducing the total number of runs, but be aware that grouped settings
+        will have non-zero covariance. TODO: set default True after handling covariance.
     :param mitigate_readout_errors: Boolean flag indicating whether bias due to imperfect
         readout should be corrected
+    :param show_progress_bar: displays a progress bar via tqdm if true.
     :return: The estimated fidelity of the state prepared by or process represented by the input
         ``program``, as implemented on the provided ``qc``, along with the standard error of the
-        estimate. The experiment and corresponding results are also returned. 
+        estimate. The experiment and corresponding results are also returned.
     """
     if kind.lower not in ['state', 'process']:
         raise ValueError('Kind must be either \'state\' or \'process\'.')
@@ -423,9 +432,12 @@ def do_dfe(qc: QuantumComputer, benchmarker: BenchmarkConnection, program: Progr
         else:
             expt = generate_monte_carlo_process_dfe_experiment(benchmarker, program, qubits,
                                                                mc_n_terms)
+    if group_tpb_settings:
+        expt = group_settings(expt)
 
-    results = list( acquire_dfe_data(qc, expt, num_shots, active_reset=active_reset,
-                                     mitigate_readout_errors=mitigate_readout_errors))
+    results = list(acquire_dfe_data(qc, expt, num_shots, active_reset=active_reset,
+                                     mitigate_readout_errors=mitigate_readout_errors,
+                                     show_progress_bar=show_progress_bar))
 
     fid, std_err = estimate_dfe(results, kind)
 
