@@ -75,11 +75,20 @@ Finally, we analyze our data with one of the analysis routines::
     [ 0.23 +0.027j  0.175-0.j     0.277-0.j    -0.173+0.004j]
     [-0.203+0.01j  -0.168+0.019j -0.173-0.004j  0.229-0.j   ]]
 
+.. module:: forest.benchmarking.tomography
 
+.. toctree::
+    tomo_state_example
+    tomo_proc_example
+
+.. autosummary::
+    :toctree: autogen
+    :template: autosumm.rst
+
+    do_tomography
 
 State Tomography
 ----------------
-.. currentmodule:: forest.benchmarking.tomography
 .. autosummary::
     :toctree: autogen
     :template: autosumm.rst
