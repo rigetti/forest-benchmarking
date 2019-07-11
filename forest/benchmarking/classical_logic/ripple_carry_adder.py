@@ -20,6 +20,7 @@ from typing import Sequence, Tuple
 import networkx as nx
 import numpy as np
 from scipy.spatial.distance import hamming
+from tqdm import tqdm
 
 from pyquil.gates import CNOT, CCNOT, X, I, H, CZ, MEASURE, RESET
 from pyquil import Program
@@ -249,7 +250,8 @@ def get_n_bit_adder_results(qc: QuantumComputer, n_bits: int,
                             registers: Tuple[Sequence[int], Sequence[int], int, int] = None,
                             qubits: Sequence[int] = None, in_x_basis: bool = False,
                             num_shots: int = 100, use_param_program: bool = False,
-                            use_active_reset: bool = True) -> Sequence[Sequence[Sequence[int]]]:
+                            use_active_reset: bool = True, show_progress_bar: bool = False) \
+        -> Sequence[Sequence[Sequence[int]]]:
     """
     Convenient wrapper for collecting the results of addition for every possible pair of n_bits
     long summands.
@@ -265,6 +267,7 @@ def get_n_bit_adder_results(qc: QuantumComputer, n_bits: int,
         Doing so should speed up overall execution on a QPU.
     :param use_active_reset: whether or not to use active reset. Doing so will speed up execution
         on a QPU.
+    :param show_progress_bar: displays a progress bar via tqdm if true.
     :return: A list of n_shots many outputs for each possible summation of two n_bit long summands,
         listed in increasing numerical order where the label is the 2n bit number represented by
         num = a_bits | b_bits for the addition of a + b.
@@ -284,7 +287,7 @@ def get_n_bit_adder_results(qc: QuantumComputer, n_bits: int,
 
     all_results = []
     # loop over all binary strings of length n_bits
-    for bits in all_bitstrings(2 * n_bits):
+    for bits in tqdm(all_bitstrings(2 * n_bits), disable=not show_progress_bar):
         # split the binary number into two numbers
         # which are the binary numbers the user wants to add.
         # They are written from (MSB .... LSB) = (a_n, ..., a_1, a_0)

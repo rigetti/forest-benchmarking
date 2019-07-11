@@ -9,8 +9,9 @@ The code is contained in the module `classical_logic`.
 The benchmark is simplistic and not very rigorous as it does not test any specific feature of the hardware. Further the whole circuit is classical in the sense that we start and end in computational basis states and all gates simply perform classical not, controlled not (`CNOT`), or doubly controlled not (`CCNOT` aka a Toffoli gate). Finally, even for the modest task of adding two one bit numbers, the `CZ` gate (our fundamental two qubit gate) count is very high for the circuit. This in turn implies a low probability of the entire circuit working.
 
 
-.. todo:: Put an overview or mini tutorial here.
+.. toctree::
 
+    examples/ripple_adder_bm_example
 
 Circuit Primitives
 ------------------
