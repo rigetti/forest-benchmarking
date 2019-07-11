@@ -38,7 +38,7 @@ def assign_registers_to_line_or_cycle(start: int, graph: nx.Graph, num_length: i
         -> Tuple[Sequence[int], Sequence[int], int, int]:
     """
     From the start node assign registers as they are laid out in the ideal circuit diagram in
-    [CDKM96].
+    [CDKM96]_.
 
     Assumes that the there are no dead ends in the graph, and any available neighbor can be
     selected from the start without any further checks.
@@ -47,7 +47,7 @@ def assign_registers_to_line_or_cycle(start: int, graph: nx.Graph, num_length: i
     :param graph: a graph with an unambiguous assignment from the start node, e.g. a cycle or line
     :param num_length: the length of the bitstring representation of one summand
     :return: the necessary registers and ancilla labels for implementing an adder program to add
-        the numbers a and b. The output can be passed directly to adder()
+        the numbers a and b. The output can be passed directly to :func:`adder`
     """
     if 2 * num_length + 2 > nx.number_of_nodes(graph):
         raise ValueError("There are not enough qubits in the graph to support the computation.")
@@ -92,7 +92,7 @@ def get_qubit_registers_for_adder(qc: QuantumComputer, num_length: int,
         -> Tuple[Sequence[int], Sequence[int], int, int]:
     """
     Searches for a layout among the given qubits for the two n-bit registers and two additional
-    ancilla that matches the simple layout given in figure 4 of [CDKM96].
+    ancilla that matches the simple layout given in figure 4 of [CDKM96]_.
 
     This method ignores any considerations of physical characteristics of the qc aside from the
     qubit layout. An error is thrown if the appropriate layout is not found.
@@ -101,7 +101,7 @@ def get_qubit_registers_for_adder(qc: QuantumComputer, num_length: int,
     :param num_length: the length of the bitstring representation of one summand
     :param qubits: the available qubits on which to run the adder program.
     :return: the necessary registers and ancilla labels for implementing an adder
-        program to add the numbers a and b. The output can be passed directly to adder()
+        program to add the numbers a and b. The output can be passed directly to :func:`adder`
     """
     if qubits is None:
         unavailable = []  # assume this means all qubits in qc are available
@@ -152,13 +152,13 @@ def adder(num_a: Sequence[int], num_b: Sequence[int], register_a: Sequence[int],
     """
     Produces a program implementing reversible adding on a quantum computer to compute a + b.
 
-    This implementation is based on [CDKM96], which is easy to implement, if not the most
+    This implementation is based on [CDKM96]_, which is easy to implement, if not the most
     efficient. Each register of qubit labels should be provided such that the first qubit in
     each register is expected to carry the least significant bit of the respective number. This
     method also requires two extra ancilla, one initialized to 0 that acts as a dummy initial
     carry bit and another (which also probably ought be initialized to 0) that stores the most
     significant bit of the addition (should there be a final carry). The most straightforward
-    ordering of the registers and two ancilla for adding n-bit numbers follows the pattern
+    ordering of the registers and two ancilla for adding n-bit numbers follows the pattern::
 
         carry_ancilla
         b_0
@@ -180,11 +180,10 @@ def adder(num_a: Sequence[int], num_b: Sequence[int], register_a: Sequence[int],
     The output of the circuit falls on the qubits initially labeled by the b bits (and z_ancilla).
 
     The default option is to compute the addition in the computational (aka Z) basis. By setting
-    in_x_basis true, the gates CNOT_X_basis and CCNOT_X_basis (defined above) will replace CNOT
-    and CCNOT so that the computation happens in the X basis.
+    in_x_basis true, the gates :func:`primitives.CNOT_X_basis` and :func:`primitives.CCNOT_X_basis`
+    will replace CNOT and CCNOT so that the computation happens in the X basis.
 
-        [CDKM96]
-        "A new quantum ripple-carry addition circuit"
+    .. [CDKM96] "A new quantum ripple-carry addition circuit"
         S. Cuccaro, T. Draper, s. Kutin, D. Moulton
         https://arxiv.org/abs/quant-ph/0410184
 
@@ -257,7 +256,7 @@ def get_n_bit_adder_results(qc: QuantumComputer, n_bits: int,
 
     :param qc: the quantum resource on which to run each addition
     :param n_bits: the number of bits of one of the summands (each summand is the same length)
-    :param registers: optional explicit qubit layout of each of the registers passed to adder()
+    :param registers: optional explicit qubit layout of each of the registers passed to :func:`adder`
     :param qubits: available subset of qubits of the qc on which to run the circuits.
     :param in_x_basis: if true, prepare the bitstring-representation of the numbers in the x basis
         and subsequently performs all addition logic in the x basis.

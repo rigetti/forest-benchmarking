@@ -3,12 +3,15 @@ from pyquil import Program
 
 
 def CNOT_X_basis(control, target) -> Program:
-    r"""
+    """
     The CNOT in the X basis, i.e.
 
-    CNOTX = |+X+| * I + |-X-| * Z
+    ::
 
-    where |+> and |-> are the +/- eigenstate of the Pauli X operator and * denotes a tensor product.
+        CNOTX = |+X+| * I + |-X-| * Z
+
+    where ``|+>`` and ``|->`` are the +/- eigenstate of the Pauli X operator, and ``*`` denotes a
+    tensor product.
 
     :param control: qubit label
     :param target: qubit label
@@ -22,15 +25,18 @@ def CNOT_X_basis(control, target) -> Program:
 
 
 def CCNOT_X_basis(control1, control2, target) -> Program:
-    r"""
+    """
     The CCNOT (Toffoli) in the X basis, i.e.
 
-    CCNOTX = |+X+| * |+X+| * I +
-             |+X+| * |-X-| * I +
-             |-X-| * |+X+| * I +
-             |-X-| * |-X-| * Z
+    ::
 
-    where |+> and |-> are the +/- eigenstate of the Pauli X operator and * denotes a tensor product.
+        CCNOTX = |+X+| * |+X+| * I +
+                 |+X+| * |-X-| * I +
+                 |-X-| * |+X+| * I +
+                 |-X-| * |-X-| * Z
+
+    where ``|+>`` and ``|->`` are the +/- eigenstate of the Pauli X operator, and ``*`` denotes a
+    tensor product.
 
     :param control1: qubit label
     :param control2: qubit label
@@ -55,10 +61,11 @@ def majority_gate(a: int, b: int, c: int, in_x_basis: bool = False) -> Program:
     Computes (a * b) xor (a * c) xor  (b * c)
     where * is multiplication mod 2.
 
-    The default option is to compute this in the computational (aka Z) basis. By passing in
-    CNOTfun and CCNOTfun as CNOT_X_basis and CCNOT_X_basis the computation happens in the X basis.
+    The default option is to compute this in the computational (aka Z) basis. If in_x_basis is
+    true then the computation is instead in the X basis, i.e.
+    CNOT is replaced by CNOT_X_basis and CCNOT is replaced by CCNOT_X_basis
 
-    See [CDKM96] reference in adder() docstring
+    See [CDKM96]_ reference in ripple_carry_adder.adder() docstring
 
     :param a: qubit label
     :param b: qubit label
@@ -83,12 +90,15 @@ def majority_gate(a: int, b: int, c: int, in_x_basis: bool = False) -> Program:
 
 def unmajority_add_gate(a: int, b: int, c: int, in_x_basis: bool = False) -> Program:
     """
-    The UnMajority and Add or UMA gate
+    The UnMajority and Add gate, or UMA for short.
 
-    The default option is to compute this in the computational (aka Z) basis. By passing in
-    CNOTfun and CCNOTfun as CNOT_X_basis and CCNOT_X_basis the computation happens in the X basis.
+    The default option is to compute this in the computational (aka Z) basis. If in_x_basis is
+    true then the computation is instead in the X basis, i.e.
+    CNOT is replaced by CNOT_X_basis and CCNOT is replaced by CCNOT_X_basis
 
-    See [CDKM96] reference in adder() docstring
+    See [CDKM96]_ reference in ripple_carry_adder.adder() docstring
+
+    .. seealso:: :func:`unmajority_add_parallel_gate`
 
     :param a: qubit label
     :param b: qubit label
@@ -113,13 +123,14 @@ def unmajority_add_gate(a: int, b: int, c: int, in_x_basis: bool = False) -> Pro
 
 def unmajority_add_parallel_gate(a: int, b: int, c: int, in_x_basis: bool = False) -> Program:
     """
-    The UnMajority and Add or UMA gate
+    An alternative form of the UnMajority and Add gate, or UMA for short.
 
-    3-CNOT version but admits greater parallelism
+    This implementation of UMA has 3-CNOTs, rather than 2, but admits greater parallelism
 
-    See [CDKM96] reference in adder() docstring
+    See [CDKM96]_ reference in ripple_carry_adder.adder() docstring
 
-    Computes
+    .. seealso:: :func:`unmajority_add_gate`
+
     :param a: qubit label
     :param b: qubit label
     :param c: qubit label
