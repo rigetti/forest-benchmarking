@@ -5,11 +5,9 @@ The module ``observable_estimation`` is at the heart of forest benchmarking. It 
 convenient way to construct experiments that measure observables and mitigate errors
 associated with readout (measurement) process.
 
-Overview
----------
+.. toctree::
 
-.. todo:: Put an overview or a mini tutorial here.
-
+    examples/obs_est_example
 
 Data structures
 ---------------
