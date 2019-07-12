@@ -76,6 +76,7 @@ Contents
    :caption: Operator and Superoperator tools
 
    superoperator_representations
+   examples/superop_tools_example
    operator_tools/rand_ops
    operator_tools/app_superop
    operator_tools/calc

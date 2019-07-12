@@ -1,8 +1,8 @@
 # Superoperator representations
 
-This document summarizes our conventions for the different superoperator representations. We show how to apply the channels to states in these represenations and how to convert channels between a subset of representations. By combining these conversion methods you can convert between any of the channel representations.
+This document summarizes our conventions for the different superoperator representations. We show how to apply the channels to states in these representations and how to convert channels between a subset of representations. By combining these conversion methods you can convert between any of the channel representations.
 
-This document is **not** intended to be a tutorial or a comprehensive review. At the bottom of the document there is a list of references with more information. This document was influenced by [IGST] and we recomend reading [GRAPTN] to gain deeper understading. (The references are listed at the bottom of this document.) Additionally these references explain, for example how to determine if a channel is unital or completely postive in the different representations.
+This document is **not** intended to be a tutorial or a comprehensive review. At the bottom of the document there is a list of references with more information. This document was influenced by [IGST] and we recommend reading [GRAPTN] to gain deeper understanding. (The references are listed at the bottom of this document.) Additionally these references explain, for example how to determine if a channel is unital or completely positive in the different representations.
 
 
 ## `vec` and `unvec`
@@ -29,7 +29,7 @@ Similarly we can define a row vectorization to be row stacking $ {\rm vec_r}(A) 
 
 ### Matrix multiplication in vectorized form
 
-For matricies $A,B,C$ 
+For matrices $A,B,C$ 
 
 $$\begin{align}
 {\rm vec}(ABC) = (C^T\otimes A) {\rm vec}(B), \quad (2)
@@ -63,7 +63,7 @@ This section is based on the Wood et al. presentation in [GRAPTN].
 As motivation for this section consider the Kraus representation theorem. It shows that a quantum channel can be represented as a partial trace over a unitary operation on a larger Hilbert space. Actually the unitary is on a bipartite Hilbert space.
 
 
-When representing quantum channels one insight is used may times.
+When representing quantum channels one insight is used many times.
 
 Consider two Hilbert spaces $\mathbb H_A$ and $\mathbb H_B$ with dimensions $d_A$ and $d_B$ respectively. An abstract quantum process matrix $\mathcal Q$ lives in the combined (bipartite) space of $\mathbb H_A \otimes \mathbb H_B$ so $\mathcal Q$ is a $d_A^2\times d_B^2$ matrix.
 
@@ -72,7 +72,7 @@ We can represent the process as a tensor with components
 $$\mathcal Q_{m,\mu;n,\nu} = \langle m, \mu |\mathcal Q |n,\nu \rangle $$ 
 where $|n,\nu\rangle = |n\rangle \otimes |\nu\rangle$, $m,n\in \{0,\ldots, d_A-1\}$, $\mu,\nu\in \{0,\ldots, d_B-1\}$ and all vectors are in the standard basis.
 
-With respect to these indicies some useful operations are [GRAPTN]:
+With respect to these indices some useful operations are [GRAPTN]:
  
 Transpose $T$: $\mathcal Q_{m,\mu;n,\nu} \mapsto \mathcal Q_{n,\nu;m,\mu},$  
 SWAP: $\mathcal Q_{m,\mu;n,\nu} \mapsto \mathcal Q_{\mu,m;\nu,n},$  
@@ -84,15 +84,15 @@ $${\rm vec}(G)\otimes {\rm vec}(\Gamma) \quad {\rm and} \quad  {\rm vec}(G\otime
 where $G$ and $\Gamma$ are matrices that act on $\mathbb H_A$ and $\mathbb H_B$ respectively, as explained in [VECQO].
 
 ### A note on numerical implementations
-Most linear algebra (or tensor) libraries have the ablity to `reshape` a matrix and `swapaxes` (or sometimes it is called `permute_dims`). 
+Most linear algebra (or tensor) libraries have the ability to `reshape` a matrix and `swapaxes` (or sometimes it is called `permute_dims`). 
 
-If you are trying to reshuffle indicies usually the first job is to write your matrix in tensor form. This requires reshaping a $d_A^2\times d_B^2$ matrix into a $d_A\times d_A\times d_B \times d_B$ tensor. Next you `permute_dims` or `swapaxes`. Often $d_A = d_B$ so we `reshape` to a Matrix that has the same dimensions as the orignal  $d_A^2\times d_A^2$ matix.
+If you are trying to reshuffle indices usually the first job is to write your matrix in tensor form. This requires reshaping a $d_A^2\times d_B^2$ matrix into a $d_A\times d_A\times d_B \times d_B$ tensor. Next you `permute_dims` or `swapaxes`. Often $d_A = d_B$ so we `reshape` to a Matrix that has the same dimensions as the original  $d_A^2\times d_A^2$ matrix.
 
 
 ## The $n$-qubit Pauli basis 
- The $n$-qubit Pauli basis is denoted $\mathcal P^{\otimes n} $ where $\mathcal  P = \{ I, X, Y, Z \}$ are the usual Pauli matricies. It is an operator basis for the $d = 2^n$ dimensional Hilbert space and there are $d^2 = 4^n$ operators in $\mathcal P^{\otimes n} $. If one divides all the operators by $\sqrt{d}$ the basis is orthonormal with respect to the Hilbert-Schmidt inner product.
+ The $n$-qubit Pauli basis is denoted $\mathcal P^{\otimes n} $ where $\mathcal  P = \{ I, X, Y, Z \}$ are the usual Pauli matrices. It is an operator basis for the $d = 2^n$ dimensional Hilbert space and there are $d^2 = 4^n$ operators in $\mathcal P^{\otimes n} $. If one divides all the operators by $\sqrt{d}$ the basis is orthonormal with respect to the Hilbert-Schmidt inner product.
  
-It is often convenient to index the $d^2$ operators with a single label, e.g. $P_1=I^{\otimes n},\, \ldots,\, P_{d^2}= Z^{\otimes n}$  (or $P_0=I^{\otimes n}$ if you like zero indexing). In anycase, as these operators are Hermitian and unitary they obey $P_i^2=I^{\otimes n}$.
+It is often convenient to index the $d^2$ operators with a single label, e.g. $P_1=I^{\otimes n},\, \ldots,\, P_{d^2}= Z^{\otimes n}$  (or $P_0=I^{\otimes n}$ if you like zero indexing). In any case, as these operators are Hermitian and unitary they obey $P_i^2=I^{\otimes n}$.
  
 To be explicit, for two qubits $d=4$ and we have 16 operators e.g. $\{II, IX, IY, IZ, XI, XX, XY, ..., ZZ\}$ were $II$ should be interpreted as $I\otimes I$ etc. The single index would be $\{P_1, P_2, P_3, P_4, P_5, P_6, P_7, ..., P_{16}\}$.
 
@@ -154,7 +154,7 @@ $$|\rho' \rangle \rangle = R_{\mathcal E} |\rho \rangle \rangle.$$
 
 
 ## Kraus to Superoperator (Liouville)
-We already saw an example of this in the setion on `vec`-ing. There we re-packaged conjugation by unitary evolution into the action of a matrix on a vec'd density operator. Unitary evolution is simply the case of a single Kraus operator, so we generalize this by taking a sum over all Kraus operators.  
+We already saw an example of this in the section on `vec`-ing. There we re-packaged conjugation by unitary evolution into the action of a matrix on a vec'd density operator. Unitary evolution is simply the case of a single Kraus operator, so we generalize this by taking a sum over all Kraus operators.  
 
 Consider the set of Kraus operators $\{ M_k \}$. The corresponding quantum operation is $\mathcal E (\rho) = \sum_k M_k \rho M_k^\dagger $.
 
@@ -193,7 +193,7 @@ $\begin{align}
 $$(R_{\mathcal E})_{i,j} = \frac 1 d \sum_{k,l}\chi_{k,l} {\rm Tr}[ P_i P_k P_j P_l].$$
 
 ## Superoperator to Pauli-Liouville matrix
-The standard basis on $n$ qubits is called the computational basis. It is essentially all the strings $|c_1\rangle=|0..0\rangle$ through to $|c_{\rm max}\rangle = |1...1\rangle$. To convert between a superoperator and the Pauli-Liouville matrix representation we need to do a change of basis from the computational basis to the Pauli basis. This is acheived by the unitary
+The standard basis on $n$ qubits is called the computational basis. It is essentially all the strings $|c_1\rangle=|0..0\rangle$ through to $|c_{\rm max}\rangle = |1...1\rangle$. To convert between a superoperator and the Pauli-Liouville matrix representation we need to do a change of basis from the computational basis to the Pauli basis. This is achieved by the unitary
 
 $$ U_{c2p}= \sum_{k=1}|c_k\rangle\langle\langle P_k|.$$
 
@@ -210,7 +210,7 @@ $$ \mathcal C = R(\mathcal E).$$
 It turns out that $ \mathcal E = R(\mathcal C)$ which means that $\mathcal E= R(R(\mathcal E))$.
 
 ## Pauli-Liouville matrix to Superoperator
-To convert between the Pauli-Liouville matrix and the superoperator representation we need to to a change of basis from the Pauli basis to the computational basis. This is acheived by the unitary
+To convert between the Pauli-Liouville matrix and the superoperator representation we need to to a change of basis from the Pauli basis to the computational basis. This is achieved by the unitary
 
 $$ U_{p2c}= \sum_{k=1}|P_k\rangle\rangle \langle k|,$$
 which is simply $U_{c2p}^\dagger$.
@@ -230,11 +230,11 @@ $$ \rho_{\mathcal E} = \frac{1}{d^2}\sum_{i,j=1}^{d^2} (R_{\mathcal E})_{i,j}  \
 ## Choi to Kraus
 This is simply the reverse of the Kraus to Choi procedure.
 
-Given the Choi matrix $\mathcal C$ we find it's eigenvalues $\{\lambda_i\}$ and vectors $\{|M_i\rangle\rangle \}$. Then the Kraus operators are
+Given the Choi matrix $\mathcal C$ we find its eigenvalues $\{\lambda_i\}$ and vectors $\{|M_i\rangle\rangle \}$. Then the Kraus operators are
 
 $$ M_i = \sqrt{\lambda_i}\, {\rm unvec}\big (|M_i\rangle\rangle\big),$$
 
-For numerical implementation one usually puts a threshold on the eigenvalues, say $\lambda> 10^{-10}$, to prevent numerical instablities. 
+For numerical implementation one usually puts a threshold on the eigenvalues, say $\lambda> 10^{-10}$, to prevent numerical instabilities. 
 
 ## Choi to Pauli-Liouville
 First we normalize the Choi representation
@@ -261,7 +261,7 @@ Some observations:
 
 * The Choi matrix of a unitary process always has rank 1.
 * The superoperator / Liouville representation of a unitary process is always full rank.
-* The eigenvalues of a Choi matrix give you an upper bound to the probability a particular (canonical) Kraus operator will occur (generally that probability depends on the state). This is helpful when sampling Kraus operators (you can test for which occurred accoridng to the order of these eigenvalues).
+* The eigenvalues of a Choi matrix give you an upper bound to the probability a particular (canonical) Kraus operator will occur (generally that probability depends on the state). This is helpful when sampling Kraus operators (you can test for which occurred according to the order of these eigenvalues).
 * The $\chi$ matrix (in the Pauli basis) is very convenient for computing the result of Pauli twirling or Clifford twirling the corresponding process.
 
 ### Unitary Channels or Gates
@@ -372,7 +372,7 @@ $$\begin{align}
 
 
 ### Pauli Channels
-Pauli channels are nice because they are diagonal in two representations and they have the *depolarlizing channel* as a speical case. 
+Pauli channels are nice because they are diagonal in two representations and they have the *depolarizing channel* as a special case. 
 
 In the operator sum representation a single qubit Pauli channel is defined as  
 $$\mathcal E(\rho) = (1-p_x-p_y-p_z) I \rho I + p_x X\rho X + p_y Y \rho Y + p_z Z \rho Z$$
@@ -469,7 +469,7 @@ $$\begin{align}
 \end{align}$$
 
 ### Amplitude Damping or the $T_1$ channel
-Amplitude damping is an energy dissipation (or relaxation) process. If a qubit it in it's excited state $|1\rangle$ it may emit energy, a photon, and transition to the ground state $|0\rangle$. In device physics an experiment that measures the decay over some time $t$, with functional form $\exp(-\Gamma t)$, is known as a $T_1$ experiment (where $T_1 = 1/\Gamma$).
+Amplitude damping is an energy dissipation (or relaxation) process. If a qubit it in its excited state $|1\rangle$ it may emit energy, a photon, and transition to the ground state $|0\rangle$. In device physics an experiment that measures the decay over some time $t$, with functional form $\exp(-\Gamma t)$, is known as a $T_1$ experiment (where $T_1 = 1/\Gamma$).
 
 From the perspective of quantum channels the amplitude damping channel is interesting as is an example of a non-unital channel i.e. one that does not have the identity matrix as a fixed point $\mathcal E_{AD} (I) \neq I$.
 

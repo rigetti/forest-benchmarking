@@ -4,11 +4,11 @@ We have arbitrarily decided to use a column stacking convention.
 
 A good reference for these methods is:
 
-[PGD] Maximum-likelihood quantum process tomography via projected gradient descent
-      Knee et al.,
-      Phys. Rev. A 98, 062336 (2018)
-      https://dx.doi.org/10.1103/PhysRevA.98.062336
-      https://arxiv.org/abs/1803.10062
+.. [PGD] Maximum-likelihood quantum process tomography via projected gradient descent.
+    Knee et al.
+    Phys. Rev. A 98, 062336 (2018).
+    https://dx.doi.org/10.1103/PhysRevA.98.062336
+    https://arxiv.org/abs/1803.10062
 """
 import numpy as np
 from scipy import linalg
@@ -21,13 +21,13 @@ def proj_choi_to_completely_positive(choi: np.ndarray, check_finite: bool = True
     Projects the Choi representation of a process into the nearest Choi matrix in the space of
     completely positive maps.
 
-    Equation 8 of [PGD]
+    Equation 8 of [PGD]_
 
-    [PGD] Maximum-likelihood quantum process tomography via projected gradient descent
-          Knee et al.,
-          Phys. Rev. A 98, 062336 (2018)
-          https://dx.doi.org/10.1103/PhysRevA.98.062336
-          https://arxiv.org/abs/1803.10062
+    .. [PGD] Maximum-likelihood quantum process tomography via projected gradient descent.
+        Knee et al.
+        Phys. Rev. A 98, 062336 (2018).
+        https://dx.doi.org/10.1103/PhysRevA.98.062336
+        https://arxiv.org/abs/1803.10062
 
     :param choi: Choi representation of a process
     :param check_finite: check that the input matrices contain only finite numbers.
@@ -44,7 +44,7 @@ def proj_choi_to_trace_non_increasing(choi: np.ndarray) -> np.ndarray:
     """
     Projects the Choi matrix of a process into the space of trace non-increasing maps.
 
-    Equation 33 of [PGD]
+    Equation 33 of [PGD]_
 
     :param choi: Choi representation of a process
     :return: Choi representation of the projected trace non-increasing process
@@ -70,8 +70,11 @@ def proj_choi_to_trace_preserving(choi: np.ndarray) -> np.ndarray:
     Projects the Choi representation of a process to the closest processes in the space of trace
     preserving maps.
 
-    Equation 12 of [PGD], but without vecing the Choi matrix. See choi_is_trace_preserving for
-    comparison.
+    Equation 12 of [PGD]_, but without vecing the Choi matrix.
+
+    .. seealso::
+
+        :func:`choi_is_trace_preserving`
 
     :param choi: Choi representation of a process
     :return: Choi representation of the projected trace preserving process
@@ -92,14 +95,14 @@ def proj_choi_to_physical(choi: np.ndarray, make_trace_preserving: bool = True) 
     Projects the given Choi matrix into the subspace of Completetly Positive and either
     Trace Perserving (TP) or Trace-Non-Increasing maps.
 
-    Uses Dykstra's algorithm with the stopping criterion presented in:
+    Uses Dykstra's algorithm with the stopping criterion presented in [DYKALG]_
 
-    [DYKALG] Dykstra’s algorithm and robust stopping criteria
-             Birgin et al.,
-             (Springer US, Boston, MA, 2009), pp. 828–833, ISBN 978-0-387-74759-0.
-             https://doi.org/10.1007/978-0-387-74759-0_143
+    .. [DYKALG] Dykstra’s algorithm and robust stopping criteria.
+         Birgin et al.
+         (Springer US, Boston, MA, 2009), pp. 828–833, ISBN 978-0-387-74759-0.
+         https://doi.org/10.1007/978-0-387-74759-0_143
 
-    This method is suggested in [PGD]
+    This method is suggested in [PGD]_
 
     :param choi: the Choi representation estimate of a quantum process.
     :param make_trace_preserving: default true, projects the estimate to a trace-preserving
@@ -151,14 +154,13 @@ def proj_choi_to_unitary(choi: np.ndarray, check_finite: bool = True) -> np.ndar
     """
     Compute the unitary closest to a quantum process specified by a Choi matrix.
 
-    This function enforces Hermiticity of the Choi matrix. See the following reference for more
-    details:
+    This function enforces Hermiticity of the Choi matrix. See [IntQC]_ for more details:
 
-    Interference of Quantum Channels
-    Daniel K. L. Oi
-    Phys. Rev. Lett. 91, 067902 (2003)
-    https://doi.org/10.1103/PhysRevLett.91.067902
-    https://arxiv.org/abs/quant-ph/0303178
+    .. [IntQC] Interference of Quantum Channels.
+        Daniel K. L. Oi.
+        Phys. Rev. Lett. 91, 067902 (2003).
+        https://doi.org/10.1103/PhysRevLett.91.067902
+        https://arxiv.org/abs/quant-ph/0303178
 
     :param choi: the Choi representation of a quantum process.
     :param check_finite: check that the input matrices contain only finite numbers.

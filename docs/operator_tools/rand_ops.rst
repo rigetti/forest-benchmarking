@@ -5,10 +5,9 @@ Random Operators and Superoperators
 
 A module for generating random quantum states and processes.
 
-Overview
----------
+.. toctree::
 
-.. todo:: Put an overview or a mini tutorial here.
+    ../examples/rand_ops_example
 
 
 Random Complex Matrix

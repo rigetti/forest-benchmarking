@@ -3,17 +3,17 @@ Superoperator representations
 
 This document summarizes our conventions for the different superoperator
 representations. We show how to apply the channels to states in these
-represenations and how to convert channels between a subset of
+representations and how to convert channels between a subset of
 representations. By combining these conversion methods you can convert
 between any of the channel representations.
 
 This document is **not** intended to be a tutorial or a comprehensive
 review. At the bottom of the document there is a list of references with
-more information. This document was influenced by [IGST] and we recomend
-reading [GRAPTN] to gain deeper understading. (The references are listed
+more information. This document was influenced by [IGST]_ and we recommend
+reading [GRAPTN]_ to gain deeper understanding. (The references are listed
 at the bottom of this document.) Additionally these references explain,
 for example how to determine if a channel is unital or completely
-postive in the different representations.
+positive in the different representations.
 
 ``vec`` and ``unvec``
 ---------------------
@@ -54,7 +54,7 @@ Similarly we can define a row vectorization to be row stacking :math:`{\rm vec_r
 Matrix multiplication in vectorized form
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-For matricies :math:`A,B,C`
+For matrices :math:`A,B,C`
 
 .. math::
 
@@ -97,14 +97,14 @@ $ {}([A,X])= (IA - A^TI) {}(X)$
 Matrix operations on Bipartite matrices: Reshuffling, SWAP, and tranposition
 ----------------------------------------------------------------------------
 
-This section is based on the Wood et al. presentation in [GRAPTN].
+This section is based on the Wood et al. presentation in [GRAPTN]_.
 
 As motivation for this section consider the Kraus representation
 theorem. It shows that a quantum channel can be represented as a partial
 trace over a unitary operation on a larger Hilbert space. Actually the
 unitary is on a bipartite Hilbert space.
 
-When representing quantum channels one insight is used may times.
+When representing quantum channels one insight is used many times.
 
 Consider two Hilbert spaces :math:`\mathbb H_A` and :math:`\mathbb H_B`
 with dimensions :math:`d_A` and :math:`d_B` respectively. An abstract
@@ -121,7 +121,7 @@ where :math:`|n,\nu\rangle = |n\rangle \otimes |\nu\rangle`,
 :math:`\mu,\nu\in \{0,\ldots, d_B-1\}` and all vectors are in the
 standard basis.
 
-With respect to these indicies some useful operations are [GRAPTN]:
+With respect to these indices some useful operations are [GRAPTN]_:
 
 Transpose :math:`T`:
 :math:`\mathcal Q_{m,\mu;n,\nu} \mapsto \mathcal Q_{n,\nu;m,\mu},`
@@ -142,28 +142,28 @@ understanding the relationship between
 
 where :math:`G` and :math:`\Gamma` are matrices that act on
 :math:`\mathbb H_A` and :math:`\mathbb H_B` respectively, as explained
-in [VECQO].
+in [VECQO]_.
 
 A note on numerical implementations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Most linear algebra (or tensor) libraries have the ablity to ``reshape``
+Most linear algebra (or tensor) libraries have the ability to ``reshape``
 a matrix and ``swapaxes`` (or sometimes it is called ``permute_dims``).
 
-If you are trying to reshuffle indicies usually the first job is to
+If you are trying to reshuffle indices usually the first job is to
 write your matrix in tensor form. This requires reshaping a
 :math:`d_A^2\times d_B^2` matrix into a
 :math:`d_A\times d_A\times d_B \times d_B` tensor. Next you
 ``permute_dims`` or ``swapaxes``. Often :math:`d_A = d_B` so we
-``reshape`` to a Matrix that has the same dimensions as the orignal
-:math:`d_A^2\times d_A^2` matix.
+``reshape`` to a Matrix that has the same dimensions as the original
+:math:`d_A^2\times d_A^2` matrix.
 
 The :math:`n`-qubit Pauli basis
 -------------------------------
 
 The :math:`n`-qubit Pauli basis is denoted
 :math:`\mathcal P^{\otimes n} ` where
-:math:`\mathcal  P = \{ I, X, Y, Z \}` are the usual Pauli matricies. It
+:math:`\mathcal  P = \{ I, X, Y, Z \}` are the usual Pauli matrices. It
 is an operator basis for the :math:`d = 2^n` dimensional Hilbert space
 and there are :math:`d^2 = 4^n` operators in
 :math:`\mathcal P^{\otimes n} `. If one divides all the operators by
@@ -271,7 +271,7 @@ multiplication
 Kraus to Superoperator (Liouville)
 ----------------------------------
 
-We already saw an example of this in the setion on ``vec``-ing. There we
+We already saw an example of this in the section on ``vec``-ing. There we
 re-packaged conjugation by unitary evolution into the action of a matrix
 on a vec'd density operator. Unitary evolution is simply the case of a
 single Kraus operator, so we generalize this by taking a sum over all
@@ -333,7 +333,7 @@ basis. It is essentially all the strings
 :math:`|c_{\rm max}\rangle = |1...1\rangle`. To convert between a
 superoperator and the Pauli-Liouville matrix representation we need to
 do a change of basis from the computational basis to the Pauli basis.
-This is acheived by the unitary
+This is achieved by the unitary
 
 .. math::  U_{c2p}= \sum_{k=1}|c_k\rangle\langle\langle P_k|.
 
@@ -357,7 +357,7 @@ Pauli-Liouville matrix to Superoperator
 
 To convert between the Pauli-Liouville matrix and the superoperator
 representation we need to to a change of basis from the Pauli basis to
-the computational basis. This is acheived by the unitary
+the computational basis. This is achieved by the unitary
 
 .. math::  U_{p2c}= \sum_{k=1}|P_k\rangle\rangle \langle k|,
 
@@ -379,7 +379,7 @@ Choi to Kraus
 
 This is simply the reverse of the Kraus to Choi procedure.
 
-Given the Choi matrix :math:`\mathcal C` we find it's eigenvalues
+Given the Choi matrix :math:`\mathcal C` we find its eigenvalues
 :math:`\{\lambda_i\}` and vectors :math:`\{|M_i\rangle\rangle \}`. Then
 the Kraus operators are
 
@@ -387,7 +387,7 @@ the Kraus operators are
 
 For numerical implementation one usually puts a threshold on the
 eigenvalues, say :math:`\lambda> 10^{-10}`, to prevent numerical
-instablities.
+instabilities.
 
 Choi to Pauli-Liouville
 -----------------------
@@ -428,7 +428,7 @@ Some observations:
    probability a particular (canonical) Kraus operator will occur
    (generally that probability depends on the state). This is helpful
    when sampling Kraus operators (you can test for which occurred
-   accoridng to the order of these eigenvalues).
+   according to the order of these eigenvalues).
 -  The :math:`\chi` matrix (in the Pauli basis) is very convenient for
    computing the result of Pauli twirling or Clifford twirling the
    corresponding process.
@@ -571,7 +571,7 @@ Pauli Channels
 ~~~~~~~~~~~~~~
 
 Pauli channels are nice because they are diagonal in two representations
-and they have the *depolarlizing channel* as a speical case.
+and they have the *depolarizing channel* as a special case.
 
 In the operator sum representation a single qubit Pauli channel is
 defined as
@@ -693,7 +693,7 @@ Amplitude Damping or the :math:`T_1` channel
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Amplitude damping is an energy dissipation (or relaxation) process. If a
-qubit it in it's excited state :math:`|1\rangle` it may emit energy, a
+qubit it in its excited state :math:`|1\rangle` it may emit energy, a
 photon, and transition to the ground state :math:`|0\rangle`. In device
 physics an experiment that measures the decay over some time :math:`t`,
 with functional form :math:`\exp(-\Gamma t)`, is known as a :math:`T_1`
@@ -825,38 +825,38 @@ superoperator representation.
 References
 ----------
 
-| [IGST] Introduction to Quantum Gate Set Tomography
-| Greenbaum,
-| arXiv:1509.02921, (2015)
-| https://arxiv.org/abs/1509.02921
+.. [IGST] Introduction to Quantum Gate Set Tomography.
+    Greenbaum.
+    arXiv:1509.02921, (2015).
+    https://arxiv.org/abs/1509.02921
 
-| [QN] Quantum Nescimus. Improving the characterization of quantum systems from limited information
-| Harper,
-| PhD thesis University of Sydney, 2018
-| https://ses.library.usyd.edu.au/handle/2123/17896
+.. [QN] Quantum Nescimus. Improving the characterization of quantum systems from limited information.
+    Harper.
+    PhD thesis University of Sydney, 2018.
+    https://ses.library.usyd.edu.au/handle/2123/17896
 
-| [GRAPTN] Tensor networks and graphical calculus for open quantum systems
-| Wood et al.,
-| Quant. Inf. Comp. 15, 0579-0811 (2015)
-| https://arxiv.org/abs/1111.6950
+.. [GRAPTN] Tensor networks and graphical calculus for open quantum systems. 
+    Wood et al.
+    Quant. Inf. Comp. 15, 0579-0811 (2015).
+    https://arxiv.org/abs/1111.6950
 
-| [SVDMAT] Singular value decomposition and matrix reorderings in quantum information theory
-| Miszczak,
-| Int. J. Mod. Phys. C 22, No. 9, 897 (2011)
-| https://dx.doi.org/10.1142/S0129183111016683
-| https://arxiv.org/abs/1011.1585
+.. [SVDMAT] Singular value decomposition and matrix reorderings in quantum information theory.
+    Miszczak.
+    Int. J. Mod. Phys. C 22, No. 9, 897 (2011).
+    https://dx.doi.org/10.1142/S0129183111016683
+    https://arxiv.org/abs/1011.1585
 
-| [VECQO] Vectorization of quantum operations and its use
-| Gilchrist et al., arXiv:0911.2539, (2009)
-| https://arxiv.org/abs/0911.2539
+.. [VECQO] Vectorization of quantum operations and its use.
+    Gilchrist et al., arXiv:0911.2539, (2009).
+    https://arxiv.org/abs/0911.2539
 
-| [MATQO] On the Matrix Representation of Quantum Operations
-| Nambu et al.,
-| arXiv: 0504091 (2005)
-| https://arxiv.org/abs/quant-ph/0504091
+.. [MATQO] On the Matrix Representation of Quantum Operations.
+    Nambu et al.
+    arXiv: 0504091 (2005).
+    https://arxiv.org/abs/quant-ph/0504091
 
-| [DUAL] On duality between quantum maps and quantum states
-| Zyczkowski et al.,
-| Open Syst. Inf. Dyn. 11, 3 (2004)
-| https://dx.doi.org/10.1023/B:OPSY.0000024753.05661.c2
-| https://arxiv.org/abs/quant-ph/0401119
+.. [DUAL] On duality between quantum maps and quantum states.
+    Zyczkowski et al.
+    Open Syst. Inf. Dyn. 11, 3 (2004).
+    https://dx.doi.org/10.1023/B:OPSY.0000024753.05661.c2
+    https://arxiv.org/abs/quant-ph/0401119
