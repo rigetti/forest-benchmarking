@@ -23,12 +23,6 @@ def proj_choi_to_completely_positive(choi: np.ndarray, check_finite: bool = True
 
     Equation 8 of [PGD]_
 
-    .. [PGD] Maximum-likelihood quantum process tomography via projected gradient descent.
-        Knee et al.
-        Phys. Rev. A 98, 062336 (2018).
-        https://dx.doi.org/10.1103/PhysRevA.98.062336
-        https://arxiv.org/abs/1803.10062
-
     :param choi: Choi representation of a process
     :param check_finite: check that the input matrices contain only finite numbers.
     :return: closest Choi matrix in the space of completely positive maps

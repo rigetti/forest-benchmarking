@@ -87,7 +87,7 @@ def generate_t1_experiments(qubits: Sequence[int], times: Sequence[float]) \
     measure the decay time from the excited state to ground state for each qubit in qubits.
 
     For each delay time in times a single program will be generated in which all qubits are
-    initialized to the excited state (|1>) and simultaneously measured after the given delay.
+    initialized to the excited state (`|1>`) and simultaneously measured after the given delay.
 
     :param qubits: list of qubits to measure.
     :param times: The times at which to measure, given in seconds. Each time is rounded to the
@@ -294,7 +294,7 @@ def generate_rabi_experiments(qubits: Sequence[int], angles: Sequence[float]) \
 
     :param qubits: list of qubits to measure.
     :param angles: A list of angles at which to make a measurement
-    :return: ObservablesExperiments which can be run to verify the  RX(*, q) calibration
+    :return: ObservablesExperiments which can be run to verify the  RX(angle, q) calibration
         for each qubit
     """
     expts = []
@@ -326,8 +326,8 @@ def fit_rabi_results(angles: Sequence[float], z_expectations: Sequence[float],
 
     amplitude
         this will have magnitude (p1_given_1 - p1_given_0) / 2 where
-        p1_given_1 is the probability of measuring 1 when the qubit is in the |1> state.
-        p1_given_0 is the probability of measuring 1 when the qubit is in the |0> state.
+        p1_given_1 is the probability of measuring 1 when the qubit is in the `|1>` state.
+        p1_given_0 is the probability of measuring 1 when the qubit is in the `|0>` state.
 
     offset
         this is the offset phase, in radians, with respect to the true rotation frequency.
@@ -417,8 +417,8 @@ def fit_cz_phase_ramsey_results(angles: Sequence[float], y_expectations: Sequenc
 
     amplitude
         this will have magnitude (p1_given_1 - p1_given_0) / 2 where
-        p1_given_1 is the probability of measuring 1 when the qubit is in the |1> state.
-        p1_given_0 is the probability of measuring 1 when the qubit is in the |0> state.
+        p1_given_1 is the probability of measuring 1 when the qubit is in the `|1>` state.
+        p1_given_0 is the probability of measuring 1 when the qubit is in the `|0>` state.
 
     offset
         this is the offset phase, in radians, with respect to the true rotation frequency.
