@@ -79,8 +79,8 @@ Finally, we analyze our data with one of the analysis routines::
 .. module:: forest.benchmarking.tomography
 
 .. toctree::
-    examples/tomo_state_example
-    examples/tomo_proc_example
+    examples/tomography_state
+    examples/tomography_process
 
 .. autosummary::
     :toctree: autogen

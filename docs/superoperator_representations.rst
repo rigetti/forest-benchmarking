@@ -10,9 +10,9 @@ between any of the channel representations.
 This document is **not** intended to be a tutorial or a comprehensive
 review. At the bottom of the document there is a list of references with
 more information. This document was influenced by [IGST]_ and we recommend
-reading [GRAPTN]_ to gain deeper understanding. (The references are listed
-at the bottom of this document.) Additionally these references explain,
-for example how to determine if a channel is unital or completely
+reading [GRAPTN]_ to gain deeper understanding (see also [QN]_, [SVDMAT]_, [MATQO]_, [DUAL]_ listed
+at the bottom of this document). Additionally, these references explain,
+for example, how to determine if a channel is unital or completely
 positive in the different representations.
 
 ``vec`` and ``unvec``

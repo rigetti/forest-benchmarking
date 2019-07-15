@@ -7,7 +7,7 @@ A module for generating random quantum states and processes.
 
 .. toctree::
 
-    ../examples/rand_ops_example
+    ../examples/random_operators
 
 
 Random Complex Matrix

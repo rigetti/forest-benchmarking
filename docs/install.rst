@@ -26,7 +26,7 @@ If you dont already have Jupyter or Jupyter lab now would be a good time to inst
 
 ::
 
-    pip install jupyterlab
+	pip install jupyterlab
 
 
 Step 2. Install forest-benchmarking
@@ -64,11 +64,13 @@ We use sphinx to build the documentation. To do this, first  install the require
 	pip install sphinx
 	pip install sphinx_rtd_theme
 	pip install nbsphinx
-	
-then navigate into Forest-Benchmarkings top-level directory and run:
+	pip install nbsphinx_link
+
+then navigate into Forest-Benchmarkings docs directory and run:
 
 ::
 
-		sphinx-build -b html docs/ docs/_build
+	make clean
+	make html
 
-To view the docs navigate to the newly-created docs/_build directory and open the index.html file in a browser.
+To view the docs navigate to the newly-created docs/_build/html directory and open the index.html file in a browser.

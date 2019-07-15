@@ -11,7 +11,7 @@ The benchmark is simplistic and not very rigorous as it does not test any specif
 
 .. toctree::
 
-    examples/ripple_adder_bm_example
+    examples/ripple_adder_benchmark
 
 Circuit Primitives
 ------------------

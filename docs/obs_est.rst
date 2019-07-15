@@ -7,11 +7,11 @@ associated with readout (measurement) process.
 
 .. toctree::
 
-    examples/obs_est_example
+    examples/observable_estimation
 
 Data structures
 ---------------
-.. currentmodule:: forest.benchmarking.observable_estimation
+.. module:: forest.benchmarking.observable_estimation
 .. autosummary::
     :toctree: autogen
     :template: autosumm.rst

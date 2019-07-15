@@ -8,9 +8,9 @@ compose to the identity to observe how performance degrades with increasing circ
 
 .. toctree::
 
-    examples/rb_example
-    examples/urb_example
-    examples/irb_example
+    examples/randomized_benchmarking
+    examples/randomized_benchmarking_unitarity
+    examples/randomized_benchmarking_interleaved
 
 .. autosummary::
     :toctree: autogen

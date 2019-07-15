@@ -5,11 +5,10 @@ Readout Error Estimation
 
 The ``readout.py`` module allows you to estimate the measurement confusion matrix.
 
-Overview
---------
 
-.. todo:: Put an overview or mini tutorial here.
+.. toctree::
 
+    examples/readout_error_estimation
 
 
 Functions

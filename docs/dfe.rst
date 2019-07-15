@@ -9,7 +9,7 @@ cost than full tomography.
 
 .. toctree::
 
-    examples/dfe_example
+    examples/direct_fidelity_estimation
 
 .. autosummary::
     :toctree: autogen

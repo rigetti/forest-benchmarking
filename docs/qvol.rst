@@ -9,8 +9,12 @@ The quantum volume is holistic quantum computer performance measure (see `arXiv:
 Roughly the logarithm (base 2) of quantum volume :math:`V_Q`, quantifies the largest random
 circuit of equal width and depth that the computer successfully implements and is certifiably
 quantum. So if you have 64 qubits and the best log-QV you have measured is :math:`\log_2 V_Q = 3`
-then effectively you only have an 3 qubit device!
+then effectively you only have a 3 qubit device!
 
+
+.. toctree::
+
+    examples/quantum_volume
 
 .. autosummary::
     :toctree: autogen
