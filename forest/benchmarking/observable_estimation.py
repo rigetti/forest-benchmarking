@@ -8,7 +8,6 @@ from json import JSONEncoder
 from operator import mul
 from typing import List, Union, Iterable, Tuple, Dict, Callable, Sequence
 from copy import copy
-import warnings
 
 import numpy as np
 from math import pi
