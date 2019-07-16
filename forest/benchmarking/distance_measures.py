@@ -380,15 +380,17 @@ def diamond_norm_distance(choi0: np.ndarray, choi1: np.ndarray) -> float:
     Return the diamond norm distance between two completely positive
     trace-preserving (CPTP) superoperators, represented as Choi matrices.
 
-    The calculation uses the simplified semidefinite program of Watrous
+    The calculation uses the simplified semidefinite program of Watrous in [CBN]_
+
+    .. note::
+
+        This calculation becomes very slow for 4 or more qubits.
 
     .. [CBN] Semidefinite programs for completely bounded norms.
           J. Watrous.
           Theory of Computing 5, 11, pp. 217-238 (2009).
           http://theoryofcomputing.org/articles/v005a011
           http://arxiv.org/abs/0901.4709
-
-    This calculation becomes very slow for 4 or more qubits.
 
     :param choi0: A 4**N by 4**N matrix (where N is the number of qubits)
     :param choi1: A 4**N by 4**N matrix (where N is the number of qubits)

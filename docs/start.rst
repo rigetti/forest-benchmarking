@@ -1,4 +1,6 @@
-Quick start guide
+.. _start:
+
+Quick Start Guide
 =================
 
 Below we will assume that you are developing in a jupyter notebook.
@@ -13,7 +15,7 @@ First thing you need to do is open up a terminal and run:
 
 	$ quilc -S
 	$ qvm -S
-	$ juputer lab
+	$ jupyter lab
 
 Inside the notebook we need to get some basic pyQuil object
 

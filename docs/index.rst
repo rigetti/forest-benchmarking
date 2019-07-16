@@ -6,10 +6,10 @@ Forest-Benchmarking is an **open source** library for performing quantum charact
 
 
 
-To get started see our
+To get started see
 
-* :doc:`install`
-* :doc:`start`
+* :ref:`install`
+* :ref:`start`
 
 
 .. note::
@@ -18,6 +18,14 @@ To get started see our
 
 Contents
 --------
+
+.. toctree::
+    :maxdepth: 1
+
+    install
+    start
+
+
 .. toctree::
    :maxdepth: 1
    :caption: Observable Estimation and Error Mitigation

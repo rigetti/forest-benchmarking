@@ -169,7 +169,7 @@ def generate_rpe_experiments(rotation: Program, prep_prog: Program, pre_meas_pro
         5) Prepare (one of) the qubit(s) for measurement along either the X or Y axis.
         6) Measure this qubit, and in the multi-qubit case other qubits participating in rotation.
 
-    The single qubit algorithm is due to [RPE].
+    The single qubit algorithm is due to [RPE]_. See also [RPE2]_
 
     .. [RPE]  Robust Calibration of a Universal Single-Qubit Gate-Set via Robust Phase Estimation.
            Kimmel et al.
@@ -197,10 +197,10 @@ def generate_rpe_experiments(rotation: Program, prep_prog: Program, pre_meas_pro
         of basis in prep_prog; that is, this should map eigenvectors back to computational basis.
     :param settings: the ExperimentSettings appropriate for the given experiment. These can be
         generated along with the prep_prog and meas_prog by the helpers above.
-    :param num_depths: the number of depths in the protocol described in [RPE]. A depth is the
+    :param num_depths: the number of depths in the protocol described in [RPE]_. A depth is the
         number of consecutive applications of the rotation in a single iteration. The maximum
         depth is 2**(num_depths-1)
-    :return: experiments necessary for the RPE protocol in [RPE]
+    :return: experiments necessary for the RPE protocol in [RPE]_
     """
     expts = []
     for exponent in range(num_depths):
@@ -241,7 +241,7 @@ def num_trials(depth, max_depth, multiplicative_factor: float = 1.0,
     :param depth: the depth of the program whose number of trials is calculated
     :param max_depth: maximum depth of programs in the experiment
     :param multiplicative_factor: extra add-hoc factor that multiplies the optimal number of shots
-    :param additive_error: estimate of the max additive error in the experiment, eq. V.15 of [RPE]
+    :param additive_error: estimate of the max additive error in the experiment, eq. V.15 of [RPE]_
     :param alpha: a hyper-parameter in equation V.11 of [RPE]_, suggested to be 5/2, > 2
     :param beta: a hyper-parameter in equation V.11 of [RPE]_, suggested to be 1/2, > 0
     :return: Mj, the number of shots for program with depth 2**(j-1) in iteration j of RPE
