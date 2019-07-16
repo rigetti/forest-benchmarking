@@ -8,6 +8,7 @@ from json import JSONEncoder
 from operator import mul
 from typing import List, Union, Iterable, Tuple, Dict, Callable, Sequence
 from copy import copy
+import warnings
 
 import numpy as np
 from math import pi
@@ -1152,7 +1153,8 @@ def ratio_variance(a: Union[float, np.ndarray],
     return var_a / b**2 + (a**2 * var_b) / b**4
 
 
-def merge_disjoint_experiments(experiments: List[ObservablesExperiment]) -> ObservablesExperiment:
+def merge_disjoint_experiments(experiments: List[ObservablesExperiment],
+                               group_merged_settings: bool = True) -> ObservablesExperiment:
     """
     Merges the list of experiments into a single experiment that runs the sum of the individual
     experiment programs and contains all of the combined experiment settings.
@@ -1175,19 +1177,32 @@ def merge_disjoint_experiments(experiments: List[ObservablesExperiment]) -> Obse
     different qubits, and be wary of the fact that measurement happens only after all gates have
     finished.
 
-    Note that to get the time saving benefits you need to call `group_settings` on the ouput
-    experiment.
+    Note that to get the time saving benefits the settings must be grouped on the merged
+    experiment--by default this is done before returning the experiment.
 
     :param experiments: a group of experiments to combine into a single experiment
+    :param group_merged_settings: By default group the settings of the merged experiment.
     :return: a single experiment that runs the summed program and all settings.
     """
+    used_qubits = set()
+    for expt in experiments:
+        if expt.program.get_qubits().intersection(used_qubits):
+            raise ValueError("Experiment programs act on some shared set of qubits and cannot be "
+                          "merged unambiguously.")
+        used_qubits = used_qubits.union(expt.program.get_qubits())
+
     # get a flat list of all settings, to be regrouped later
-    parallel_settings = [setting for expt in experiments
+    all_settings = [setting for expt in experiments
                          for simult_settings in expt
                          for setting in simult_settings]
-    parallel_prog = sum([expt.program for expt in experiments], Program())
+    merged_program = sum([expt.program for expt in experiments], Program())
 
-    return ObservablesExperiment(parallel_settings, parallel_prog)
+    merged_expt = ObservablesExperiment(all_settings, merged_program)
+
+    if group_merged_settings:
+        merged_expt = group_settings(merged_expt)
+
+    return merged_expt
 
 
 def get_results_by_qubit_groups(results: Iterable[ExperimentResult],
@@ -1196,12 +1211,14 @@ def get_results_by_qubit_groups(results: Iterable[ExperimentResult],
     """
     Organizes ExperimentResults by the group of qubits on which the observable of the result acts.
 
-    The qubit_groups are assumed to be disjoint. Each experiment result will be assigned to a
-    qubit group key if the observable of the result.setting acts on a subset of the qubits in
-    the group. If the result does not act on a subset of qubits of any given group then the
-    result is ignored.
+    Each experiment result will be associated with a qubit group key if the observable of the
+    result.setting acts on a subset of the qubits in the group. If the result does not act on a
+    subset of qubits of any given group then the result is ignored.
 
-    :param qubit_groups: disjoint groups of qubits for which you want the pertinent results.
+    Note that for groups of qubits which are not pairwise disjoint, one result may be associated to
+    multiple groups.
+
+    :param qubit_groups: groups of qubits for which you want the pertinent results.
     :param results: ExperimentResults from running an ObservablesExperiment
     :return: a dictionary whose keys are individual groups of qubits (as sorted tuples). The
         corresponding value is the list of experiment results whose observables measure some
