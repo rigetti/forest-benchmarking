@@ -15,7 +15,7 @@ from pyquil.paulis import sI, sX, sY, sZ, PauliSum, PauliTerm
 from forest.benchmarking.observable_estimation import *
 from forest.benchmarking.observable_estimation import _OneQState,\
     _max_tpb_overlap, _max_weight_operator, _max_weight_state, \
-    _flip_array_to_prog,  _measure_bitstrings
+    _flip_array_to_prog,  _measure_bitstrings, _one_q_sic_prep
 
 
 def _generate_random_states(n_qubits, n_terms):
