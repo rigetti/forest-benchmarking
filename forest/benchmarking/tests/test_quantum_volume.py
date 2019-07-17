@@ -1,6 +1,8 @@
 import numpy as np
 import warnings
+from pyquil.numpy_simulator import NumpyWavefunctionSimulator
 from forest.benchmarking.quantum_volume import *
+from forest.benchmarking.quantum_volume import _naive_program_generator
 
 np.random.seed(1)
 
@@ -25,63 +27,30 @@ def test_extraction():
     assert extract_quantum_volume_from_results(outcomes) == 8
 
 
-def test_qv_df_generation():
-    depths = [2, 3]
-    n_ckts = 100
-
-    df = generate_quantum_volume_experiments(depths, n_ckts)
-    df_depths = df["Depth"].values
-    ckts = df["Abstract Ckt"].values
-
-    assert len(df_depths) == len(depths)*n_ckts
-
-    assert all([len(ckt[0]) == depth for ckt, depth in zip(ckts, df_depths)])
-    assert all([len(ckt[0][0]) == depth for ckt, depth in zip(ckts, df_depths)])
-
-    assert all([ckt[1].shape == (depth, depth//2, 4, 4) for ckt, depth in zip(ckts, df_depths)])
-
-
-def test_qv_data_acquisition(qvm):
-    depths = [2, 3]
-    n_ckts = 10
-    n_shots = 5
-
-    df = generate_quantum_volume_experiments(depths, n_ckts)
-    df = add_programs_to_dataframe(df, qvm)
-    df = acquire_quantum_volume_data(df, qvm, n_shots)
-
-    df_depths = df["Depth"].values
-    results = df["Results"].values
-
-    assert all([res.shape == (n_shots, depth) for res, depth in zip(results, df_depths)])
-
-
-def test_qv_count_heavy_hitters(qvm):
-    depths = [2, 3]
-    n_ckts = 10
-    n_shots = 5
-
-    df = generate_quantum_volume_experiments(depths, n_ckts)
-    df = add_programs_to_dataframe(df, qvm)
-    df = acquire_quantum_volume_data(df, qvm, n_shots)
-    df = acquire_heavy_hitters(df)
-
-    num_hhs = df["Num HH Sampled"].values
-
-    assert all([0 <= num_hh <= n_shots for num_hh in num_hhs])
-
-
 def test_qv_get_results_by_depth(qvm):
-
     depths = [2, 3]
     n_ckts = 10
     n_shots = 5
 
-    df = generate_quantum_volume_experiments(depths, n_ckts)
-    df = add_programs_to_dataframe(df, qvm)
-    df = acquire_heavy_hitters(df)
-    df = acquire_quantum_volume_data(df, qvm, n_shots)
-    results = get_results_by_depth(df)
+    ckt_results = []
+    ckt_hhs = []
+    for depth in depths:
+        wfn_sim = NumpyWavefunctionSimulator(depth)
+        for _ in range(n_ckts):
+            permutations, gates = generate_abstract_qv_circuit(depth)
+            program = _naive_program_generator(qvm, qvm.qubits(), permutations, gates)
 
-    assert len(results.keys()) == len(depths)
-    assert [0 <= results[d][1] <= results[d][0] <= 1 for d in depths]
+            program.wrap_in_numshots_loop(n_shots)
+            executable = qvm.compiler.native_quil_to_executable(program)
+            results = qvm.run(executable)
+            ckt_results.append(results)
+
+            heavy_outputs = collect_heavy_outputs(wfn_sim, permutations, gates)
+            ckt_hhs.append(heavy_outputs)
+
+    num_hh_sampled = count_heavy_hitters_sampled(ckt_results, ckt_hhs)
+    probs_by_depth = get_prob_sample_heavy_by_depth(depths, num_hh_sampled,
+                                                    [n_shots for _ in depths])
+
+    assert len(probs_by_depth.keys()) == len(depths)
+    assert [0 <= probs_by_depth[d][1] <= probs_by_depth[d][0] <= 1 for d in depths]

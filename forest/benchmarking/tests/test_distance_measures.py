@@ -1,10 +1,17 @@
-import forest.benchmarking.random_operators as rand_ops
+import forest.benchmarking.operator_tools.random_operators as rand_ops
+from forest.benchmarking.operator_tools.superoperator_transformations import (
+    kraus2pauli_liouville, kraus2superop, kraus2choi, superop2choi)
 import numpy.random
 from scipy.linalg import fractional_matrix_power as matpow
 import forest.benchmarking.distance_measures as dm
 import numpy as np
 import pytest
 import os
+from pyquil.gate_matrices import I as I_MAT
+from pyquil.gate_matrices import X as X_MAT
+from pyquil.gate_matrices import Y as Y_MAT
+from pyquil.gate_matrices import H as H_MAT
+from pyquil.gate_matrices import CNOT as CNOT_MAT
 
 numpy.random.seed(7)  # seed random number generation for all calls to rand_ops
 
@@ -49,6 +56,7 @@ def test_fidelity():
     psi_theta = np.array([[np.cos(theta / 2)], [np.sin(theta / 2)]])
     sigma = np.matmul(psi_theta, psi_theta.transpose())
     assert np.allclose(dm.fidelity(rho, sigma), 0.0)
+
 
 def test_smith_fidelity():
     psi = np.zeros((2, 1))
@@ -130,7 +138,7 @@ def test_qcb_for_mixed_states():
     rho = np.diag([lam_p, lam_m])
     rho_theta = np.matmul(np.matmul(G, rho), G.transpose())
     qcb, s = dm.quantum_chernoff_bound(rho, rho_theta)
-    assert np.allclose(dm.quantum_chernoff_bound(rho, rho_theta)[0], 0.59999999999)
+    assert np.allclose(qcb, 0.59999999999)
 
 
 # =================================================================================================
@@ -162,7 +170,7 @@ def test_HS_obeys_linearity():
 # =================================================================================================
 # Test:  distance measured for Processes
 # =================================================================================================
-def test_diamond_norm():
+def test_diamond_norm_distance():
     if int(os.getenv('SKIP_SCS', 0)) == 1:
         return pytest.skip('Having issues with SCS, skipping for now')
 
@@ -170,31 +178,9 @@ def test_diamond_norm():
     # https://github.com/qutip/qutip/blob/master/qutip/tests/test_metrics.py
     # which were in turn generated using QuantumUtils for MATLAB
     # (https://goo.gl/oWXhO9) by Christopher Granade
-
-    _I = np.asarray([[1, 0], [0, 1]])
-    _X = np.asarray([[0, 1], [1, 0]])
-    _Y = np.asarray([[0, -1.0j], [1.0j, 0]])
-    _H = np.asarray([[1, 1], [1, -1]]) / np.sqrt(2)
-
-    def _gate_to_superop(gate):
-        dim = gate.shape[0]
-        superop = np.outer(gate, gate.conj().T)
-        superop = np.reshape(superop, [dim]*4)
-        superop = np.transpose(superop, [0, 3, 1, 2])
-        return superop
-
-    def _superop_to_choi(superop):
-        dim = superop.shape[0]
-        superop = np.transpose(superop, (0, 2, 1, 3))
-        choi = np.reshape(superop, [dim**2] * 2)
-        return choi
-
-    def _gate_to_choi(gate):
-        return _superop_to_choi(_gate_to_superop(gate))
-
-    choi0 = _gate_to_choi(_I)
-    choi1 = _gate_to_choi(_X)
-    dnorm = dm.diamond_norm(choi0, choi1)
+    choi0 = kraus2choi(I_MAT)
+    choi1 = kraus2choi(X_MAT)
+    dnorm = dm.diamond_norm_distance(choi0, choi1)
     assert np.isclose(2.0, dnorm, rtol=0.01)
 
     turns_dnorm = [[1.000000e-03, 3.141591e-03],
@@ -205,9 +191,9 @@ def test_diamond_norm():
                    [3.100000e-01, 9.358596e-01]]
 
     for turns, target in turns_dnorm:
-        choi0 = _gate_to_choi(_X)
-        choi1 = _gate_to_choi(matpow(_X, 1 + turns))
-        dnorm = dm.diamond_norm(choi0, choi1)
+        choi0 = kraus2choi(X_MAT)
+        choi1 = kraus2choi(matpow(X_MAT, 1 + turns))
+        dnorm = dm.diamond_norm_distance(choi0, choi1)
         assert np.isclose(target, dnorm, rtol=0.01)
 
     hadamard_mixtures = [[1.000000e-03, 2.000000e-03],
@@ -218,17 +204,17 @@ def test_diamond_norm():
                          [3.100000e-01, 6.200000e-01]]
 
     for p, target in hadamard_mixtures:
-        chan0 = _gate_to_superop(_I) * (1 - p) + _gate_to_superop(_H) * p
-        chan1 = _gate_to_superop(_I)
+        chan0 = kraus2superop(I_MAT) * (1 - p) + kraus2superop(H_MAT) * p
+        chan1 = kraus2superop(I_MAT)
 
-        choi0 = _superop_to_choi(chan0)
-        choi1 = _superop_to_choi(chan1)
-        dnorm = dm.diamond_norm(choi0, choi1)
+        choi0 = superop2choi(chan0)
+        choi1 = superop2choi(chan1)
+        dnorm = dm.diamond_norm_distance(choi0, choi1)
         assert np.isclose(dnorm, target, rtol=0.01)
 
-    choi0 = _gate_to_choi(_I)
-    choi1 = _gate_to_choi(matpow(_Y, 0.5))
-    dnorm = dm.diamond_norm(choi0, choi1)
+    choi0 = kraus2choi(I_MAT)
+    choi1 = kraus2choi(matpow(Y_MAT, 0.5))
+    dnorm = dm.diamond_norm_distance(choi0, choi1)
     assert np.isclose(dnorm, np.sqrt(2), rtol=0.01)
 
 def test_watrous_bounds():
@@ -237,29 +223,8 @@ def test_watrous_bounds():
     # which were in turn generated using QuantumUtils for MATLAB
     # (https://goo.gl/oWXhO9) by Christopher Granade
 
-    _I = np.asarray([[1, 0], [0, 1]])
-    _X = np.asarray([[0, 1], [1, 0]])
-    _Y = np.asarray([[0, -1.0j], [1.0j, 0]])
-    _H = np.asarray([[1, 1], [1, -1]]) / np.sqrt(2)
-
-    def _gate_to_superop(gate):
-        dim = gate.shape[0]
-        superop = np.outer(gate, gate.conj().T)
-        superop = np.reshape(superop, [dim]*4)
-        superop = np.transpose(superop, [0, 3, 1, 2])
-        return superop
-
-    def _superop_to_choi(superop):
-        dim = superop.shape[0]
-        superop = np.transpose(superop, (0, 2, 1, 3))
-        choi = np.reshape(superop, [dim**2] * 2)
-        return choi
-
-    def _gate_to_choi(gate):
-        return _superop_to_choi(_gate_to_superop(gate))
-
-    choi0 = _gate_to_choi(_I)
-    choi1 = _gate_to_choi(_X)
+    choi0 = kraus2choi(I_MAT)
+    choi1 = kraus2choi(X_MAT)
     wbounds = dm.watrous_bounds(choi0-choi1)
     assert wbounds[0]/2 <= 2.0 or np.isclose(wbounds[0]/2, 2.0, rtol=1e-2)
     assert wbounds[1]/2 >= 2.0 or np.isclose(wbounds[1]/2, 2.0, rtol=1e-2)
@@ -272,8 +237,8 @@ def test_watrous_bounds():
                    [3.100000e-01, 9.358596e-01]]
 
     for turns, target in turns_dnorm:
-        choi0 = _gate_to_choi(_X)
-        choi1 = _gate_to_choi(matpow(_X, 1 + turns))
+        choi0 = kraus2choi(X_MAT)
+        choi1 = kraus2choi(matpow(X_MAT, 1 + turns))
         wbounds = dm.watrous_bounds(choi0-choi1)
         assert wbounds[0]/2 <= target or np.isclose(wbounds[0]/2, target, rtol=1e-2)
         assert wbounds[1]/2 >= target or np.isclose(wbounds[1]/2, target, rtol=1e-2)
@@ -286,29 +251,26 @@ def test_watrous_bounds():
                          [3.100000e-01, 6.200000e-01]]
 
     for p, target in hadamard_mixtures:
-        chan0 = _gate_to_superop(_I) * (1 - p) + _gate_to_superop(_H) * p
-        chan1 = _gate_to_superop(_I)
+        chan0 = kraus2superop(I_MAT) * (1 - p) + kraus2superop(H_MAT) * p
+        chan1 = kraus2superop(I_MAT)
 
-        choi0 = _superop_to_choi(chan0)
-        choi1 = _superop_to_choi(chan1)
+        choi0 = superop2choi(chan0)
+        choi1 = superop2choi(chan1)
         wbounds = dm.watrous_bounds(choi0-choi1)
         assert wbounds[0]/2 <= target or np.isclose(wbounds[0]/2, target, rtol=1e-2)
         assert wbounds[1]/2 >= target or np.isclose(wbounds[1]/2, target, rtol=1e-2)
 
-    choi0 = _gate_to_choi(_I)
-    choi1 = _gate_to_choi(matpow(_Y, 0.5))
+    choi0 = kraus2choi(I_MAT)
+    choi1 = kraus2choi(matpow(Y_MAT, 0.5))
     wbounds = dm.watrous_bounds(choi0-choi1)
     assert wbounds[0]/2 <= np.sqrt(2) or np.isclose(wbounds[0]/2, np.sqrt(2), rtol=1e-2)
     assert wbounds[1]/2 >= np.sqrt(2) or np.isclose(wbounds[0]/2, np.sqrt(2), rtol=1e-2)
     
 def test_process_fidelity():
     # test single qubit fidelity of identical gates
-    from forest.benchmarking.superoperator_conversion import kraus2pauli_liouville
-    _X = np.asarray([[0, 1], [1, 0]])
-    X_pauli_rep = kraus2pauli_liouville([_X])
+    X_pauli_rep = kraus2pauli_liouville([X_MAT])
     assert np.isclose( dm.process_fidelity(X_pauli_rep, X_pauli_rep), 1, rtol=0.01)
 
     # test two qubit fidelity of identical gates
-    _CNOT = np.array([[1,0,0,0],[0,1,0,0],[0,0,0,1],[0,0,1,0]])
-    CNOT_pauli_rep = kraus2pauli_liouville([_CNOT])
+    CNOT_pauli_rep = kraus2pauli_liouville([CNOT_MAT])
     assert np.isclose( dm.process_fidelity(CNOT_pauli_rep, CNOT_pauli_rep), 1, rtol=0.01)

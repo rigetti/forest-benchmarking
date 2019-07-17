@@ -1,4 +1,4 @@
-pyquil>=2.4.0
+pyquil>=2.7.0
 numpy
 networkx
 pandas
@@ -11,6 +11,7 @@ cvxpy>=1.0.0
 dataclasses; python_version < "3.7"
 tqdm
 gitpython
+matplotlib>=3.1.0
 
 # test dependencies
 flake8
@@ -23,3 +24,8 @@ scikit-learn
 # doc dependencies
 sphinx
 sphinx-autodoc-typehints
+sphinx_rtd_theme
+nbsphinx
+
+# for testing examples
+nbval

@@ -2,11 +2,13 @@ import pytest
 import numpy.random
 numpy.random.seed(1)  # seed random number generation for all calls to rand_ops
 
-import forest.benchmarking.random_operators as rand_ops
 import numpy as np
 from sympy.combinatorics import Permutation
 from numpy import linalg as la
 import forest.benchmarking.distance_measures as dm
+import forest.benchmarking.operator_tools.random_operators as rand_ops
+from forest.benchmarking.operator_tools.validate_superoperator import (
+    choi_is_trace_preserving,choi_is_completely_positive)
 
 D2_SWAP = np.array([[1, 0, 0, 0],
                     [0, 0, 1, 0],
@@ -28,6 +30,10 @@ D3_SWAP = np.array([[1., 0., 0., 0., 0., 0., 0., 0., 0.],
 # =================================================================================================
 # Test:  Permute tensor factors
 # =================================================================================================
+def test_permute_tensor_factor_id():
+    np.testing.assert_array_equal(rand_ops.permute_tensor_factors(2, [0, 1, 2]), np.eye(8))
+
+
 def test_permute_tensor_factor_SWAP():
     # test the Dimension two and three SWAP operators
     D2 = 2
@@ -60,6 +66,17 @@ def test_permute_tensor_factor_three_qubits():
     fn_ans3 = np.matmul(Pop, np.kron(np.kron(states[1], states[0]), states[0]))
     by_hand_ans3 = np.kron(np.kron(states[0], states[0]), states[1])
     assert np.dot(fn_ans3.T, by_hand_ans3) == 1.0
+
+
+def test_permute_tensor_factor_diff_size_spaces():
+    dims = [2, 4, 8]
+    perm = [2, 1, 0]
+
+    alt_dims = 2
+    alt_perm = [3, 4, 5, 1, 2, 0]
+
+    np.testing.assert_array_equal(rand_ops.permute_tensor_factors(dims, perm),
+                                rand_ops.permute_tensor_factors(alt_dims, alt_perm))
 
 
 def test_permute_tensor_factor_four_qubit_permutation_operator():
@@ -167,7 +184,7 @@ def test_random_unitaries_are_unitary():
     assert np.allclose(avg_trace3, 3.0)
     assert np.allclose(avg_det3, 1.0)
 
-
+# ~ 11 sec; passed 2019/06/11
 def test_random_unitaries_first_moment():
     # the first moment should be proportional to P_21/D
     N_avg = 50000
@@ -194,7 +211,7 @@ def test_random_unitaries_first_moment():
         D3_avg += np.kron(U3, U3d) / N_avg
 
     # Compute the Frobenius norm of the different between the estimated operator and the answer
-    assert np.real(la.norm((D2_avg - D2_SWAP / D2), 'fro')) <= 0.01
+    assert np.real(la.norm((D2_avg - D2_SWAP / D2), 'fro')) <= 0.02
     assert np.real(la.norm((D2_avg - D2_SWAP / D2), 'fro')) >= 0.00
     assert np.real(la.norm((D3_avg - D3_SWAP / D3), 'fro')) <= 0.02
     assert np.real(la.norm((D3_avg - D3_SWAP / D3), 'fro')) >= 0.00
@@ -202,6 +219,8 @@ def test_random_unitaries_first_moment():
     #   for dimensions 2 and 3
 
 
+# ~ 12 sec; passed 2019/06/11
+@pytest.mark.slow
 def test_random_unitaries_second_moment():
     # the second moment should be proportional to
     #
@@ -263,9 +282,7 @@ def test_random_unitaries_second_moment():
     estimate = np.around(np.real(D2_var), 2)
 
     # are the estimated operator and the answer close?
-    print(truth)
-    print(estimate)
-    assert np.allclose(truth, estimate)
+    assert np.allclose(truth, estimate, atol=.01)
     # ^^ this test equation 5.17 in https://arxiv.org/pdf/0711.1017.pdf
 
 
@@ -291,7 +308,7 @@ def test_unit_length():
 # =================================================================================================
 # Test:  Ginibre state matrix
 # =================================================================================================
-def test_is_positive_operator():
+def test_ginibre_is_positive_operator():
     N_avg = 10
     K = 2
 
@@ -318,7 +335,7 @@ def test_is_positive_operator():
     assert np.min(np.real(eigenvalues)) >= -1e-10
 
 
-def test_is_trace_one():
+def test_ginibre_is_trace_one():
     N_avg = 100
     K = 2
     D = 2
@@ -330,7 +347,7 @@ def test_is_trace_one():
     assert avg_trace >= 1 - 1e-10
 
 
-def test_has_correct_second_moment():
+def test_ginibre_has_correct_second_moment():
     # Numerically calculate Eq. 3.20 from
     # Zyczkowski and Sommers, J. Phys. A: Math. Gen. 34 7111, (2001)
     #
@@ -364,21 +381,13 @@ def test_has_correct_second_moment():
 # =================================================================================================
 # Test: State matrix from Bures measure
 # =================================================================================================
-def test_is_positive_operator():
-    N_avg = 30
+def test_bures_is_positive_operator():
     D = 2
-    eigenvallist = []
-    for idx in range(0, N_avg):
-        eigenval = la.eig(rand_ops.bures_measure_state_matrix(D))[0]
-        eigenvallist += [eigenval]
-    eigenvalues = np.asarray(eigenvallist)
-    eigenvalues = eigenvalues.reshape(1, D * N_avg)
-
-    assert np.max(np.absolute(np.imag(eigenvalues))) < 1e-10
-    assert np.min(np.real(eigenvalues)) >= -1e-10
+    for idx in range(0, 10):
+        assert choi_is_completely_positive(rand_ops.bures_measure_state_matrix(D))
 
 
-def test_has_correct_second_moment():
+def test_bures_has_correct_second_moment():
     # Numerically calculate Eq. 3.1 from
     # Sommers and Zyczkowski, J. Phys. A: Math. Gen. 37 8457, (2004)
     #
@@ -414,23 +423,14 @@ def test_BCSZ_dist_is_complete_positive():
     # A quantum channel is completely positive, iff the Choi matrix is non-negative.
     D = 2
     K = 2
-    N_avg = 10
 
-    eigenvallist = []
-    for idx in range(0, N_avg):
+    for idx in range(0, 10):
         choi = rand_ops.rand_map_with_BCSZ_dist(D, K)
-        eigenval = la.eig(choi)[0]
-        eigenvallist += [eigenval]
-    eigenvalues = np.asarray(eigenvallist)
-    eigenvalues = eigenvalues.reshape(1, D * D * N_avg)
-    assert np.max(np.absolute(np.imag(eigenvalues))) < 1e-10
-    assert np.min(np.real(eigenvalues)) >= -1e-10
+        assert choi_is_completely_positive(choi)
 
 
 def test_BCSZ_dist_is_trace_preserving():
     D = 2
     K = 2
     choi = rand_ops.rand_map_with_BCSZ_dist(D, K)
-    choi_tensor = choi.reshape([D, D, D, D])
-    choi_red = np.trace(choi_tensor, axis1=0, axis2=2)
-    assert np.isclose(choi_red, np.eye(D)).all()
+    assert choi_is_trace_preserving(choi)
