@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from functools import partial
 
 from pyquil.quilbase import Pragma, Gate, DefGate
+from pyquil.quilatom import QubitPlaceholder
 from pyquil.quil import Program, address_qubits, merge_programs
 from pyquil.api import QuantumComputer, BenchmarkConnection
 from pyquil.gates import CNOT, CCNOT, Z, X, I, H, CZ, MEASURE, RESET
@@ -21,28 +22,6 @@ from rpcq._utils import RPCErrorError
 from forest.benchmarking.randomized_benchmarking import get_rb_gateset
 from forest.benchmarking.distance_measures import total_variation_distance as tvd
 from forest.benchmarking.random_operators import haar_rand_unitary
-from forest.benchmarking.compilation import basic_compile
-
-#
-# @dataclass(order=True)
-# class Slice:
-#     index: int
-#     gates: Tuple[Program]
-#     needs_compilation: bool = True
-
-    # def __str__(self):
-    #     return f'Index {self.index}:\n' + '\n'.join([str(comp) for comp in self.components]) + '\n'
-
-#TODO: make concatenation of slices possible.
-
-# @dataclass(order=True)
-# class Layer:
-#     depth: int
-#     slices: Tuple[Slice]
-#     needs_compilation: bool = True
-
-    # def __str__(self):
-    #     return f'Depth {self.depth}:\n' + '\n'.join([str(comp) for comp in self.components]) + '\n'
 
 
 # @dataclass
@@ -110,27 +89,6 @@ class CircuitTemplate:
     # def __str__(self):
     #     return f'Depth {self.depth}:\n' + '\n'.join([str(comp) for comp in self.components]) + '\n'
 
-
-# @dataclass(order=True)
-# class LayerTemplate:
-#     depth: int
-#     slices: Tuple[SliceTemplate]
-#     sandwich: bool = False
-
-    # def __str__(self):
-    #     return f'Depth {self.depth}:\n' + '\n'.join([str(comp) for comp in self.components]) + '\n'
-
-
-# @dataclass
-# class CircuitTemplate:
-#     slices: Tuple[SliceTemplate]
-#     graph: nx.Graph
-#     sandwich: bool = False
-#     name: str = None
-
-    # def __str__(self):
-    #     return '\n'.join([str(lyr) for lyr in self.layers]) + '\n'
-
 # ==================================================================================================
 # Gate Sets
 # ==================================================================================================
@@ -150,13 +108,6 @@ def random_single_qubit_gates(graph: nx.Graph, gates: Sequence[Gate]):
     return program
 
 
-def get_rand_1q_template(gates: Sequence[Gate]):
-    def func(qc, graph, width, sequence):
-        partial_func = partial(random_single_qubit_gates, gates = gates)
-        return partial_func(graph)
-    return CircuitTemplate([func])
-
-
 def random_two_qubit_gates(graph: nx.Graph, gates:  Sequence[Gate]):
     """
     Write a program to randomly place two qubit gates on edges of the specified graph.
@@ -174,10 +125,10 @@ def random_two_qubit_gates(graph: nx.Graph, gates:  Sequence[Gate]):
     return program
 
 
-def random_single_qubit_cliffords(graph: nx.Graph, bm: BenchmarkConnection):
+def random_single_qubit_cliffords(bm: BenchmarkConnection, graph: nx.Graph):
     """
     Create a program comprised of single qubit Cliffords gates randomly placed on the nodes of
-    the specified graph. Each uniformly random choice of Clifford is implemented in the native 
+    the specified graph. Each uniformly random choice of Clifford is implemented in the native
     gateset.
 
     :param bm: A benchmark connection that will do the grunt work of generating the Cliffords
@@ -185,7 +136,9 @@ def random_single_qubit_cliffords(graph: nx.Graph, bm: BenchmarkConnection):
     :return: A program that randomly places single qubit Clifford gates on a graph.
     """
     num_qubits = len(graph.nodes)
-    gateset_1q, q_placeholders1 = get_rb_gateset(rb_type='1q')
+
+    q_placeholder = QubitPlaceholder()
+    gateset_1q = get_rb_gateset([q_placeholder])
 
     # the +1 is because the depth includes the inverse
     clif_n_inv = bm.generate_rb_sequence(depth=(num_qubits + 1), gateset=gateset_1q, seed=None)
@@ -193,12 +146,12 @@ def random_single_qubit_cliffords(graph: nx.Graph, bm: BenchmarkConnection):
 
     prog = Program()
     for q, clif in zip(graph.nodes, rand_cliffords):
-        gate = address_qubits(clif, qubit_mapping={clif.get_qubits().pop(): q})
+        gate = address_qubits(clif, qubit_mapping={q_placeholder: q})
         prog += gate
     return prog
 
 
-def random_two_qubit_cliffords(graph: nx.Graph, bm: BenchmarkConnection):
+def random_two_qubit_cliffords(bm: BenchmarkConnection, graph: nx.Graph):
     """
     Write a program to place random two qubit Cliffords gates on edges of the graph.
 
@@ -207,7 +160,8 @@ def random_two_qubit_cliffords(graph: nx.Graph, bm: BenchmarkConnection):
     :return: A program that has two qubit gates randomly placed on the graph edges.
     """
     num_2q_gates = len(graph.edges)
-    gateset_2q, q_placeholders2 = get_rb_gateset(rb_type='2q')
+    q_placeholders = QubitPlaceholder.register(n=2)
+    gateset_2q = get_rb_gateset(q_placeholders)
 
     # the +1 is because the depth includes the inverse
     clif_n_inv = bm.generate_rb_sequence(depth=(num_2q_gates + 1), gateset=gateset_2q, seed=None)
@@ -217,8 +171,8 @@ def random_two_qubit_cliffords(graph: nx.Graph, bm: BenchmarkConnection):
     # do the two coloring with pragmas?
     # no point until fencing is over
     for edges, clif in zip(graph.edges, rand_cliffords):
-        qb1, qb2 = clif.get_qubits()
-        gate = address_qubits(clif, qubit_mapping={qb1: edges[0], qb2: edges[1], })
+        gate = address_qubits(clif, qubit_mapping={q_placeholders[0]: edges[0],
+                                                   q_placeholders[1]: edges[1]})
         prog += gate
     return prog
 
@@ -227,6 +181,7 @@ def random_permutation(graph: nx.Graph, width):
     #TODO: find another way; this is too slow
     qubits = list(graph.nodes)
     measure_qubits = qubits[:width]  # arbitrarily pick the first width-many nodes
+    # TODO: use native permutations
     permutation = np.random.permutation(range(len(measure_qubits)))
     matrix = permutation_arbitrary(permutation, len(measure_qubits))[0]
 
@@ -252,7 +207,7 @@ def random_su2_pairs(graph: nx.Graph, width):
     return gates
 
 
-def quantum_volume_compilation(qc, graph, width, depth, sequence):
+def quantum_volume_compilation(qc, graph, width, sequence):
     prog = merge_programs(sequence)
     qubits = list(graph.nodes)
     measure_qubits = qubits[:width]  # arbitrarily pick the first width-many nodes
@@ -292,6 +247,43 @@ def quantum_volume_compilation(qc, graph, width, depth, sequence):
         raise
 
     return native_quil
+
+
+###
+# Templates
+###
+
+def get_rand_1q_template(gates: Sequence[Gate]):
+    def func(qc, graph, width, sequence):
+        partial_func = partial(random_single_qubit_gates, gates = gates)
+        return partial_func(graph)
+    return CircuitTemplate([func])
+
+def get_rand_2q_template(gates: Sequence[Gate]):
+    def func(qc, graph, width, sequence):
+        partial_func = partial(random_two_qubit_gates, gates = gates)
+        return partial_func(graph)
+    return CircuitTemplate([func])
+
+def get_rand_1q_cliff_template(bm: BenchmarkConnection):
+    def func(qc, graph, width, sequence):
+        partial_func = partial(random_single_qubit_cliffords, bm =bm)
+        return partial_func(graph)
+    return CircuitTemplate([func])
+
+def get_rand_2q_cliff_template(bm: BenchmarkConnection):
+    def func(qc, graph, width, sequence):
+        partial_func = partial(random_two_qubit_cliffords, bm =bm)
+        return partial_func(graph)
+    return CircuitTemplate([func])
+
+def get_rand_perm_template(bm: BenchmarkConnection):
+    def func(qc, graph, width, sequence):
+        prog = random_permutation(graph, width)
+        native_quil = qc.compiler.quil_to_native_quil(prog)
+        return partial_func(graph)
+    return CircuitTemplate([func])
+
 
 # ===========================================
 # Layer tools
