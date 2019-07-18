@@ -1,4 +1,4 @@
-.. currentmodule:: forest_qcvv.rb
+.. currentmodule:: forest.benchmarking.randomized_benchmarking
 
 Randomized Benchmarking
 =======================
@@ -8,59 +8,53 @@ compose to the identity to observe how performance degrades with increasing circ
 
 .. todo:: Talk some more about stuff.
 
-Unitary RB
-----------
 
-.. todo:: Talk about unitarity RB.
-
-
-API Reference
--------------
-
-.. currentmodule:: forest_qcvv.rb
+Gates and Sequences
+-------------------
 .. autosummary::
     :toctree: autogen
     :template: autosumm.rst
 
-    rb_dataframe
-    add_sequences_to_dataframe
-    rb_seq_to_program
-    run_rb_measurement
     oneq_rb_gateset
     twoq_rb_gateset
     get_rb_gateset
     generate_rb_sequence
-    generate_simultaneous_rb_sequence
     merge_sequences
-    survival_statistics
-    survivals_from_results
-    add_survivals
-    survivals_by_qubits
-    standard_rb
-    standard_rb_guess
-    fit_standard_rb
-    estimate_purity
-    estimate_purity_err
-    shifted_purities_from_results
-    add_shifted_purities
-    shifted_purities_by_qubits
+    generate_rb_experiment_sequences
 
-.. rubric:: Unitary RB
+
+Standard and Interleaved RB
+---------------------------
 
 .. autosummary::
     :toctree: autogen
     :template: autosumm.rst
 
-    strip_inverse_from_sequences
-    add_unitarity_sequences_to_dataframe
-    run_unitarity_measurement
-    unitarity_to_RB_decay
-    unitarity_fn
+    generate_rb_experiments
+    group_sequences_into_parallel_experiments
+    acquire_rb_data
+    z_obs_stats_to_survival_statistics
+    fit_rb_results
+
+
+Unitarity or Purity RB
+----------------------
+
+.. autosummary::
+    :toctree: autogen
+    :template: autosumm.rst
+
+    generate_unitarity_experiments
+    estimate_purity
+    estimate_purity_err
+    fit_unitarity_results
+    unitarity_to_rb_decay
     unitarity_guess
     fit_unitarity
 
 
-.. rubric:: Interleaved RB
+Analysis Helper functions for RB
+--------------------------------
 
 .. autosummary::
     :toctree: autogen
@@ -69,7 +63,7 @@ API Reference
     coherence_angle
     gamma
     interleaved_gate_fidelity_bounds
-    gate_infidelity_to_irb_decay
-    irb_decay_to_gate_infidelity
-    average_gate_infidelity_to_RB_decay
-    RB_decay_to_gate_fidelity
+    gate_error_to_irb_decay
+    irb_decay_to_gate_error
+    average_gate_error_to_rb_decay
+    rb_decay_to_gate_error

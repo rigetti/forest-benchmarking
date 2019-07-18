@@ -1,24 +1,54 @@
-# Forest-Benchmarking
+# Forest Benchmarking
 
-A library for quantum characterization, verification, validation, and benchmarking using Rigetti's
- SDK -- Forest. 
+[![pipeline status](https://gitlab.com/rigetti/forest-benchmarking/badges/master/pipeline.svg)](https://gitlab.com/rigetti/forest-benchmarking/commits/master)
+[![Build Status](https://semaphoreci.com/api/v1/rigetti/forest-benchmarking/branches/master/shields_badge.svg)](https://semaphoreci.com/rigetti/forest-benchmarking)
+[![Documentation Status](https://readthedocs.org/projects/forest-benchmarking/badge/?version=latest)](https://forest-benchmarking.readthedocs.io/en/latest/?badge=latest)
 
+A library for quantum characterization, verification, validation (QCVV), and benchmarking using [pyQuil](https://github.com/rigetti/pyquil).
 
-### Installation
+## Installation
 
-Forest-Benchmarking is a Python package. It is currently in pre-release and must be installed from `master`
+`forest-benchmarking` can be installed from source or via the Python package manager PyPI.
 
-    git clone https://github.com/rigetti/forest-benchmarking.git
-    cd forest-benchmarking/
-    pip install -e .
+**Note**: NumPy and SciPy must be pre-installed for installation to be successful, due to cvxpy.
 
-### Library Philosophy
+### Source
 
-The core philosophy of Forest-Benchmarking is to separate: 
+```bash
+git clone https://github.com/rigetti/forest-benchmarking.git
+cd forest-benchmarking/
+pip install numpy scipy
+pip install -e .
+```
+
+### PyPI
+
+```bash
+pip install numpy scipy
+pip install forest-benchmarking
+```
+
+## Library Philosophy
+
+The core philosophy of `forest-benchmarking` is to separate:
 
 * Experiment design and or generation
 * Data collection
 * Data analysis
 * Data visualisation
 
-We ask that code contributed to this repository respect this separation. We also ask that an example of how to use your contributed code is placed in the `/examples/` directory along with the standard documentation found in `/docs/`.
+We ask that code contributed to this repository respect this separation.
+We also ask that an example of how to use your contributed code is placed
+in the `/examples/` directory along with the standard documentation found in `/docs/`.
+
+## Testing
+
+The unit tests can be run locally using `pytest`, but beware that the test dependencies
+must be installed beforehand using `pip install -r requirements.txt`.
+
+## Disclaimer
+
+This package is currently in alpha (v0.x), and therefore you should not expect that APIs
+will necessarily be stable between releases. Code that depends on this package in its current
+state is very likely to break when the package version changes, so we encourage you to pin
+the version you use, and update it consciously when necessary.
