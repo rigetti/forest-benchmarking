@@ -24,8 +24,8 @@ Fits
 
     base_param_decay
     fit_base_param_decay
-    decay_constant_param_decay
-    fit_decay_constant_param_decay
+    decay_time_param_decay
+    fit_decay_time_param_decay
     decaying_cosine
     fit_decaying_cosine
     shifted_cosine

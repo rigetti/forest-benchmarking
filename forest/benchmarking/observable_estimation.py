@@ -45,16 +45,30 @@ class _OneQState:
     qubit: int
 
     def __str__(self):
+        if self.label in ['X', 'Y', 'Z']:
+            if self.index == 0:
+                eigen_state = '+'
+            else:
+                eigen_state = '-'
+            return f'{self.label}{eigen_state}_{self.qubit}'
+        # otherwise use standard numerical index
         return f'{self.label}{self.index}_{self.qubit}'
 
     @classmethod
     def from_str(cls, s):
-        ma = re.match(r'\s*(\w+)(\d+)_(\d+)\s*', s)
+        ma = re.match(r'\s*(\w+)([\d+-])_(\d+)\s*', s)
         if ma is None:
             raise ValueError(f"Couldn't parse '{s}'")
+        index = ma.group(2)
+        if index == '+':
+            index = int(0)
+        elif index == '-':
+            index = int(1)
+        else:
+            index = int(index)
         return _OneQState(
             label=ma.group(1),
-            index=int(ma.group(2)),
+            index=index,
             qubit=int(ma.group(3)),
         )
 
@@ -213,6 +227,9 @@ def _abbrev_program(program: Program, max_len=10):
 
 class ObservablesExperiment:
     """
+    A data structure for experiments involving estimation of the expectation of various
+    observables measured on a core program, possibly with a collection of different preparations.
+
     Many near-term quantum algorithms involve:
      - some limited state preparation, e.g. prepare a Pauli eigenstate
      - enacting a quantum process (like in tomography) or preparing a variational ansatz state
@@ -234,8 +251,7 @@ class ObservablesExperiment:
 
     def __init__(self,
                  settings: Union[List[ExperimentSetting], List[List[ExperimentSetting]]],
-                 program: Program,
-                 qubits: List[int] = None):
+                 program: Program):
         if len(settings) == 0:
             settings = []
         else:
@@ -245,10 +261,6 @@ class ObservablesExperiment:
 
         self._settings = settings  # type: List[List[ExperimentSetting]]
         self.program = program
-        if qubits is not None:
-            warnings.warn("The 'qubits' parameter has been deprecated and will be removed"
-                          "in a future release of pyquil")
-        self.qubits = qubits
 
     def __len__(self):
         return len(self._settings)
@@ -610,6 +622,7 @@ def group_settings(obs_expt: ObservablesExperiment,
     """
     Group settings that are diagonal in a shared tensor product basis (TPB) to minimize number
     of QPU runs.
+
     Background
     ----------
     Given some PauliTerm operator, the 'natural' tensor product basis to
@@ -675,71 +688,6 @@ class ExperimentResult:
     calibration_expectation: Union[float, complex] = None
     calibration_std_err: Union[float, complex] = None
     calibration_counts: int = None
-
-    def __init__(self, setting: ExperimentSetting,
-                 expectation: Union[float, complex],
-                 total_counts: int,
-                 stddev: Union[float, complex] = None,
-                 std_err: Union[float, complex] = None,
-                 raw_expectation: Union[float, complex] = None,
-                 raw_stddev: float = None,
-                 raw_std_err: float = None,
-                 calibration_expectation: Union[float, complex] = None,
-                 calibration_stddev: Union[float, complex] = None,
-                 calibration_std_err: Union[float, complex] = None,
-                 calibration_counts: int = None):
-
-        object.__setattr__(self, 'setting', setting)
-        object.__setattr__(self, 'expectation', expectation)
-        object.__setattr__(self, 'total_counts', total_counts)
-        object.__setattr__(self, 'raw_expectation', raw_expectation)
-        object.__setattr__(self, 'calibration_expectation', calibration_expectation)
-        object.__setattr__(self, 'calibration_counts', calibration_counts)
-
-        if stddev is not None:
-            warnings.warn("'stddev' has been renamed to 'std_err'")
-            std_err = stddev
-        object.__setattr__(self, 'std_err', std_err)
-
-        if raw_stddev is not None:
-            warnings.warn("'raw_stddev' has been renamed to 'raw_std_err'")
-            raw_std_err = raw_stddev
-        object.__setattr__(self, 'raw_std_err', raw_std_err)
-
-        if calibration_stddev is not None:
-            warnings.warn("'calibration_stddev' has been renamed to 'calibration_std_err'")
-            calibration_std_err = calibration_stddev
-        object.__setattr__(self, 'calibration_std_err', calibration_std_err)
-
-    def get_stddev(self) -> Union[float, complex]:
-        warnings.warn("'stddev' has been renamed to 'std_err'")
-        return self.std_err
-
-    def set_stddev(self, value: Union[float, complex]):
-        warnings.warn("'stddev' has been renamed to 'std_err'")
-        object.__setattr__(self, 'std_err', value)
-
-    stddev = property(get_stddev, set_stddev)
-
-    def get_raw_stddev(self) -> float:
-        warnings.warn("'raw_stddev' has been renamed to 'raw_std_err'")
-        return self.raw_std_err
-
-    def set_raw_stddev(self, value: float):
-        warnings.warn("'raw_stddev' has been renamed to 'raw_std_err'")
-        object.__setattr__(self, 'raw_std_err', value)
-
-    raw_stddev = property(get_raw_stddev, set_raw_stddev)
-
-    def get_calibration_stddev(self) -> Union[float, complex]:
-        warnings.warn("'calibration_stddev' has been renamed to 'calibration_std_err'")
-        return self.calibration_std_err
-
-    def set_calibration_stddev(self, value: Union[float, complex]):
-        warnings.warn("'calibration_stddev' has been renamed to 'calibration_std_err'")
-        object.__setattr__(self, 'calibration_std_err', value)
-
-    calibration_stddev = property(get_calibration_stddev, set_calibration_stddev)
 
     def __str__(self):
         return f'{self.setting}: {self.expectation} +- {self.std_err}'
@@ -977,11 +925,13 @@ def calibrate_observable_estimates(qc: QuantumComputer, expt_results: List[Exper
     """
     Calibrates the expectation and std_err of the input expt_results and updates those estimates.
 
-    The old estimates are moved to raw_* and the calibration results themselves for the given
-    observable are recorded as calibration_*
-
-    Calibration is done by measuring expectation values of eigenstates of the obervable which
-    ideally should yield either +/- 1 but in practice will have magnitude less than 1.
+    The input expt_results should be estimated with symmetrized readout error for this to work
+    properly. Calibration is done by measuring expectation values of eigenstates of the
+    observable, which ideally should yield either +/- 1 but in practice will have magnitude less
+    than 1. For default exhaustive_symmetrization the calibration expectation magnitude
+    averaged over all eigenvectors is recorded as calibration_expectation. The original
+    expectation is moved to raw_expectation and replaced with the old value scaled by the inverse
+    calibration expectation.
 
     :param qc: a quantum computer object on which to run the programs necessary to calibrate each
         result.
@@ -1045,22 +995,29 @@ def ratio_variance(a: Union[float, np.ndarray],
                    b: Union[float, np.ndarray],
                    var_b: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
     r"""
-    Given random variables 'A' and 'B', compute the variance on the ratio Y = A/B. Denote the
-    mean of the random variables as a = E[A] and b = E[B] while the variances are var_a = Var[A]
-    and var_b = Var[B] and the covariance as Cov[A,B]. The following expression approximates the
-    variance of Y
+    Given random variables 'A' and 'B', compute the variance on the ratio Y = A/B.
+
+    Denote the mean of the random variables as a = E[A] and b = E[B] while the variances are
+    var_a = Var[A] and var_b = Var[B] and the covariance as Cov[A,B]. The following expression
+    approximates the variance of Y
+
     Var[Y] \approx (a/b) ^2 * ( var_a /a^2 + var_b / b^2 - 2 * Cov[A,B]/(a*b) )
+
     We assume the covariance of A and B is negligible, resting on the assumption that A and B
     are independently measured. The expression above rests on the assumption that B is non-zero,
     an assumption which we expect to hold true in most cases, but makes no such assumptions
     about A. If we allow E[A] = 0, then calculating the expression above via numpy would complain
     about dividing by zero. Instead, we can re-write the above expression as
+
     Var[Y] \approx var_a /b^2 + (a^2 * var_b) / b^4
+
     where we have dropped the covariance term as noted above.
+
     See the following for more details:
       - https://doi.org/10.1002/(SICI)1097-0320(20000401)39:4<300::AID-CYTO8>3.0.CO;2-O
       - http://www.stat.cmu.edu/~hseltman/files/ratio.pdf
       - https://en.wikipedia.org/wiki/Taylor_expansions_for_the_moments_of_functions_of_random_variables
+
     :param a: Mean of 'A', to be used as the numerator in a ratio.
     :param var_a: Variance in 'A'
     :param b: Mean of 'B', to be used as the numerator in a ratio.
