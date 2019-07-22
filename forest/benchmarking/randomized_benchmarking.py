@@ -16,33 +16,8 @@ from forest.benchmarking.tomography import _state_tomo_settings
 from forest.benchmarking.utils import all_traceless_pauli_z_terms, is_pos_pow_two
 from forest.benchmarking.analysis.fitting import fit_base_param_decay
 from forest.benchmarking.observable_estimation import ExperimentSetting, ExperimentResult, \
-    zeros_state, estimate_observables, ObservablesExperiment, group_settings
-
-
-def get_results_by_qubit_group(qubit_groups: Sequence[Sequence[int]],
-                               parallel_results: Iterable[ExperimentResult]) \
-        -> Dict[Tuple[int, ...], List[ExperimentResult]]:
-    """
-    Organizes ExperimentResults by separate qubit groups when the input results are returned from
-    running a particular ObservablesExperiment which is part of a simultaneous RB experiment.
-
-    :param qubit_groups: disjoint groups of qubits for which we have simultaneous RB results.
-    :param parallel_results: the results from running an ObservablesExperiment as part of a
-        simultaneous RB experiment
-    :return: a dictionary whose keys are individual groups of qubits (as tuples) with
-        corresponding value which is the list of experiment results which measure some subset of
-        that qubit group. The results are output in the order they are input.
-    """
-    qubit_groups = [tuple(group) for group in qubit_groups]
-    results_by_qubit_group = {group: [] for group in qubit_groups}
-    for res in parallel_results:
-        res_qs = res.setting.observable.get_qubits()
-
-        for group in qubit_groups:
-            if set(res_qs).issubset(set(group)):
-                results_by_qubit_group[group].append(res)
-
-    return results_by_qubit_group
+    zeros_state, estimate_observables, ObservablesExperiment, group_settings, \
+    get_results_by_qubit_groups
 
 
 def get_stats_by_qubit_group(qubit_groups: Sequence[Sequence[int]],
@@ -62,7 +37,7 @@ def get_stats_by_qubit_group(qubit_groups: Sequence[Sequence[int]],
     qubits = [tuple(group) for group in qubit_groups]
     stats_by_qubit_group = {group: {'expectation': [], 'std_err': []} for group in qubit_groups}
     for results in expt_results:
-        res_by_qubit_group = get_results_by_qubit_group(qubits, results)
+        res_by_qubit_group = get_results_by_qubit_groups(results, qubits)
 
         for group in qubits:
             # pull out the expectation and std_err from each result
