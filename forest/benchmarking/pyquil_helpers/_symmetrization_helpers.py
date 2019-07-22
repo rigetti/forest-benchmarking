@@ -3,7 +3,7 @@ from math import pi, log
 from typing import List, Tuple
 import itertools
 import numpy as np
-from copy import copy
+from copy import deepcopy
 from types import MethodType
 
 from pyquil.quil import Program
@@ -14,7 +14,7 @@ from forest.benchmarking.compilation import basic_compile
 
 
 def get_symmetrizing_qc(qc: QuantumComputer, use_basic_compile=True) -> QuantumComputer:
-    symm_qc = copy(qc)
+    symm_qc = deepcopy(qc)
     symm_qc.run_symmetrized_readout = MethodType(run_symmetrized_readout, symm_qc)
 
     if use_basic_compile:

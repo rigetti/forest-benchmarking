@@ -163,7 +163,7 @@ def single_q_tomo_fixture():
 
     # Get data from QVM
     tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
-    results = list(estimate_observables(qc=qc, obs_expt=tomo_expt, num_shots=500,
+    results = list(estimate_observables(qc=qc, obs_expt=tomo_expt, num_shots=1000,
                                         symm_type=-1))
     results = list(calibrate_observable_estimates(qc, results))
 
@@ -191,7 +191,7 @@ def two_q_tomo_fixture():
 
     # Get data from QVM
     tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
-    results = list(estimate_observables(qc=qc, obs_expt=tomo_expt, num_shots=500,
+    results = list(estimate_observables(qc=qc, obs_expt=tomo_expt, num_shots=1000,
                                         symm_type=-1))
     results = list(calibrate_observable_estimates(qc, results))
 
