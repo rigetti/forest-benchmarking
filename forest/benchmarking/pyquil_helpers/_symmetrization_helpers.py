@@ -2,9 +2,108 @@ import warnings
 from math import pi, log
 from typing import List, Tuple
 import itertools
+import numpy as np
+from copy import copy
+from types import MethodType
+
 from pyquil.quil import Program
 from pyquil.gates import RX, MEASURE
-import numpy as np
+from pyquil.api import QuantumComputer
+
+from forest.benchmarking.compilation import basic_compile
+
+
+def get_symmetrizing_qc(qc: QuantumComputer, use_basic_compile=True) -> QuantumComputer:
+    symm_qc = copy(qc)
+    symm_qc.run_symmetrized_readout = MethodType(run_symmetrized_readout, symm_qc)
+
+    if use_basic_compile:
+        symm_qc.compiler.quil_to_native_quil = basic_compile
+
+    return symm_qc
+
+
+def run_symmetrized_readout(self, program: Program, trials: int, symm_type: int = 3,
+                            meas_qubits: List[int] = None) -> np.ndarray:
+    r"""
+    Run a quil program in such a way that the readout error is made symmetric. Enforcing
+    symmetric readout error is useful in simplifying the assumptions in some near
+    term error mitigation strategies, see ``measure_observables`` for more information.
+
+    The simplest example is for one qubit. In a noisy device, the probability of accurately
+    reading the 0 state might be higher than that of the 1 state; due to e.g. amplitude
+    damping. This makes correcting for readout more difficult. In the simplest case, this
+    function runs the program normally ``(trials//2)`` times. The other half of the time,
+    it will insert an ``X`` gate prior to any ``MEASURE`` instruction and then flip the
+    measured classical bit back. Overall this has the effect of symmetrizing the readout error.
+
+    The details. Consider preparing the input bitstring ``|i>`` (in the computational basis) and
+    measuring in the Z basis. Then the Confusion matrix for the readout error is specified by
+    the probabilities
+
+         p(j|i) := Pr(measured = j | prepared = i ).
+
+    In the case of a single qubit i,j \in [0,1] then:
+    there is no readout error if p(0|0) = p(1|1) = 1.
+    the readout error is symmetric if p(0|0) = p(1|1) = 1 - epsilon.
+    the readout error is asymmetric if p(0|0) != p(1|1).
+
+    If your quantum computer has this kind of asymmetric readout error then
+    ``qc.run_symmetrized_readout`` will symmetrize the readout error.
+
+    The readout error above is only asymmetric on a single bit. In practice the confusion
+    matrix on n bits need not be symmetric, e.g. for two qubits p(ij|ij) != 1 - epsilon for
+    all i,j. In these situations a more sophisticated means of symmetrization is needed; and
+    we use orthogonal arrays (OA) built from Hadamard matrices.
+
+    The symmetrization types are specified by an int; the types available are:
+    -1 -- exhaustive symmetrization uses every possible combination of flips
+    0 -- trivial that is no symmetrization
+    1 -- symmetrization using an OA with strength 1
+    2 -- symmetrization using an OA with strength 2
+    3 -- symmetrization using an OA with strength 3
+    In the context of readout symmetrization the strength of the orthogonal array enforces
+    the symmetry of the marginal confusion matrices.
+
+    By default a strength 3 OA is used; this ensures expectations of the form
+    ``<b_k . b_j . b_i>`` for bits any bits i,j,k will have symmetric readout errors. Here
+    expectation of a random variable x as is denote ``<x> = sum_i Pr(i) x_i``. It turns out that
+    a strength 3 OA is also a strength 2 and strength 1 OA it also ensures ``<b_j . b_i>`` and
+    ``<b_i>`` have symmetric readout errors for any bits b_j and b_i.
+
+    :param program: The program to run symmetrized readout on.
+    :param trials: The minimum number of times to run the program; it is recommend that this
+        number should be in the hundreds or thousands. This parameter will be mutated if
+        necessary.
+    :param symm_type: the type of symmetrization
+    :param meas_qubits: An advanced feature. The groups of measurement qubits. Only these
+        qubits will be symmetrized over, even if the program acts on other qubits.
+    :return: A numpy array of shape (trials, len(ro-register)) that contains 0s and 1s.
+    """
+    if not isinstance(symm_type, int):
+        raise ValueError("Symmetrization options are indicated by an int. See "
+                         "the docstrings for more information.")
+
+    if meas_qubits is None:
+        meas_qubits = list(program.get_qubits())
+
+    # It is desirable to have hundreds or thousands of trials more than the minimum
+    trials = _check_min_num_trials_for_symmetrized_readout(len(meas_qubits), trials, symm_type)
+
+    sym_programs, flip_arrays = _symmetrization(program, meas_qubits, symm_type)
+
+    # Floor division so e.g. 9 // 8 = 1 and 17 // 8 = 2.
+    num_shots_per_prog = trials // len(sym_programs)
+
+    if num_shots_per_prog * len(sym_programs) < trials:
+        warnings.warn(f"The number of trials was modified from {trials} to "
+                      f"{num_shots_per_prog * len(sym_programs)}. To be consistent with the "
+                      f"number of trials required by the type of readout symmetrization "
+                      f"chosen.")
+
+    results = _measure_bitstrings(self, sym_programs, meas_qubits, num_shots_per_prog)
+
+    return _consolidate_symmetrization_outputs(results, flip_arrays)
 
 
 def _flip_array_to_prog(flip_array: Tuple[bool], qubits: List[int]) -> Program:
@@ -138,8 +237,7 @@ def _measure_bitstrings(qc, programs: List[Program], meas_qubits: List[int],
             prog += MEASURE(q, ro[idx])
 
         prog.wrap_in_numshots_loop(num_shots)
-        prog = qc.compiler.quil_to_native_quil(prog)
-        exe = qc.compiler.native_quil_to_executable(prog)
+        exe = qc.compile(prog)
         shots = qc.run(exe)
         results.append(shots)
     return results

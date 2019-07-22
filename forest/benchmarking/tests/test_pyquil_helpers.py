@@ -5,22 +5,19 @@ import numpy as np
 import pytest
 
 from pyquil import Program
-from pyquil.api import QVM, local_qvm
+from pyquil.api import QVM, local_qvm, get_qc, QuantumComputer
 from pyquil.device import NxDevice, gates_in_isa
 from pyquil.gates import *
 from pyquil.noise import decoherence_noise_with_asymmetric_ro
 from pyquil.pyqvm import PyQVM
 from pyquil.api._qac import AbstractCompiler
 
-from forest.benchmarking.pyquil_helpers import (QuantumComputer,
-                                                get_qc,
-                                                _symmetrization,
-                                                _flip_array_to_prog,
-                                                _construct_orthogonal_array,
-                                                _construct_strength_two_orthogonal_array,
-                                                _construct_strength_three_orthogonal_array,
-                                                _measure_bitstrings, _consolidate_symmetrization_outputs,
-                                                _check_min_num_trials_for_symmetrized_readout)
+from forest.benchmarking.pyquil_helpers import get_symmetrizing_qc
+from forest.benchmarking.pyquil_helpers._symmetrization_helpers import \
+    (_symmetrization, _flip_array_to_prog, _construct_orthogonal_array,
+     _construct_strength_two_orthogonal_array, _construct_strength_three_orthogonal_array,
+     _measure_bitstrings, _consolidate_symmetrization_outputs,
+     _check_min_num_trials_for_symmetrized_readout)
 
 
 class DummyCompiler(AbstractCompiler):
@@ -56,6 +53,17 @@ def test_flip_array_to_prog():
         'RX(pi) 4',
         'RX(pi) 5'
     ]
+
+    qubits = [0, 2, 3]
+    ops_strings = list(itertools.product([0, 1], repeat=len(qubits)))
+    d_expected = {(0, 0, 0): '', (0, 0, 1): 'RX(pi) 3\n', (0, 1, 0): 'RX(pi) 2\n',
+                  (0, 1, 1): 'RX(pi) 2\nRX(pi) 3\n',
+                  (1, 0, 0): 'RX(pi) 0\n', (1, 0, 1): 'RX(pi) 0\nRX(pi) 3\n',
+                  (1, 1, 0): 'RX(pi) 0\nRX(pi) 2\n',
+                  (1, 1, 1): 'RX(pi) 0\nRX(pi) 2\nRX(pi) 3\n'}
+    for op_str in ops_strings:
+        p = _flip_array_to_prog(op_str, qubits)
+        assert str(p) == d_expected[op_str]
 
 
 def test_symmetrization():
@@ -205,19 +213,18 @@ def test_readout_symmetrization(forest):
         device=device,
         compiler=DummyCompiler()
     )
+    symm_qc = get_symmetrizing_qc(qc, use_basic_compile=False)
 
-    prog = Program(I(0), X(1),
-                   MEASURE(0, 0),
-                   MEASURE(1, 1))
-    prog.wrap_in_numshots_loop(1000)
+    prog = Program(I(0), X(1))
+    trials = 1000
 
-    bs1 = qc.run(prog)
-    avg0_us = np.mean(bs1[:, 0])
-    avg1_us = 1 - np.mean(bs1[:, 1])
+    bs1 = symm_qc.run_and_measure(prog, trials)
+    avg0_us = np.mean(bs1[0])
+    avg1_us = 1 - np.mean(bs1[1])
     diff_us = avg1_us - avg0_us
     assert diff_us > 0.03
 
-    bs2 = qc.run_symmetrized_readout(prog, 1000)
+    bs2 = symm_qc.run_symmetrized_readout(prog, trials)
     avg0_s = np.mean(bs2[:, 0])
     avg1_s = 1 - np.mean(bs2[:, 1])
     diff_s = avg1_s - avg0_s
@@ -228,8 +235,9 @@ def test_run_symmetrized_readout_error():
     # This test checks if the function runs for any possible input on a small number of qubits.
     # Locally this test was run on all 8 qubits, but it was slow.
     qc = get_qc("8q-qvm")
+    symm_qc = get_symmetrizing_qc(qc, use_basic_compile=False)
     sym_type_vec = [-1, 0, 1, 2, 3]
     prog_vec = [Program(I(x) for x in range(0, 3))[0:n] for n in range(0, 4)]
     trials_vec = list(range(0, 5))
     for prog, trials, sym_type in itertools.product(prog_vec, trials_vec, sym_type_vec):
-        print(qc.run_symmetrized_readout(prog, trials, sym_type))
+        print(symm_qc.run_symmetrized_readout(prog, trials, sym_type))
