@@ -98,12 +98,12 @@ def test_monte_carlo_state_dfe(benchmarker: BenchmarkConnection):
         assert_almost_equal(expectation, 1., decimal=7)
 
 
-def test_acquire_dfe_data(benchmarker: BenchmarkConnection, test_qc):
+def test_acquire_dfe_data(benchmarker: BenchmarkConnection, qvm):
     # pick (Clifford) process that acts as identity on qubits 0 and 1
     process = Program(X(2), X(3))
     texpt = generate_exhaustive_state_dfe_experiment(benchmarker=benchmarker, program=process,
                                                      qubits=[0, 1])
-    dfe_data = acquire_dfe_data(qc=test_qc, expt=texpt)
+    dfe_data = acquire_dfe_data(qc=qvm, expt=texpt)
     fid_est, fid_std_err = estimate_dfe(dfe_data, 'state')
 
     assert_allclose(fid_est, 1.0)
