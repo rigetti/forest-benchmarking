@@ -638,7 +638,7 @@ def do_rb(qc: QuantumComputer, benchmarker: BenchmarkConnection,
         else:
             fit = fit_rb_results(depths, stats['expectation'], stats['std_err'], num_shots)
 
-        decays[group] =  fit.params['decay']
+        decays[group] =  fit.params['decay'].value
 
     return decays, expts, results
 

@@ -417,7 +417,7 @@ def do_dfe(qc: QuantumComputer, benchmarker: BenchmarkConnection, program: Progr
         ``program``, as implemented on the provided ``qc``, along with the standard error of the
         estimate. The experiment and corresponding results are also returned.
     """
-    if kind.lower not in ['state', 'process']:
+    if kind.lower() not in ['state', 'process']:
         raise ValueError('Kind must be either \'state\' or \'process\'.')
 
     if mc_n_terms is None:
