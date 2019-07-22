@@ -9,7 +9,7 @@ from pyquil import Program
 from pyquil.api import BenchmarkConnection, QuantumComputer
 from forest.benchmarking.observable_estimation import ExperimentResult, ExperimentSetting, \
     ObservablesExperiment, TensorProductState, estimate_observables, plusX, minusX, plusY, minusY,\
-    plusZ, minusZ, exhaustive_symmetrization, calibrate_observable_estimates
+    plusZ, minusZ, calibrate_observable_estimates
 from pyquil.paulis import PauliTerm, sI, sX, sY, sZ
 
 
@@ -274,7 +274,7 @@ def acquire_dfe_data(qc: QuantumComputer, expr: ObservablesExperiment, num_shots
     """
     if mitigate_readout_errors:
         res = list(estimate_observables(qc, expr, num_shots=num_shots, active_reset=active_reset,
-                                        symmetrization_method=exhaustive_symmetrization))
+                                        symm_type=-1))
         res = list(calibrate_observable_estimates(qc, res, num_shots=num_shots))
     else:
         res = list(estimate_observables(qc, expr, num_shots=num_shots, active_reset=active_reset))

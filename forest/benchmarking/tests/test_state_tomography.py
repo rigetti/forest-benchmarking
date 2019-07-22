@@ -14,7 +14,7 @@ from pyquil.device import NxDevice
 from pyquil.gates import I, H, CZ
 from pyquil.numpy_simulator import NumpyWavefunctionSimulator
 from forest.benchmarking.observable_estimation import estimate_observables, ExperimentResult, \
-    ExperimentSetting, zeros_state, exhaustive_symmetrization, calibrate_observable_estimates
+    ExperimentSetting, zeros_state, calibrate_observable_estimates
 from pyquil.paulis import sI, sZ, sX
 from pyquil.quil import Program
 from rpcq.messages import PyQuilExecutableResponse
@@ -164,7 +164,7 @@ def single_q_tomo_fixture():
     # Get data from QVM
     tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
     results = list(estimate_observables(qc=qc, obs_expt=tomo_expt, num_shots=500,
-                                        symmetrization_method=exhaustive_symmetrization))
+                                        symm_type=-1))
     results = list(calibrate_observable_estimates(qc, results))
 
     return results, rho_true
@@ -192,7 +192,7 @@ def two_q_tomo_fixture():
     # Get data from QVM
     tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
     results = list(estimate_observables(qc=qc, obs_expt=tomo_expt, num_shots=500,
-                                        symmetrization_method=exhaustive_symmetrization))
+                                        symm_type=-1))
     results = list(calibrate_observable_estimates(qc, results))
 
     return results, rho_true
