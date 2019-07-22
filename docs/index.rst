@@ -28,7 +28,7 @@ Contents
 
 .. toctree::
    :maxdepth: 1
-   :caption: Observable Estimation and Error Mitigation
+   :caption: Observable Estimation
 
    obs_est
 
