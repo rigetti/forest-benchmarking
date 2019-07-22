@@ -39,4 +39,6 @@ Functions
     group_settings
     shots_to_obs_moments
     ratio_variance
+    merge_disjoint_experiments
+    get_results_by_qubit_groups
 

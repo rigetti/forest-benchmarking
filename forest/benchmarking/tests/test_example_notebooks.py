@@ -182,17 +182,15 @@ def test_superoperator_tools_nb():
     print(output_str)
     assert check_for_failure_and_empty_output(output_str)
 
+# ~10 sec
+def test_tomography_process_nb():
+    output_str = run_notebook('tomography_process.ipynb')
+    print(output_str)
+    assert check_for_failure_and_empty_output(output_str)
 
-# Notebook fails at the moment
-# def test_tomography_process_nb():
-#     output_str = run_notebook('tomography_process.ipynb')
-#     print(output_str)
-#     assert output_str.find('failed') is -1
 
-
-# Notebook fails at the moment will fix on the tomography branch
 # ~4 sec
-# def test_tomography_state_nb():
-#    output_str = run_notebook('tomography_state.ipynb')
-#    print(output_str)
-#    assert check_for_failure_and_empty_output(output_str)
+def test_tomography_state_nb():
+   output_str = run_notebook('tomography_state.ipynb')
+   print(output_str)
+   assert check_for_failure_and_empty_output(output_str)
