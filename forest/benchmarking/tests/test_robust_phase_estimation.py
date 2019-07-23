@@ -1,6 +1,6 @@
 import numpy as np
 from numpy import pi
-from pyquil.gates import I, H, RY, RZ
+from pyquil.gates import I, H, RY, RZ, RX
 from pyquil.noise import damping_after_dephasing
 from pyquil.quil import Program
 from pyquil.quilbase import Measurement
@@ -81,3 +81,17 @@ def test_noisy_rpe(qvm):
                                        additive_error=add_error)
         phase_estimate = rpe.robust_phase_estimate(results, [q])
         assert np.allclose(phase_estimate, angle, atol=tolerance)
+
+
+def test_do_rpe(qvm):
+    angles = [-pi / 2, pi]
+    qubits = [0, 1]
+    qubit_groups = [(qubit,) for qubit in qubits]
+    changes_of_basis = [H(qubit) for qubit in qubits]
+
+    for angle in angles:
+        rotation = Program([RX(angle, qubit) for qubit in qubits])
+        phases, expts, ress = rpe.do_rpe(qvm, rotation, changes_of_basis, qubit_groups,
+                                         num_depths=6)
+        for group in qubit_groups:
+            assert np.allclose(phases[group], angle % (2*pi), atol=.1)
