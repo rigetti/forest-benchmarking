@@ -1,10 +1,11 @@
-from typing import Tuple, List, Sequence, Union
+from typing import Tuple, List, Sequence, Union, Dict
 import warnings
 
 import numpy as np
 from numpy import pi
 from functools import reduce
 from operator import mul
+from tqdm import tqdm
 
 from pyquil.quil import Program, merge_programs, DefGate, Pragma
 from pyquil.quilbase import Gate
@@ -13,7 +14,8 @@ from pyquil.paulis import PauliTerm
 from forest.benchmarking.utils import bloch_vector_to_standard_basis, is_pos_pow_two
 from forest.benchmarking.observable_estimation import ExperimentSetting, plusZ, minusZ, \
     ObservablesExperiment, ExperimentResult, estimate_observables, plusX, _OneQState, \
-    TensorProductState, group_settings
+    TensorProductState, group_settings, get_results_by_qubit_groups, \
+    calibrate_observable_estimates, exhaustive_symmetrization
 
 import matplotlib.pyplot as plt
 
@@ -256,7 +258,9 @@ def num_trials(depth, max_depth, multiplicative_factor: float = 1.0,
 def acquire_rpe_data(qc: QuantumComputer,
                      experiments: Sequence[ObservablesExperiment],
                      multiplicative_factor: float = 1.0, additive_error: float = None,
-                     min_shots: int = 500) -> List[List[ExperimentResult]]:
+                     min_shots: int = 500,  active_reset: bool = False,
+                     mitigate_readout_errors: bool = False, show_progress_bar: bool = False) \
+        -> List[List[ExperimentResult]]:
     """
     Run each experiment in the sequence of experiments.
 
@@ -272,16 +276,32 @@ def acquire_rpe_data(qc: QuantumComputer,
         in contrast to the theoretical assumption that shot-rate is independent of number of shots,
         in practice the shot-rate is approximately proportional to the number of shots up to about
         500 so taking fewer shots is sub-optimal.
+    :param active_reset: Boolean flag indicating whether experiments should begin with an
+        active reset instruction (this can make the collection of experiments run a lot faster).
+    :param mitigate_readout_errors: Boolean flag indicating whether bias due to imperfect
+        readout should be corrected
+    :param show_progress_bar: displays a progress bar via tqdm if true.
     :return: a copy of the input experiments populated with results in each layer.
     """
     depths = [2**idx for idx in range(len(experiments))]
     max_depth = max(depths)
 
     results = []
-    for depth, expt in zip(depths, experiments):
+    for depth, expt in zip(tqdm(depths, disable=not show_progress_bar), experiments):
         theoretical_optimum = num_trials(depth, max_depth, multiplicative_factor, additive_error)
         num_shots = max(min_shots, theoretical_optimum)
-        results.append(list(estimate_observables(qc, expt, num_shots)))
+
+        # TODO: fix up mitigate_readout_errors.
+        if mitigate_readout_errors:
+            res = list(
+                estimate_observables(qc, expt, num_shots=num_shots, active_reset=active_reset,
+                                     symmetrization_method=exhaustive_symmetrization))
+
+            results.append(list(calibrate_observable_estimates(qc, res, num_shots=num_shots)))
+        else:
+            results.append(list(
+                estimate_observables(qc, expt, num_shots=num_shots, active_reset=active_reset)))
+
     return results
 
 
@@ -546,3 +566,64 @@ def plot_rpe_iterations(xs, ys, x_stds, y_stds, expected_positions: List = None)
     ax.grid(True)
 
     return ax
+
+
+def do_rpe(qc: QuantumComputer, rotation: Program, changes_of_basis: List[Program],
+           qubit_groups: Sequence[Sequence[int]],  num_depths: int = 6,
+           multiplicative_factor: float = 1.0, additive_error: float = None,
+           active_reset: bool = False,
+           mitigate_readout_errors: bool = False,
+           show_progress_bar: bool = False) \
+        -> Tuple[Dict[Tuple[int, ...], float],
+                 List[ObservablesExperiment],
+                 List[List[ExperimentResult]]]:
+    """
+    A wrapper around experiment generation, data acquisition, and estimation that runs a RB
+    experiment on the qubit_groups and returns the rb_decay along with the experiments and results.
+
+    :param qc: A quantum computer object on which the experiment will run.
+    :param rotation: the program or gate whose angle of rotation is to be estimated. Note that
+        this program will be run through forest_benchmarking.compilation.basic_compile().
+    :param changes_of_basis: a list of programs implementing the change of basis transformation
+        which maps the computational basis states to the appropriate eigenvectors on each group
+        of qubits provided.
+    :param qubit_groups: The partition of qubits into groups. For each group we will estimate an
+        rb decay. Each decay should be interpreted as a 'simultaneous rb decay' as the sequences
+        on each group of qubits will be run concurrently.
+    :param num_depths: the number of depths in the experiment
+    :param active_reset: Boolean flag indicating whether experiments should begin with an
+        active reset instruction (this can make the collection of experiments run a lot faster).
+    :param mitigate_readout_errors: Boolean flag indicating whether bias due to imperfect
+        readout should be corrected
+    :param show_progress_bar: displays a progress bar via tqdm if true.
+    :return: The estimated rb decays for each group of qubits, along with the experiment and
+        corresponding results.
+    """
+    prep_prog_tot = Program()
+    pre_meas_prog_tot = Program()
+    all_settings = []
+    for qubits, cob in zip(qubit_groups, changes_of_basis):
+        prep_prog, pre_meas_prog, settings = all_eigenvector_prep_meas_settings(qubits, cob)
+        prep_prog_tot += prep_prog
+        pre_meas_prog_tot += pre_meas_prog
+        all_settings += settings
+
+    expts = generate_rpe_experiments(rotation, prep_prog_tot, pre_meas_prog_tot, all_settings,
+                                     num_depths)
+
+    # TODO: fix up mitigate_readout_errors.
+    results = acquire_rpe_data(qc, expts, multiplicative_factor=multiplicative_factor,
+                               additive_error=additive_error,
+                               active_reset=active_reset,
+                               mitigate_readout_errors=mitigate_readout_errors,
+                               show_progress_bar=show_progress_bar)
+    results_by_group = [get_results_by_qubit_groups(depth_results, qubit_groups)
+                        for depth_results in results]
+
+    estimates_by_qubit_group = {}
+    for qubits in qubit_groups:
+        group_results = [res[tuple(qubits)] for res in results_by_group]
+        estimates = robust_phase_estimate(group_results, qubits)
+        estimates_by_qubit_group[tuple(qubits)] = estimates
+
+    return estimates_by_qubit_group, expts, results

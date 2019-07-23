@@ -17,7 +17,7 @@ import networkx as nx
 from networkx.algorithms.approximation.clique import clique_removal
 from pyquil import Program
 from pyquil.api import QuantumComputer
-from pyquil.gates import RX, RZ, MEASURE
+from pyquil.gates import RX, RZ, MEASURE, RESET
 from pyquil.paulis import PauliTerm, sI, is_identity
 
 from forest.benchmarking.compilation import basic_compile, _RY
@@ -1059,8 +1059,9 @@ def get_calibration_program(observable: PauliTerm, noisy_program: Program = None
 
 
 def calibrate_observable_estimates(qc: QuantumComputer, expt_results: List[ExperimentResult],
+                                   num_shots: int = 500,
                                    symmetrization_method: Callable = exhaustive_symmetrization,
-                                   num_shots: int = 500, noisy_program: Program = None) \
+                                   noisy_program: Program = None) \
         -> Iterable[ExperimentResult]:
     """
     Calibrates the expectation and std_err of the input expt_results and updates those estimates.
@@ -1076,8 +1077,8 @@ def calibrate_observable_estimates(qc: QuantumComputer, expt_results: List[Exper
     :param qc: a quantum computer object on which to run the programs necessary to calibrate each
         result.
     :param expt_results: a list of results, each of which will be separately calibrated.
-    :param symmetrization_method: by default every eigenvector of each observable is measured.
     :param num_shots: the number of shots to run for each eigenvector
+    :param symmetrization_method: by default every eigenvector of each observable is measured.
     :param noisy_program: an optional program from which to inherit a noise model; only relevant
         for running on a QVM
     :return: a copy of the input results with updated estimates and calibration results.

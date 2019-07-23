@@ -1,8 +1,9 @@
-from typing import Sequence, List, Dict
+from typing import Sequence, List, Dict, Tuple
 
 import numpy as np
 from numpy import pi
 from lmfit.model import ModelResult
+from tqdm import tqdm
 
 from pyquil.api import QuantumComputer
 from pyquil.gates import RX, RY, RZ, CZ, MEASURE
@@ -24,7 +25,8 @@ MHZ = 1e6  # MHz, megahertz
 
 def acquire_qubit_spectroscopy_data(qc: QuantumComputer,
                                     experiments: Sequence[ObservablesExperiment],
-                                    num_shots: int = 500) -> List[List[ExperimentResult]]:
+                                    num_shots: int = 500, show_progress_bar: bool = False) \
+        -> List[List[ExperimentResult]]:
     """
     A standard data acquisition method for all experiments in this module.
 
@@ -34,11 +36,12 @@ def acquire_qubit_spectroscopy_data(qc: QuantumComputer,
     :param qc: a quantum computer on which to run the experiments
     :param experiments: the ObservablesExperiments to run on the given qc
     :param num_shots: the number of shots to collect for each experiment.
+    :param show_progress_bar: displays a progress bar via tqdm if true.
     :return: a list of ExperimentResults for each ObservablesExperiment, returned in order of the
         input sequence of experiments.
     """
     results = []
-    for expt in experiments:
+    for expt in tqdm(experiments, disable=not show_progress_bar):
         results.append(list(estimate_observables(qc, expt, num_shots)))
     return results
 
@@ -149,6 +152,48 @@ def fit_t1_results(times: Sequence[float], z_expectations: Sequence[float],
 
     return fit_decay_time_param_decay(np.asarray(times), probability_one, weights,
                                       param_guesses)
+
+
+def do_t1_or_t2(qc: QuantumComputer, qubits: Sequence[int], times: Sequence[float],
+                kind: str, num_shots: int = 500, show_progress_bar: bool = False) \
+        -> Tuple[Dict[int, float], List[ObservablesExperiment], List[List[ExperimentResult]]]:
+    """
+    A wrapper around experiment generation, data acquisition, and estimation that runs a t1,
+    t2 echo, or t2* experiment on each qubit in qubits and returns the rb_decay along with the
+    experiments and results.
+
+    :param qc: a quantum computer on which to run the experiments
+    :param qubits: list of qubits to measure.
+    :param times: The times at which to measure, given in seconds. Each time is rounded to the
+        nearest .1 microseconds.
+    :param kind: which kind of experiment to do, one of 't1', 't2_star', or 't2_echo'
+    :param num_shots: the number of shots to collect for each experiment.
+    :param show_progress_bar: displays a progress bar via tqdm if true.
+    :return:
+    """
+    if kind.lower() == 't1':
+        gen_method = generate_t1_experiments
+        fit_method = fit_t1_results
+    elif kind.lower() == 't2_star':
+        gen_method = generate_t2_star_experiments
+        fit_method = fit_t2_results
+    elif kind.lower() == 't2_echo':
+        gen_method = generate_t2_echo_experiments
+        fit_method = fit_t2_results
+    else:
+        raise ValueError('Kind must be one of \'t1\', \'t2_star\', or \'t2_echo\'.')
+
+    expts = gen_method(qubits, times)
+    results = acquire_qubit_spectroscopy_data(qc, expts, num_shots, show_progress_bar)
+    stats = get_stats_by_qubit(results)
+    decay_time_by_qubit = {}
+    for qubit in qubits:
+        fit = fit_method(np.asarray(times) / MICROSECOND, stats[qubit]['expectation'],
+                         stats[qubit]['std_err'])
+        decay_time = fit.params['decay_time'].value  # in us
+        decay_time_by_qubit[qubit] = float(decay_time)
+
+    return decay_time_by_qubit, expts, results
 
 
 # ==================================================================================================
