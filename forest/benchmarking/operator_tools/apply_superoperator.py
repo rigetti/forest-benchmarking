@@ -7,20 +7,20 @@ For more information about the conventions used, look at the file in
 
 Further references include:
 
-[GRAPTN] Tensor networks and graphical calculus for open quantum systems
+.. [GRAPTN] Tensor networks and graphical calculus for open quantum systems.
          Wood et al.
-         Quant. Inf. Comp. 15, 0579-0811 (2015)
+         Quant. Inf. Comp. 15, 0579-0811 (2015).
          (no DOI)
          https://arxiv.org/abs/1111.6950
 
-[MATQO] On the Matrix Representation of Quantum Operations
-        Nambu et al.,
-        arXiv: 0504091 (2005)
+.. [MATQO] On the Matrix Representation of Quantum Operations.
+        Nambu et al.
+        arXiv: 0504091 (2005).
         https://arxiv.org/abs/quant-ph/0504091
 
-[DUAL] On duality between quantum maps and quantum states
-       Zyczkowski et al.,
-       Open Syst. Inf. Dyn. 11, 3 (2004)
+.. [DUAL] On duality between quantum maps and quantum states.
+       Zyczkowski et al.
+       Open Syst. Inf. Dyn. 11, 3 (2004).
        https://dx.doi.org/10.1023/B:OPSY.0000024753.05661.c2
        https://arxiv.org/abs/quant-ph/0401119
 
@@ -65,12 +65,20 @@ def apply_choi_matrix_2_state(choi: np.ndarray, state: np.ndarray) -> np.ndarray
     The Choi matrix is a dim**2 by dim**2 matrix and the state rho is a dim by dim matrix. The
     output state is
 
-    rho_{out} = Tr_{A_{in}}[(rho^T \otimes Id) Choi_matrix ],
+    .. math::
 
-    where T denotes transposition and Tr_{A_{in}} is the partial trace over input Hilbert space H_{
-    A_{in}}; the Choi matrix representing a process mapping rho in H_{A_{in}} to rho_{out}
-    in H_{B_{out}} is regarded as an operator on the space H_{A_{in}} \otimes H_{B_{out}}.
+        \rho_{out} = Tr_{A_{in}}[(\rho^T \otimes Id) \rm{Choi\_matrix} ],
 
+    where :math:`^T` denotes transposition and :math:`Tr_{A_{in}}` is the partial trace over input
+    Hilbert space :math:`H_{A_{in}}`
+
+    The Choi matrix representing a process mapping
+
+     .. math::
+
+        \rho_{in} \in H_{A_{in}} \rightarrow \rho_{out} \in H_{B_{out}}
+
+    is regarded as an operator on the space :math:`H_{A_{in}} \otimes H_{B_{out}}`.
 
     :param choi: a dim**2 by dim**2 matrix
     :param state: A dim by dim ndarray which is the density matrix for the state

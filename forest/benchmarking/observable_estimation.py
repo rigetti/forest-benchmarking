@@ -4,11 +4,11 @@ import json
 import logging
 import re
 import sys
-import warnings
 from json import JSONEncoder
 from operator import mul
-from typing import List, Union, Iterable, Tuple, Dict, Callable
+from typing import List, Union, Iterable, Tuple, Dict, Callable, Sequence
 from copy import copy
+from tqdm import tqdm
 
 import numpy as np
 from math import pi
@@ -174,10 +174,13 @@ def zeros_state(qubits: Iterable[int]):
 class ExperimentSetting:
     """
     Input and output settings for an ObservablesExperiment.
+
     Many near-term quantum algorithms and QCVV protocols take the following form:
+
      - Start in a pauli state
      - Do some interesting quantum circuit (e.g. prepare some ansatz)
      - Measure the output of the circuit w.r.t. expectations of Pauli observables.
+
     Where we typically use a large number of (start, measure) pairs but keep the quantum circuit
     program consistent. This class represents the (start, measure) pairs. Typically a large
     number of these :py:class:`ExperimentSetting` objects will be created and grouped into
@@ -209,7 +212,9 @@ class ExperimentSetting:
 
 
 def _abbrev_program(program: Program, max_len=10):
-    """Create an abbreviated string representation of a Program.
+    """
+    Create an abbreviated string representation of a Program.
+
     This will join all instructions onto a single line joined by '; '. If the number of
     instructions exceeds ``max_len``, some will be excluded from the string representation.
     """
@@ -230,10 +235,12 @@ class ObservablesExperiment:
     observables measured on a core program, possibly with a collection of different preparations.
 
     Many near-term quantum algorithms involve:
+
      - some limited state preparation, e.g. prepare a Pauli eigenstate
      - enacting a quantum process (like in tomography) or preparing a variational ansatz state
        (like in VQE) with some circuit.
      - Measure the output of the circuit w.r.t. expectations of Pauli observables
+
     Where we typically use a large number of (state_prep, measure_observable) pairs but keep the
     quantum circuit program consistent. This class stores the circuit program as a
     :py:class:`~pyquil.Program` and maintains a list of :py:class:`ExperimentSetting` objects
@@ -243,6 +250,7 @@ class ObservablesExperiment:
     Settings sharing an inner list will be estimated simultaneously. If you don't want this,
     provide a list of length-1-lists. As a convenience, if you pass a 1D list to the constructor
     will expand it to a list of length-1-lists.
+
     This class will not group settings for you. Please see :py:func:`group_settings` for
     a function that will automatically process a ObservablesExperiment to group Experiments sharing
     a TPB.
@@ -618,35 +626,49 @@ def group_settings_greedy(obs_expt: ObservablesExperiment):
 
 def group_settings(obs_expt: ObservablesExperiment,
                    method: str = 'greedy') -> ObservablesExperiment:
-    """
+    r"""
     Group settings that are diagonal in a shared tensor product basis (TPB) to minimize number
     of QPU runs.
 
-    Background
-    ----------
+    :Background:
+
     Given some PauliTerm operator, the 'natural' tensor product basis to
     diagonalize this term is the one which diagonalizes each Pauli operator in the
     product term-by-term.
+
     For example, X(1) * Z(0) would be diagonal in the 'natural' tensor product basis
-    {(|0> +/- |1>)/Sqrt[2]} * {|0>, |1>}, whereas Z(1) * X(0) would be diagonal
-    in the 'natural' tpb {|0>, |1>} * {(|0> +/- |1>)/Sqrt[2]}. The two operators
-    commute but are not diagonal in each others 'natural' tpb (in fact, they are
-    anti-diagonal in each others 'natural' tpb). This function tests whether two
-    operators given as PauliTerms are both diagonal in each others 'natural' tpb.
-    Note that for the given example of X(1) * Z(0) and Z(1) * X(0), we can construct
-    the following basis which simultaneously diagonalizes both operators:
-      -- |0>' = |0> (|+>) + |1> (|->)
-      -- |1>' = |0> (|+>) - |1> (|->)
-      -- |2>' = |0> (|->) + |1> (|+>)
-      -- |3>' = |0> (-|->) + |1> (|+>)
+
+    .. math::
+
+        \{ (|0> + |1>)/ \sqrt{2}, (|0> - |1>)/ \sqrt{2} \} * \{ |0>, |1> \}
+
+    whereas, Z(1) * X(0) would be diagonal in the 'natural' TPB
+
+    .. math::
+
+        \{ |0>, |1> \} * \{ (|0> + |1>)/ \sqrt{2}, (|0> - |1>)/ \sqrt{2} \}
+
+    The two operators commute but are not diagonal in each others 'natural' TPB (in fact, they are
+    anti-diagonal in each others 'natural' TPB). This function tests whether two operators given
+    as PauliTerms are both diagonal in each others 'natural' TPB. Note that for the given example
+    of X(1) * Z(0) and Z(1) * X(0), we can construct the following basis which simultaneously
+    diagonalizes both operators::
+
+        |a> =  |0> |+> + |1> |->
+        |b> =  |0> |+> - |1> |->
+        |c> =  |0> |-> + |1> |+>
+        |d> = -|0> |-> + |1> |+>
+
     In this basis, X Z looks like diag(1, -1, 1, -1), and Z X looks like diag(1, 1, -1, -1).
     Notice however that this basis cannot be constructed with single-qubit operations, as each
     of the basis vectors are entangled states.
-    Methods
-    -------
+
+    :Methods:
+
     The "greedy" method will keep a running set of 'buckets' into which grouped ExperimentSettings
     will be placed. Each new ExperimentSetting considered is assigned to the first applicable
     bucket and a new bucket is created if there are no applicable buckets.
+
     The "clique-removal" method maps the term grouping problem onto Max Clique graph problem.
     This method constructs a NetworkX graph where an edge exists between two settings that
     share an nTPB and then uses networkx's algorithm for clique removal. This method can give
@@ -843,17 +865,21 @@ def exhaustive_symmetrization(programs: List[Program], meas_qubits: List[List[in
 
 
 def _measure_bitstrings(qc: QuantumComputer, programs: List[Program], meas_qubits: List[List[int]],
-                        num_shots = 500, use_compiler = False) -> List[np.ndarray]:
+                        num_shots = 500, use_compiler = False, show_progress_bar: bool = False) \
+        -> List[np.ndarray]:
     """
     Wrapper for appending measure instructions onto each program, running the program,
     and accumulating the resulting bitarrays.
 
-    By default each program is assumed to be native quil.
+    By default each program is assumed to be native quil, so the quil to native quil step is not
+    performed by the compiler.
 
     :param qc: a quantum computer object on which to run each program
     :param programs: a list of programs to run
     :param meas_qubits: groups of qubits to measure for each program
     :param num_shots: the number of shots to run for each program
+    :param use_compiler: if true, the compiler is used to compile quil to native quil.
+    :param show_progress_bar: displays a progress bar via tqdm if true.
     :return: a len(programs) long list of num_shots by num_meas_qubits bit arrays of results for
         each program.
     """
@@ -861,7 +887,7 @@ def _measure_bitstrings(qc: QuantumComputer, programs: List[Program], meas_qubit
                                               'program, one list of qubits per program.'
 
     results = []
-    for program, qubits in zip(programs, meas_qubits):
+    for program, qubits in zip(tqdm(programs, disable=not show_progress_bar), meas_qubits):
         if len(qubits) == 0:
             # corresponds to measuring identity; no program needs to be run.
             results.append(np.array([[]]))
@@ -966,7 +992,8 @@ def consolidate_symmetrization_outputs(outputs: List[np.ndarray], flip_arrays: L
 
 def estimate_observables(qc: QuantumComputer, obs_expt: ObservablesExperiment,
                          num_shots: int = 500, symmetrization_method: Callable = None,
-                         active_reset: bool = False) -> Iterable[ExperimentResult]:
+                         active_reset: bool = False, show_progress_bar: bool = False)\
+        -> Iterable[ExperimentResult]:
     """
     Standard wrapper for estimating the observables in an ObservableExperiment.
 
@@ -990,6 +1017,7 @@ def estimate_observables(qc: QuantumComputer, obs_expt: ObservablesExperiment,
         remove unwanted classical correlations in the qubit measurement readout.
     :param active_reset: whether or not to begin the program by actively resetting. If true,
         execution of each of the returned programs in a loop on the QPU will generally be faster.
+    :param show_progress_bar: displays a progress bar via tqdm if true.
     :return: all of the ExperimentResults which hold an estimate of each observable of obs_expt
     """
     programs, meas_qubits = generate_experiment_programs(obs_expt, active_reset)
@@ -997,10 +1025,12 @@ def estimate_observables(qc: QuantumComputer, obs_expt: ObservablesExperiment,
     if symmetrization_method is not None:
         programs, symm_qubits, flip_arrays, prog_groups = symmetrization_method(programs,
                                                                                 meas_qubits)
-        symm_outputs = _measure_bitstrings(qc, programs, symm_qubits, num_shots)
+        symm_outputs = _measure_bitstrings(qc, programs, symm_qubits, num_shots,
+                                           show_progress_bar=show_progress_bar)
         results = consolidate_symmetrization_outputs(symm_outputs, flip_arrays, prog_groups)
     else:
-        results = _measure_bitstrings(qc, programs, meas_qubits, num_shots)
+        results = _measure_bitstrings(qc, programs, meas_qubits, num_shots,
+                                      show_progress_bar=show_progress_bar)
 
     assert len(results) == len(meas_qubits) == len(obs_expt)
     for bitarray, meas_qs, settings in zip(results, meas_qubits, obs_expt):
@@ -1128,7 +1158,9 @@ def ratio_variance(a: Union[float, np.ndarray],
     var_a = Var[A] and var_b = Var[B] and the covariance as Cov[A,B]. The following expression
     approximates the variance of Y
 
-    Var[Y] \approx (a/b) ^2 * ( var_a /a^2 + var_b / b^2 - 2 * Cov[A,B]/(a*b) )
+    .. math::
+
+        Var[Y] \approx (a/b)^2 * ( var_a /a^2 + var_b / b^2 - 2 * Cov[A,B]/(a*b) )
 
     We assume the covariance of A and B is negligible, resting on the assumption that A and B
     are independently measured. The expression above rests on the assumption that B is non-zero,
@@ -1136,11 +1168,14 @@ def ratio_variance(a: Union[float, np.ndarray],
     about A. If we allow E[A] = 0, then calculating the expression above via numpy would complain
     about dividing by zero. Instead, we can re-write the above expression as
 
-    Var[Y] \approx var_a /b^2 + (a^2 * var_b) / b^4
+    .. math::
+
+        Var[Y] \approx var_a /b^2 + (a^2 * var_b) / b^4
 
     where we have dropped the covariance term as noted above.
 
     See the following for more details:
+
       - https://doi.org/10.1002/(SICI)1097-0320(20000401)39:4<300::AID-CYTO8>3.0.CO;2-O
       - http://www.stat.cmu.edu/~hseltman/files/ratio.pdf
       - https://en.wikipedia.org/wiki/Taylor_expansions_for_the_moments_of_functions_of_random_variables
@@ -1151,3 +1186,86 @@ def ratio_variance(a: Union[float, np.ndarray],
     :param var_b: Variance in 'B'
     """
     return var_a / b**2 + (a**2 * var_b) / b**4
+
+
+def merge_disjoint_experiments(experiments: List[ObservablesExperiment],
+                               group_merged_settings: bool = True) -> ObservablesExperiment:
+    """
+    Merges the list of experiments into a single experiment that runs the sum of the individual
+    experiment programs and contains all of the combined experiment settings.
+
+    A group of ObservablesExperiments whose programs operate on disjoint sets of qubits can be
+    'parallelized' so that the total number of runs can be reduced after grouping the settings.
+    Settings which act on disjoint sets of qubits can be automatically estimated from the same
+    run on the quantum computer.
+
+    If any experiment programs act on a shared qubit they cannot be thoughtlessly composed since
+    the order of operations on the shared qubit may have a significant impact on the program
+    behaviour; therefore we do not recommend using this method if this is the case.
+
+    Even when the individual experiments act on disjoint sets of qubits you must be
+    careful not to associate 'parallel' with 'simultaneous' execution. Physically the gates
+    specified in a pyquil Program occur as soon as resources are available; meanwhile, measurement
+    happens only after all gates. There is no specification of the exact timing of gates beyond
+    their causal relationships. Therefore, while grouping experiments into parallel operation can
+    be quite beneficial for time savings, do not depend on any simultaneous execution of gates on
+    different qubits, and be wary of the fact that measurement happens only after all gates have
+    finished.
+
+    Note that to get the time saving benefits the settings must be grouped on the merged
+    experiment--by default this is done before returning the experiment.
+
+    :param experiments: a group of experiments to combine into a single experiment
+    :param group_merged_settings: By default group the settings of the merged experiment.
+    :return: a single experiment that runs the summed program and all settings.
+    """
+    used_qubits = set()
+    for expt in experiments:
+        if expt.program.get_qubits().intersection(used_qubits):
+            raise ValueError("Experiment programs act on some shared set of qubits and cannot be "
+                          "merged unambiguously.")
+        used_qubits = used_qubits.union(expt.program.get_qubits())
+
+    # get a flat list of all settings, to be regrouped later
+    all_settings = [setting for expt in experiments
+                         for simult_settings in expt
+                         for setting in simult_settings]
+    merged_program = sum([expt.program for expt in experiments], Program())
+
+    merged_expt = ObservablesExperiment(all_settings, merged_program)
+
+    if group_merged_settings:
+        merged_expt = group_settings(merged_expt)
+
+    return merged_expt
+
+
+def get_results_by_qubit_groups(results: Iterable[ExperimentResult],
+                                qubit_groups: Sequence[Sequence[int]]) \
+        -> Dict[Tuple[int, ...], List[ExperimentResult]]:
+    """
+    Organizes ExperimentResults by the group of qubits on which the observable of the result acts.
+
+    Each experiment result will be associated with a qubit group key if the observable of the
+    result.setting acts on a subset of the qubits in the group. If the result does not act on a
+    subset of qubits of any given group then the result is ignored.
+
+    Note that for groups of qubits which are not pairwise disjoint, one result may be associated to
+    multiple groups.
+
+    :param qubit_groups: groups of qubits for which you want the pertinent results.
+    :param results: ExperimentResults from running an ObservablesExperiment
+    :return: a dictionary whose keys are individual groups of qubits (as sorted tuples). The
+        corresponding value is the list of experiment results whose observables measure some
+        subset of that qubit group. The result order is maintained within each group.
+    """
+    qubit_groups = [tuple(sorted(group)) for group in qubit_groups]
+    results_by_qubit_group = {group: [] for group in qubit_groups}
+    for res in results:
+        res_qs = res.setting.observable.get_qubits()
+
+        for group in qubit_groups:
+            if set(res_qs).issubset(set(group)):
+                results_by_qubit_group[group].append(res)
+
+    return results_by_qubit_group

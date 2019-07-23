@@ -27,18 +27,21 @@ def get_flipped_program(program: Program) -> Program:
     return flipped_prog
 
 
-def estimate_confusion_matrix(qc: QuantumComputer, qubit: int, shots: int = 10000) -> np.ndarray:
+def estimate_confusion_matrix(qc: QuantumComputer, qubit: int, num_shots: int = 10000) \
+        -> np.ndarray:
     """
     Estimate the readout confusion matrix for a given qubit.
 
-    The confusion matrix will be of the form
-        [[ p(0 | 0)     p(0 | 1)]
-         [ p(1 | 0)     p(1 | 1)]]
-    where each column sums to one. Note that the matrix need not be symmetrical.
+    The confusion matrix will be of the form::
+
+        [[ p(0 | 0)     p(0 | 1) ]
+         [ p(1 | 0)     p(1 | 1) ]]
+
+    where each column sums to one. Note that the matrix need not be symmetric.
 
     :param qc: The quantum computer to estimate the confusion matrix.
     :param qubit: The actual physical qubit to measure
-    :param shots: The number of shots to take. This function runs two programs, so
+    :param num_shots: The number of shots to take. This function runs two programs, so
         the total number of shots taken will be twice this number.
     :return: a 2x2 confusion matrix for the qubit, where each row sums to one.
     """
@@ -46,7 +49,7 @@ def estimate_confusion_matrix(qc: QuantumComputer, qubit: int, shots: int = 1000
     zero_meas = Program()
     ro_zero = zero_meas.declare("ro", "BIT", 1)
     zero_meas += MEASURE(qubit, ro_zero[0])
-    zero_meas.wrap_in_numshots_loop(shots)
+    zero_meas.wrap_in_numshots_loop(num_shots)
     should_be_0 = qc.run(qc.compile(zero_meas))
 
     # prepare one and measure; repeat shots number of times
@@ -54,7 +57,7 @@ def estimate_confusion_matrix(qc: QuantumComputer, qubit: int, shots: int = 1000
     one_meas += RX(pi, qubit)
     ro_one = one_meas.declare("ro", "BIT", 1)
     one_meas += MEASURE(qubit, ro_one[0])
-    one_meas.wrap_in_numshots_loop(shots)
+    one_meas.wrap_in_numshots_loop(num_shots)
     should_be_1 = qc.run(qc.compile(one_meas))
 
     p00 = 1 - np.mean(should_be_0)
@@ -237,10 +240,12 @@ def estimate_joint_reset_confusion(qc: QuantumComputer, qubits: Sequence[int] = 
 
     Specifically, for each possible joint_group_sized group among the qubits we perform a
     measurement for each bitstring on that group. The measurement proceeds as follows:
+
         -Repeatedly try to prepare the bitstring state on the qubits until success.
         -If use_active_reset is true (default) actively reset qubits to ground state; otherwise,
-            wait the preset amount of time for qubits to decay to ground state.
+        wait the preset amount of time for qubits to decay to ground state.
         -Measure the state after the chosen reset method.
+
     Since reset should result in the all zeros state this 'confusion matrix' should ideally have
     all ones down the left-most column of the matrix. The entry at (row_idx, 0) thus represents
     the success probability of reset given that the pre-reset state is the binary representation

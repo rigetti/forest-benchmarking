@@ -11,25 +11,28 @@ def plot_pauli_rep_of_state(state_pl_basis, ax, labels, title):
     """
     Visualize a quantum state in the Pauli-Liouville basis.
 
+    :Examples:
+
+    ::
+
+        from forest.benchmarking.superoperator_tools import *
+        from forest.benchmarking.utils import n_qubit_pauli_basis
+        # zero state in the (Z) computational basis
+        rho_std_basis = np.array([[1, 0], [0, 0]])
+        # change to Pauli-Liouville basis
+        n_qubits = 1
+        pl_basis = n_qubit_pauli_basis(n_qubits)
+        c2p = computational2pauli_basis_matrix(2*n_qubits)
+        rho_pl_basis = np.real(c2p@vec(rho_std_basis))
+        # plot
+        fig, ax = plt.subplots(1)
+        plot_pauli_rep_of_state(rho_pl_basis, ax, pl_basis.labels, 'Zero state |0>')
+
+
     :param numpy.ndarray state_pl_basis: The quantum state represented in the Pauli-Liouville basis.
     :param ax: The matplotlib axes.
     :param labels: The labels for the operator basis states.
     :param title: The title for the plot.
-
-    Examples
-    --------
-    from forest.benchmarking.superoperator_tools import *
-    from forest.benchmarking.utils import n_qubit_pauli_basis
-    # zero state in the (Z) computational basis
-    rho_std_basis = np.array([[1, 0], [0, 0]])
-    # change to Pauli-Liouville basis
-    n_qubits = 1
-    pl_basis = n_qubit_pauli_basis(n_qubits)
-    c2p = computational2pauli_basis_matrix(2*n_qubits)
-    rho_pl_basis = np.real(c2p@vec(rho_std_basis))
-    # plot
-    fig, ax = plt.subplots(1)
-    plot_pauli_rep_of_state(rho_pl_basis, ax, pl_basis.labels, 'Zero state |0>')
     """
     if len(state_pl_basis.shape) == 1:
         raise ValueError("You must pass in a (N by 1) or a (1 by N) numpy.ndarray")
@@ -67,7 +70,7 @@ def plot_pauli_rep_of_state(state_pl_basis, ax, labels, title):
 def plot_pauli_bar_rep_of_state(state_pl_basis, ax, labels, title):
     """
     Visualize a quantum state in the Pauli-Liouville basis. The magnitude of the operator
-    coeffiences are represent by the height of a bar in the bargraph.
+    coefficients are represented by the height of a bar in the bargraph.
 
     :param numpy.ndarray state_pl_basis: The quantum state represented in the Pauli-Liouville basis.
     :param ax: The matplotlib axes.
@@ -84,12 +87,13 @@ def plot_pauli_bar_rep_of_state(state_pl_basis, ax, labels, title):
     ax.grid(False)
 
 
-def plot_pauli_transfer_matrix(ptransfermatrix, ax, labels=None, title='', fontsizes: int = 16):
+def plot_pauli_transfer_matrix(ptransfermatrix: np.ndarray, ax, labels=None, title='',
+                               fontsizes: int = 16):
     """
     Visualize a quantum process using the Pauli-Liouville representation (aka the Pauli Transfer
     Matrix) of the process.
 
-    :param numpy.ndarray ptransfermatrix: The Pauli Transfer Matrix
+    :param ptransfermatrix: The Pauli Transfer Matrix
     :param ax: The matplotlib axes.
     :param labels: The labels for the operator basis states.
     :param title: The title for the plot

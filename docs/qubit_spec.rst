@@ -1,15 +1,16 @@
-.. currentmodule:: forest.benchmarking.qubit_spectroscopy
+.. module:: forest.benchmarking.qubit_spectroscopy
 
 Spectroscopic and Analog Measurements of Qubits
 ===============================================
 The protocols in the module ``qubit_spectroscopy`` are closer to analog protocols than gate based
 QCVV protocols.
 
-Overview
----------
+.. toctree::
 
-.. todo:: Put a mini tutorial here.
-
+    examples/qubit_spectroscopy_t1
+    examples/qubit_spectroscopy_t2
+    examples/qubit_spectroscopy_rabi
+    examples/qubit_spectroscopy_cz_ramsey
 
 General Functions
 -----------------

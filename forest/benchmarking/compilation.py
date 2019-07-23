@@ -12,7 +12,8 @@ from pyquil.quilbase import Gate
 def match_global_phase(a: np.ndarray,
                        b: np.ndarray
                        ) -> Tuple[np.ndarray, np.ndarray]:
-    """Phases the given matrices so that they agree on the phase of one entry.
+    """
+    Phases the given matrices so that they agree on the phase of one entry.
 
     To maximize precision, the position with the largest entry from one of the
     matrices is used when attempting to compute the phase difference between
@@ -127,11 +128,12 @@ def _T(q1, dagger=False):
 
 def _SWAP(q1, q2):
     """
-     A SWAP in terms of _CNOT
+    A SWAP in terms of _CNOT
 
-         .. note:
+    .. note:
         This uses :py:func:`_CNOT`, so it picks up a global phase.
         Don't control this gate.
+
     """
     p = Program()
     p.inst(_CNOT(q1, q2))
@@ -180,8 +182,13 @@ def basic_compile(program: Program):
     """
     A rudimentary but predictable compiler.
 
-    :param program:
-    :return:
+    No rewiring or optimization is done by this compilation step. There may be some gates that
+    are not yet supported. Gates defined in the input program are included without change in the
+    output program.
+
+    :param program: a program to be compiled to native quil with simple replacements.
+    :return: a program with some of the input non-native quil gates replaced with basic native quil
+        gate implementations.
     """
     new_prog = Program()
     new_prog.num_shots = program.num_shots

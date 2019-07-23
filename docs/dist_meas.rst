@@ -1,4 +1,4 @@
-.. currentmodule:: forest.benchmarking.distance_measures
+.. module:: forest.benchmarking.distance_measures
 
 Distance Measures
 =================
@@ -10,6 +10,9 @@ allows you to explore some quantitative measures of comparing quantum states and
 
 Distance measures between states or processes can be subtle. We recommend thinking about the *operational interpretation* of each measure before using the measure.
 
+.. toctree::
+
+    examples/distance_measures
 
 Distance measures between quantum states
 ----------------------------------------
