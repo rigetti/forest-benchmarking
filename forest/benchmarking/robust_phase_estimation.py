@@ -402,7 +402,7 @@ def estimate_phase_from_moments(xs: List, ys: List, x_stds: List, y_stds: List,
     return theta_est % (2 * pi)  # return value between 0 and 2pi
 
 
-def robust_phase_estimate(qubits: Sequence[int], results: List[List[ExperimentResult]]) \
+def robust_phase_estimate(results: List[List[ExperimentResult]], qubits: Sequence[int]) \
         -> Union[float, Sequence[float]]:
     """
     Provides the estimate of the phase for an RPE experiment with results.
@@ -591,6 +591,9 @@ def do_rpe(qc: QuantumComputer, rotation: Program, changes_of_basis: List[Progra
         rb decay. Each decay should be interpreted as a 'simultaneous rb decay' as the sequences
         on each group of qubits will be run concurrently.
     :param num_depths: the number of depths in the experiment
+    :param multiplicative_factor: ad-hoc factor to multiply the number of shots per iteration. See
+        num_trials() which computes the optimal number of shots per iteration.
+    :param additive_error: estimate of the max additive error in the experiment, see num_trials()
     :param active_reset: Boolean flag indicating whether experiments should begin with an
         active reset instruction (this can make the collection of experiments run a lot faster).
     :param mitigate_readout_errors: Boolean flag indicating whether bias due to imperfect

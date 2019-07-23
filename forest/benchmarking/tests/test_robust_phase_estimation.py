@@ -40,7 +40,7 @@ def test_noiseless_rpe(qvm):
                                          *rpe.all_eigenvector_prep_meas_settings([q], I(q)),
                                          num_depths=num_depths)
     results = rpe.acquire_rpe_data(qvm, expts, multiplicative_factor=mult_factor)
-    est = rpe.robust_phase_estimate([q], results)
+    est = rpe.robust_phase_estimate(results, [q])
     assert np.abs(angle - est) < 2 * np.sqrt(rpe.get_variance_upper_bound(num_depths, mult_factor))
 
 
@@ -79,7 +79,7 @@ def test_noisy_rpe(qvm):
         add_noise_to_experiments(expts, 25 * 10 ** (-6.), 20 * 10 ** (-6.), .92, .87, q)
         results = rpe.acquire_rpe_data(qvm, expts, multiplicative_factor=5.,
                                        additive_error=add_error)
-        phase_estimate = rpe.robust_phase_estimate([q], results)
+        phase_estimate = rpe.robust_phase_estimate(results, [q])
         assert np.allclose(phase_estimate, angle, atol=tolerance)
 
 
