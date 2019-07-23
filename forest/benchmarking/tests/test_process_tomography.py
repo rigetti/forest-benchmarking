@@ -152,4 +152,4 @@ def test_do_tomography(qvm):
     process = Program(H(qubit))
     est, _, _ = do_tomography(qvm, process, qubits=[qubit], kind='process')
 
-    np.testing.assert_allclose(est, kraus2choi(mat.H), atol=.01)
+    np.testing.assert_allclose(est, kraus2choi(mat.H), atol=.1)
