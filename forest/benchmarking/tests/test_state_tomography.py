@@ -6,7 +6,7 @@ from requests.exceptions import RequestException
 from forest.benchmarking.compilation import basic_compile
 from forest.benchmarking.operator_tools.random_operators import haar_rand_unitary
 from forest.benchmarking.tomography import generate_state_tomography_experiment, _R, \
-    iterative_mle_state_estimate, estimate_variance, linear_inv_state_estimate
+    iterative_mle_state_estimate, estimate_variance, linear_inv_state_estimate, do_tomography
 from pyquil.api import ForestConnection, QuantumComputer, QVM
 from pyquil.api._compiler import _extract_attribute_dictionary_from_program
 from pyquil.api._qac import AbstractCompiler
@@ -278,3 +278,12 @@ def test_variance_bootstrap(two_q_tomo_fixture):
                                               project_to_physical=False)
 
     np.testing.assert_allclose(purity, boot_purity, atol=2 * np.sqrt(boot_var), rtol=0.01)
+
+
+def test_do_tomography(qvm):
+    qubit = 1
+    state_prep = Program(H(qubit))
+    state_est, _, _ = do_tomography(qvm, state_prep, qubits=[qubit], kind='state')
+
+    np.testing.assert_allclose(state_est, PROJ_PLUS, atol=.01)
+

@@ -195,3 +195,13 @@ def test_unitarity(qvm, benchmarker):
                                                  2 ** len(qubits)))
     # TODO: properly incorporate unitarity error into tol
     np.testing.assert_allclose(expected_p, observed_p, atol=tol)
+
+
+def test_do_rb(qvm, benchmarker):
+    qubit_groups = [(0,), (1,)]
+    num_sequences_per_depth = 20
+    depths = [2, 10, 20] * num_sequences_per_depth
+    rb_decays, _, _ = do_rb(qvm, benchmarker, qubit_groups, depths)
+    # just test that this is some reasonable number.
+    assert .5 < rb_decays[(0,)] < 1.1
+    assert .5 < rb_decays[(1,)] < 1.1

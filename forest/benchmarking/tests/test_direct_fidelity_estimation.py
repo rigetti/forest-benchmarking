@@ -1,5 +1,7 @@
-from forest.benchmarking.direct_fidelity_estimation import generate_exhaustive_state_dfe_experiment, generate_exhaustive_process_dfe_experiment, \
-    generate_monte_carlo_state_dfe_experiment, generate_monte_carlo_process_dfe_experiment, acquire_dfe_data, estimate_dfe
+from forest.benchmarking.direct_fidelity_estimation import \
+    (generate_exhaustive_state_dfe_experiment, generate_exhaustive_process_dfe_experiment,
+     generate_monte_carlo_state_dfe_experiment, generate_monte_carlo_process_dfe_experiment,
+     acquire_dfe_data, estimate_dfe, do_dfe)
 
 from pyquil import Program
 from pyquil.api import BenchmarkConnection
@@ -75,7 +77,7 @@ def test_monte_carlo_process_dfe(benchmarker: BenchmarkConnection):
         for oneq_state in setting.in_state.states:
             prog += _one_q_state_prep(oneq_state)
         prog += process
-        print(setting.in_state, setting.observable)
+
         expectation = wfnsim.reset().do_program(prog).expectation(setting.observable)
         assert_almost_equal(expectation, 1., decimal=7)
 
@@ -108,3 +110,17 @@ def test_acquire_dfe_data(benchmarker: BenchmarkConnection, qvm):
 
     assert_allclose(fid_est, 1.0)
     assert_allclose(fid_std_err, 0.0)
+
+
+def test_do_dfe(qvm, benchmarker):
+    qubit = 1
+    state_prep = Program(H(qubit))
+    (fidelity_est, std_err), _, _ = do_dfe(qvm, benchmarker, state_prep, qubits=[qubit],
+                                           kind='state')
+
+    assert_allclose(fidelity_est, 1.0)
+
+    qubits = [1]
+    process = Program(X(*qubits))
+    (fidelity_est, std_err), _, _ = do_dfe(qvm, benchmarker, process, qubits, kind='process')
+    assert_allclose(fidelity_est, 1.0)
