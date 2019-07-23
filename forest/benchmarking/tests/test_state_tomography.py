@@ -285,5 +285,5 @@ def test_do_tomography(qvm):
     state_prep = Program(H(qubit))
     state_est, _, _ = do_tomography(qvm, state_prep, qubits=[qubit], kind='state')
 
-    np.testing.assert_allclose(state_est, PROJ_PLUS, atol=.01)
+    np.testing.assert_allclose(state_est, PROJ_PLUS, atol=.1)
 
