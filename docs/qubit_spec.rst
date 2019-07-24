@@ -21,6 +21,7 @@ General Functions
 
     acquire_qubit_spectroscopy_data
     get_stats_by_qubit
+    do_t1_or_t2
 
 T1
 -----------------
