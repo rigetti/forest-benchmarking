@@ -578,8 +578,14 @@ def do_rpe(qc: QuantumComputer, rotation: Program, changes_of_basis: List[Progra
                  List[ObservablesExperiment],
                  List[List[ExperimentResult]]]:
     """
-    A wrapper around experiment generation, data acquisition, and estimation that runs a RB
-    experiment on the qubit_groups and returns the rb_decay along with the experiments and results.
+    A wrapper around experiment generation, data acquisition, and estimation that runs robust
+    phase estimation.
+
+    The `changes_of_basis` paired with `qubit_groups` implicitly specify the accumulation of
+    which phases are being measured with respect to increasing applications of `rotation`. This
+    can be used to facilitate multiple 'parallel' RPE experiments that measure the phase of
+    several single qubit gates in parallel. It also allows for cross talk experiments where one
+    physical gate drives effective rotations that are monitored on spectator qubits.
 
     :param qc: A quantum computer object on which the experiment will run.
     :param rotation: the program or gate whose angle of rotation is to be estimated. Note that
