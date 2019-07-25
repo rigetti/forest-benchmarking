@@ -362,6 +362,15 @@ def get_rand_su4_template():
     return CircuitTemplate([func])
 
 
+def get_switch_basis_x_z_template():
+    def func(graph, **kwargs):
+        prog = Program()
+        for node in graph.nodes:
+            prog.inst(H(node))
+        return prog
+    return CircuitTemplate([func])
+
+
 def generate_volumetric_program_array(qc: QuantumComputer, ckt: CircuitTemplate, widths: List[int],
                                       depths: List[int], num_circuit_samples: int,
                                       graph: nx.Graph = None, pattern = None):
