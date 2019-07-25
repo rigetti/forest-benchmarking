@@ -1,4 +1,4 @@
-from typing import Tuple, Sequence, Callable, Any, List, Union
+from typing import Tuple, Sequence, Callable, Dict, List, Union
 from copy import copy
 import networkx as nx
 import numpy as np
@@ -9,6 +9,7 @@ from scipy.spatial.distance import hamming
 from scipy.special import comb
 from dataclasses import dataclass, field
 from functools import partial
+import matplotlib.pyplot as plt
 
 from pyquil.quilbase import Pragma, Gate, DefGate, DefPermutationGate
 from pyquil.quilatom import QubitPlaceholder
@@ -377,7 +378,7 @@ def generate_volumetric_program_array(qc: QuantumComputer, ckt: CircuitTemplate,
     if graph is None:
         graph = qc.qubit_topology()
 
-    programs = {width: {depth: []} for width in widths for depth in depths}
+    programs = {width: {depth: [] for depth in depths} for width in widths}
 
     for width, depth_array in programs.items():
         for depth, prog_list in depth_array.items():
@@ -396,8 +397,8 @@ def acquire_volumetric_data(qc: QuantumComputer, program_array, num_shots: int =
     if use_active_reset:
         reset_prog += RESET()
 
-    results = {width: {depth: []} for width, depth_array in program_array.items()
-               for depth in depth_array.keys()}
+    results = {width: {depth: [] for depth in depth_array.keys()}
+               for width, depth_array in program_array.items()}
 
     for width, depth_array in program_array.items():
         for depth, prog_list in depth_array.items():
@@ -442,8 +443,14 @@ def acquire_volumetric_data(qc: QuantumComputer, program_array, num_shots: int =
 # Analysis
 # ==================================================================================================
 def get_error_hamming_weight_distributions(noisy_results, perfect_results):
-    distrs = {width: {depth: []} for width, depth_array in noisy_results.items()
-               for depth in depth_array.keys()}
+
+    # allow for perfect result to depend only on width (pass in a list)
+    if not isinstance(perfect_results, dict):
+        perfect_results = {width: {depth: perfect_results[width] for depth in depth_array.keys()}
+              for width, depth_array in noisy_results.items()}
+
+    distrs = {width: {depth: [] for depth in depth_array.keys()}
+              for width, depth_array in noisy_results.items()}
 
     for width, depth_array in distrs.items():
         for depth, samples in depth_array.items():
@@ -460,18 +467,23 @@ def get_error_hamming_weight_distributions(noisy_results, perfect_results):
                 hamm_wt_distr =  get_hamming_wt_distr_from_list(hamm_dist_per_shot, width)
                 samples.append(np.asarray(hamm_wt_distr))
     return distrs
+
+
+def get_average_of_distributions(distrs):
+    # take in output of `get_error_hamming_weight_distributions`
+    return {w: {d: sum(distr_list) / len(distr_list) for d, distr_list in d_arr.items()}
+            for w, d_arr in distrs.items()}
+
+
+def get_success_probabilites(noisy_results, perfect_results):
+    avg_distrs = get_average_of_distributions(get_error_hamming_weight_distributions(
+        noisy_results, perfect_results))
+    return {w: {d: distr[0] for d, distr in d_distrs.items()} for w, d_distrs in avg_distrs.items()}
+
+
+# def get_total_variation_dist(distrs1, distrs2):
+
                 # TODO: separate these out
-                # wt_dist_rand = np.asarray(hamming_dist_rand(width))  # random guessing
-                # wt_dist_ideal = np.zeros_like(wt_dist_rand)  # perfect
-                # wt_dist_ideal[0] = 1
-
-                # Total variation distance
-                # tvd_data_ideal = tvd(wt_dist_data, wt_dist_ideal)
-                # tvd_data_rand = tvd(wt_dist_data, wt_dist_rand)
-
-                # Probability of success
-                # pr_suc_data = hamm_wt_distr[0]
-                # pr_suc_rand = wt_dist_rand[0]
 
                 # Probability of success with basement[ log_2(width) - 1 ] errors
                 # I.e. error when you allow for a logarithmic number of bit flips from the answer
@@ -532,66 +544,75 @@ def get_hamming_wt_distr_from_list(wt_list, n_bits):
     return [wt_list.count(weight) / num_shots for weight in range(n_bits + 1)]
 
 
-def hamming_dist_rand(num_bits: int, pad: int = 0):
-    """Return a list representing the Hamming distribution of
-    a particular bit string, of length num_bits, to randomly drawn bits.
+def get_random_hamming_wt_distr(num_bits: int):
+    """
+    Return the distribution of Hamming weight for randomly drawn bitstrings of length num_bits.
+
+    This is equivalent to the error distribution, e.g. from
+    :func:`get_error_hamming_weight_distributions` where the `noisy_results` are entirely random.
+    Comparing real data against this distribution may be a useful benchmark in determining
+    whether the real data contains any actual information.
 
     :param num_bits: number of bits in string
-    :param pad: number of zero elements to pad
-    returns: list of hamming weights with zero padding
+    returns: list of hamming weights
     """
-    N = 2 ** num_bits
-    pr = [comb(num_bits, ndx) / (2 ** num_bits) for ndx in range(0, num_bits + 1)]
-    padding = [0 for _ in range(pad)]
-    return flatten_list([pr, padding])
+    # comb(N, k) = N choose k
+    return [comb(num_bits, num_ones) / (2 ** num_bits) for num_ones in range(0, num_bits + 1)]
 
 
-def flatten_list(xlist):
-    """Flattens a list of lists.
+def plot_error_distributions(distr_arr: Dict[int, Dict[int, Sequence[float]]], widths=None,
+                             depths=None, plot_rand_distr=False):
+    if widths is None:
+        widths = distr_arr.keys()
 
-    :param xlist: list of lists
-    :returns: a flattened list
-    """
-    return [item for sublist in xlist for item in sublist]
+    if depths is None:
+        depths = list(distr_arr.values())[0].keys()
 
+    legend = ['data']
+    if plot_rand_distr:
+        legend.append('random')
 
-# helper functions to manipulate the dataframes
-def get_hamming_dist(df: pd.DataFrame, depth_val: int, width_val: int):
-    """
-    Get  Hamming distance from a dataframe for a particular depth and width.
+    fig = plt.figure(figsize=(18, 6 * len(depths)))
+    axs = fig.subplots(len(depths), len(widths), sharex='col', sharey=True)
 
-    :param df: dataframe generated from data from 'get_random_classical_circuit_results'
-    :param depth_val: depth of quantum circuit
-    :param width_val: width of quantum circuit
-    :return: smaller dataframe
-    """
-    idx = df.Depth == depth_val
-    jdx = df.Width == width_val
-    return df[idx & jdx].reset_index(drop=True)
+    for w_idx, w in enumerate(widths):
+        x_labels = np.arange(0, w + 1)
+        depth_distrs = distr_arr[w]
 
+        if plot_rand_distr:
+            rand_distr = get_random_hamming_wt_distr(w)
 
-def get_hamming_dists_fn_width(df: pd.DataFrame, depth_val: int):
-    """
-    Get  Hamming distance from a dataframe for a particular depth.
+        for d_idx, d in enumerate(depths):
+            distr = depth_distrs[d]
 
-    :param df: dataframe generated from data from 'get_random_classical_circuit_results'
-    :param depth_val: depth of quantum circuit
-    :return: smaller dataframe
-    """
-    idx = df.Depth == depth_val
-    return df[idx].reset_index(drop=True)
+            idx = d_idx * len(widths) + w_idx
+            if len(widths) == len(depths) == 1:
+                ax = axs
+            else:
+                ax = axs.flatten()[idx]
+            ax.bar(x_labels, distr, width=0.61, align='center')
 
+            if plot_rand_distr:
+                ax.bar(x_labels, rand_distr, width=0.31, align='center')
 
-def get_hamming_dists_fn_depth(df: pd.DataFrame, width_val: int):
-    """
-    Get  Hamming distance from a dataframe for a particular width.
+            ax.set_xticks(x_labels)
+            ax.grid(axis='y', alpha=0.75)
+            ax.set_title(f'w = {w}, d = {d}', size=20)
 
-    :param df: dataframe generated from data from 'get_random_classical_circuit_results'
-    :param width_val: width of quantum circuit
-    :return: smaller dataframe
-    """
-    jdx = df.Width == width_val
-    return df[jdx].reset_index(drop=True)
+            for tick in ax.xaxis.get_major_ticks():
+                tick.label.set_fontsize(15)
+
+            for tick in ax.yaxis.get_major_ticks():
+                tick.label.set_fontsize(15)
+
+    fig.legend(legend, loc='right', fontsize=15)
+    plt.ylim(0, 1)
+    fig.text(0.5, 0.05, 'Hamming Weight of Error', ha='center', va='center', fontsize=20)
+    fig.text(0.06, 0.5, 'Relative Frequency of Occurrence', ha='center', va='center',
+             rotation='vertical', fontsize=20)
+    plt.subplots_adjust(wspace=0, hspace=.15, left=.1)
+
+    return fig, axs
 
 
 def basement_function(number: float):
