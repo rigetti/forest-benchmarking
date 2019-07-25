@@ -1,4 +1,4 @@
-from typing import Tuple, Sequence, Callable, Any, List
+from typing import Tuple, Sequence, Callable, Any, List, Union
 from copy import copy
 import networkx as nx
 import numpy as np
@@ -7,7 +7,7 @@ import itertools
 import pandas as pd
 from scipy.spatial.distance import hamming
 from scipy.special import comb
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import partial
 
 from pyquil.quilbase import Pragma, Gate, DefGate, DefPermutationGate
@@ -23,9 +23,24 @@ from forest.benchmarking.distance_measures import total_variation_distance as tv
 from forest.benchmarking.operator_tools.random_operators import haar_rand_unitary
 
 
+def make_default_pattern(num_generators):
+    """
+    By default sweep over each generator in sequence n many times
+
+    :param num_generators:
+    :return:
+    """
+    return [(list(range(num_generators)), 'n')]
+
+# TODO: perhaps best for pattern to be sample-time specified given ambiguity in append
+
 @dataclass
 class CircuitTemplate:
-    generators: List[Callable]
+    generators: List[Callable] = field(default_factory=lambda : [])
+    pattern: List[Union[int, Tuple[List, int], Tuple[List, str]]] = field(init=False, repr=False)
+
+    def __post_init__(self):
+        self.pattern  = make_default_pattern(len(self.generators))
 
     # def create_unit(self):
     #     # returns a function that can be used as a generator in another template
@@ -34,10 +49,20 @@ class CircuitTemplate:
     #                                                          self.generators)
 
     def append(self, other):
-        self.generators += other.generators
+        """
+        Mutates the CircuitTemplate object by appending new generators
 
-        # TODO: store the pattern?
-        # TODO: add reps keyword to pattern?
+        :param other:
+        :return:
+        """
+        if isinstance(other, list):
+            self.generators += other
+        elif isinstance(other, CircuitTemplate):
+            self.generators += other.generators
+            # make default pattern since it is unclear how to compose general patterns.
+            self.pattern = make_default_pattern(len(self.generators))
+        else:
+            raise ValueError(f'Cannot append type {type(other)}.')
 
     def __add__(self, other):
         """
@@ -47,7 +72,8 @@ class CircuitTemplate:
         :return: A newly concatenated circuit.
         :rtype: Program
         """
-        ckt = CircuitTemplate(self.generators)
+        ckt = CircuitTemplate()
+        ckt.append(self)
         ckt.append(other)
         return ckt
 
@@ -63,8 +89,7 @@ class CircuitTemplate:
             graph = random.choice(generate_connected_subgraphs(graph, width))
 
         if pattern is None:
-            # by default sweep over each generator in sequence repetitions many times
-            pattern = range(len(self.generators))
+            pattern = self.pattern
 
         if sequence is None:
             sequence = []
@@ -77,8 +102,17 @@ class CircuitTemplate:
                     sequence.append(self.generators[elem](graph=graph, qc=qc, width=width,
                                                           sequence=sequence))
                 elif len(elem) == 2:
+
                     # elem[0] is a pattern that we will execute elem[1] many times
-                    for _ in range(elem[1]):
+                    if elem[1] == 'n':
+                        # n indicates `repetitions` number of times
+                        reps = repetitions
+                    elif isinstance(elem[1], int) and elem[1]>=0:
+                        reps = elem[1]
+                    else:
+                        raise ValueError('Repetitions must be specified by int or `n`.')
+
+                    for _ in range(reps):
                         _do_pattern(elem[0])
                 else:
                     raise ValueError('Pattern is malformed. A pattern is a list where each element '
@@ -86,8 +120,7 @@ class CircuitTemplate:
                                      'where num is an integer indicating how many times to '
                                      'repeat the associated pattern_i.')
 
-        for _ in range(repetitions):
-            _do_pattern(pattern)
+        _do_pattern(pattern)
 
         return sequence
 
