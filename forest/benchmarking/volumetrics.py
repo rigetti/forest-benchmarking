@@ -4,18 +4,17 @@ import networkx as nx
 import numpy as np
 import random
 import itertools
-import pandas as pd
 from scipy.spatial.distance import hamming
 from scipy.special import comb
 from dataclasses import dataclass, field
-from functools import partial
 import matplotlib.pyplot as plt
 
 from pyquil.quilbase import Pragma, Gate, DefGate, DefPermutationGate
 from pyquil.quilatom import QubitPlaceholder
 from pyquil.quil import Program, address_qubits, merge_programs
 from pyquil.api import QuantumComputer, BenchmarkConnection
-from pyquil.gates import CNOT, CCNOT, Z, X, I, H, CZ, MEASURE, RESET
+from pyquil.gates import *
+from pyquil.paulis import exponential_map, sX, sZ
 from rpcq.messages import TargetDevice
 from rpcq._utils import RPCErrorError
 
@@ -33,7 +32,8 @@ def make_default_pattern(num_generators):
     """
     return [(list(range(num_generators)), 'n')]
 
-# TODO: perhaps best for pattern to be sample-time specified given ambiguity in append
+# TODO: perhaps best for pattern to be sample-time specified, given ambiguity in append; however,
+#  it convenient to keep a persistent state.
 
 @dataclass
 class CircuitTemplate:
@@ -42,12 +42,6 @@ class CircuitTemplate:
 
     def __post_init__(self):
         self.pattern  = make_default_pattern(len(self.generators))
-
-    # def create_unit(self):
-    #     # returns a function that can be used as a generator in another template
-    #     return lambda qc, graph, width, depth, sequence: sum(gen(qc, graph, width, depth,
-    #                                                              sequence) for gen in
-    #                                                          self.generators)
 
     def append(self, other):
         """
@@ -218,12 +212,8 @@ def random_two_qubit_cliffords(bm: BenchmarkConnection, graph: nx.Graph):
     return prog
 
 
-def dagger_all_prior(sequence: List[Program]):
-    return merge_programs(sequence).dagger()
-
-
-def dagger_previous(sequence: List[Program]):
-    return sequence[-1].dagger()
+def dagger_previous(sequence: List[Program], n: int = 1):
+    return merge_programs(sequence[-n:]).dagger()
 
 
 def _qubit_perm_to_bitstring_perm(qubit_permutation: List[int]):
@@ -252,12 +242,21 @@ def random_qubit_permutation(graph: nx.Graph):
 def random_su4_pairs(graph: nx.Graph):
     qubits = list(graph.nodes)
     prog = Program()
+    # ignore the edges in the graph
     for q1, q2 in zip(qubits[::2], qubits[1::2]):
         matrix = haar_rand_unitary(4)
         gate_definition = DefGate(f"RSU4_{q1}_{q2}", matrix)
         RSU4 = gate_definition.get_constructor()
         prog += gate_definition
         prog += RSU4(q1, q2)
+    return prog
+
+
+def maxcut_cost_unitary(graph: nx.Graph, layer_number):
+    prog = Program()
+    theta = prog.declare('theta_' + str(layer_number), memory_type='REAL')
+    for edge in graph.edges:
+        exponential_map(sZ(edge[0] * sZ(edge[1])))(theta)
     return prog
 
 
@@ -301,44 +300,40 @@ def graph_restricted_compilation(qc, graph, program):
 
 def get_rand_1q_template(gates: Sequence[Gate]):
     def func(graph, **kwargs):
-        partial_func = partial(random_single_qubit_gates, gates=gates)
-        return partial_func(graph)
+        return random_single_qubit_gates(graph, gates=gates)
     return CircuitTemplate([func])
 
 
 def get_rand_2q_template(gates: Sequence[Gate]):
     def func(graph, **kwargs):
-        partial_func = partial(random_two_qubit_gates, gates=gates)
-        return partial_func(graph)
+        return random_two_qubit_gates(graph, gates=gates)
     return CircuitTemplate([func])
 
 
 def get_rand_1q_cliff_template(bm: BenchmarkConnection):
     def func(graph, **kwargs):
-        partial_func = partial(random_single_qubit_cliffords, bm=bm)
-        return partial_func(graph=graph)
+        return random_single_qubit_cliffords(bm, graph)
     return CircuitTemplate([func])
 
 
 def get_rand_2q_cliff_template(bm: BenchmarkConnection):
     def func(graph, **kwargs):
-        partial_func = partial(random_two_qubit_cliffords, bm=bm)
-        return partial_func(graph=graph)
+        return random_two_qubit_cliffords(bm, graph)
     return CircuitTemplate([func])
 
 
 def get_dagger_all_template():
     def func(qc, sequence, **kwargs):
-        prog = dagger_all_prior(sequence)
+        prog = dagger_previous(sequence, len(sequence))
         native_quil = qc.compiler.quil_to_native_quil(prog)
         # remove gate definition and HALT
         return Program([instr for instr in native_quil.instructions][:-1])
     return CircuitTemplate([func])
 
 
-def get_dagger_previous():
+def get_dagger_previous(n: int = 1):
     def func(qc, sequence, **kwargs):
-        prog = dagger_previous(sequence)
+        prog = dagger_previous(sequence, n)
         native_quil = qc.compiler.quil_to_native_quil(prog)
         # remove gate definition and HALT
         return Program([instr for instr in native_quil.instructions][:-1])
@@ -370,6 +365,43 @@ def get_switch_basis_x_z_template():
             prog.inst(H(node))
         return prog
     return CircuitTemplate([func])
+
+
+def get_all_H_template():
+    return get_switch_basis_x_z_template()
+
+
+def get_param_local_RX_template():
+    # remember that RX(theta) = e^(i theta X/2)
+    def func(graph, sequence, **kwargs):
+        prog = Program()
+        theta = prog.declare('theta_' + str(len(sequence)), memory_type='REAL')
+        for node in graph.nodes:
+            prog += H(node)
+            prog += RZ(theta, node)
+            prog += H(node)
+        return prog
+    return CircuitTemplate([func])
+
+
+def get_param_maxcut_graph_cost_template(maxcut_graph=None):
+    if maxcut_graph is None:
+        def default_graph_func(graph, qc, sequence, **kwargs):
+            prog = maxcut_cost_unitary(graph, len(sequence))
+            native_quil = qc.compiler.quil_to_native_quil(prog)
+            # remove gate definition and HALT
+            return Program([instr for instr in native_quil.instructions][:-1])
+        return CircuitTemplate([default_graph_func])
+    else:
+        def func(graph, qc, sequence, **kwargs):
+            if len(maxcut_graph.nodes) > len(graph.nodes):
+                raise ValueError("The maxcut graph must have fewer nodes than the number of "
+                                 "qubits.")
+            prog = maxcut_cost_unitary(maxcut_graph, len(sequence))
+            native_quil = graph_restricted_compilation(qc, graph, prog)
+            # remove gate definitions and HALT
+            return Program([instr for instr in native_quil.instructions][:-1])
+        return CircuitTemplate([func])
 
 
 def generate_volumetric_program_array(qc: QuantumComputer, ckt: CircuitTemplate, widths: List[int],
@@ -460,8 +492,14 @@ def get_error_hamming_weight_distributions(noisy_results, perfect_results):
 
             for noisy_shots, ideal_result in zip(noisy_ckt_sample_results,
                                                  perfect_ckt_sample_results):
+                if len(ideal_result) > 1:
+                    raise ValueError("You have provided ideal results with more than one shot; "
+                                     "this method is intended to analyze results where the ideal "
+                                     "result is deterministic, which makes multiple shots "
+                                     "unnecessary.")
 
-                hamm_dist_per_shot = [hamming_distance(ideal_result, shot) for shot in noisy_shots]
+                hamm_dist_per_shot = [hamming_distance(ideal_result, shot) for shot in
+                                      noisy_shots]
 
                 # Hamming weight distribution
                 hamm_wt_distr =  get_hamming_wt_distr_from_list(hamm_dist_per_shot, width)
@@ -475,13 +513,22 @@ def get_average_of_distributions(distrs):
             for w, d_arr in distrs.items()}
 
 
-def get_success_probabilites(noisy_results, perfect_results):
+def get_success_probabilities(noisy_results, perfect_results,
+                              allowed_errors: Union[int, Callable[[int], int]] = 0):
+    if isinstance(allowed_errors, int):
+        error_func = lambda num_bits: allowed_errors
+    else:
+        error_func = allowed_errors
+
     avg_distrs = get_average_of_distributions(get_error_hamming_weight_distributions(
         noisy_results, perfect_results))
-    return {w: {d: distr[0] for d, distr in d_distrs.items()} for w, d_distrs in avg_distrs.items()}
+
+    return {w: {d: sum(distr[0:error_func(w)+1]) for d, distr in d_distrs.items()}
+            for w, d_distrs in avg_distrs.items()}
 
 
-# def get_total_variation_dist(distrs1, distrs2):
+def get_total_variation_dist(distr1, distr2):
+    return tvd(np.asarray([distr1]).T, np.asarray([distr2]).T)
 
                 # TODO: separate these out
 
@@ -615,20 +662,18 @@ def plot_error_distributions(distr_arr: Dict[int, Dict[int, Sequence[float]]], w
     return fig, axs
 
 
+def basement_log_function(number: float):
+    return basement_function(np.log2(number))
+
+
 def basement_function(number: float):
     """
-    Once you are in the basement you can't go lower. Defined as
-
-    basement_function(number) = |floor(number)*heaviside(number,0)|,
-
-    where heaviside(number,0) implies the value of the step function is
-    zero if number is zero.
+    Return the floor of the number, or 0 if the number is negative.
 
     :param number: the basement function is applied to this number.
     :returns: basement of the number
     """
-    basement_of_number = np.abs(np.floor(number) * np.heaviside(number, 0))
-    return basement_of_number
+    return max(int(np.floor(number)), 0)
 
 
 # ==================================================================================================
