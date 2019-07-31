@@ -200,7 +200,7 @@ def do_t1_or_t2(qc: QuantumComputer, qubits: Sequence[int], times: Sequence[floa
 #   T2 star and T2 echo functions
 # ==================================================================================================
 def generate_t2_star_experiments(qubits: Sequence[int], times: Sequence[float],
-                                 detuning: float = 5e6) -> List[ObservablesExperiment]:
+                                 detuning: float = 1e6) -> List[ObservablesExperiment]:
     """
     Return ObservablesExperiments containing programs which constitute a T2 star experiment to
     measure the T2 star coherence decay time for each qubit in qubits.
@@ -233,7 +233,7 @@ def generate_t2_star_experiments(qubits: Sequence[int], times: Sequence[float],
 
 
 def generate_t2_echo_experiments(qubits: Sequence[int], times: Sequence[float],
-                                 detuning: float = 5e6) -> List[ObservablesExperiment]:
+                                 detuning: float = 1e6) -> List[ObservablesExperiment]:
     """
     Return ObservablesExperiments containing programs which constitute a T2 echo experiment to
     measure the T2 echo coherence decay time.
@@ -260,6 +260,7 @@ def generate_t2_echo_experiments(qubits: Sequence[int], times: Sequence[float],
     expts = []
     for t in times:
         half_time = round(t/2, 7)  # enforce 100ns boundaries
+        t = round(t, 7)
         program = Program()
         settings = []
         for q in qubits:
@@ -276,7 +277,7 @@ def generate_t2_echo_experiments(qubits: Sequence[int], times: Sequence[float],
 
 
 def fit_t2_results(times: Sequence[float], y_expectations: Sequence[float],
-                   y_std_errs: Sequence[float] = None, detuning: float = 5e6,
+                   y_std_errs: Sequence[float] = None, detuning: float = 1e6,
                    param_guesses: tuple = None) -> ModelResult:
     """
     Wrapper for fitting the results of a ObservablesExperiment; simply extracts key parameters
@@ -382,7 +383,7 @@ def fit_rabi_results(angles: Sequence[float], z_expectations: Sequence[float],
     baseline
         this is the amplitude + p1_given_0
 
-    frequency
+    angular_freq
         the ratio of the actual angle rotated over the intended control angle
         e.g. If our gates are incorrectly calibrated to apply an over-rotation then
         frequency will be greater than 1; the intended control angle will be smaller than the
@@ -391,7 +392,7 @@ def fit_rabi_results(angles: Sequence[float], z_expectations: Sequence[float],
     :param angles: the angles at which the z_expectations were measured.
     :param z_expectations: expectation of Z at each angle for a qubit initialized to 0
     :param z_std_errs: std_err of the Z expectation, optionally used to weight the fit.
-    :param param_guesses: guesses for the (amplitude, offset, baseline, frequency) parameters
+    :param param_guesses: guesses for the (amplitude, offset, baseline, angular_freq) parameters
     :return: a ModelResult fit with estimates of the Model parameters, including the frequency
         which gives the ratio of actual angle over intended control angle
     """
@@ -476,7 +477,7 @@ def fit_cz_phase_ramsey_results(angles: Sequence[float], y_expectations: Sequenc
     baseline
         this is the amplitude + p1_given_0
 
-    frequency
+    angular_freq
         the ratio of the actual angle rotated over the intended control angle
         e.g. If our gates are incorrectly calibrated to apply an over-rotation then
         frequency will be greater than 1; the intended control angle will be smaller than the
@@ -485,7 +486,7 @@ def fit_cz_phase_ramsey_results(angles: Sequence[float], y_expectations: Sequenc
     :param angles: the angles at which the z_expectations were measured.
     :param y_expectations: expectation of Y measured at each time for a qubit
     :param y_std_errs: std_err of the Y expectation, optionally used to weight the fit.
-    :param param_guesses: guesses for the (amplitude, offset, baseline, frequency) parameters
+    :param param_guesses: guesses for the (amplitude, offset, baseline, angular_freq) parameters
     :return: a ModelResult fit with estimates of the Model parameters, including the offset which
         is an estimate of the phase imparted on the measure qubit by the CZ gate.
     """

@@ -1,4 +1,5 @@
 import numpy as np
+from numpy import pi
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 from lmfit import Model
@@ -83,14 +84,15 @@ def decaying_cosine(x: np.ndarray, amplitude: float, decay_time: float, offset: 
     Calculate exponentially decaying sinusoid at a series of points.
 
     :param x: The independent variable with respect to which decay is calculated.
-    :param amplitude: The amplitude of the decaying sinusoid.
+    :param amplitude: The amplitude of the decaying cosine.
     :param decay_time: The inverse decay rate - e.g. T2 - of the decay curve.
-    :param offset: The argument offset of the sinusoidal curve, o for sin(x - o)
-    :param baseline: The baseline of the sinusoid, e.g. b for sin(x) + b
-    :param frequency: The frequency of the sinusoid, e.g. f for sin(f x)
+    :param offset: The argument offset of the sinusoidal curve, o for cos(x - o)
+    :param baseline: The baseline of the sinusoid, e.g. b for cos(x) + b
+    :param frequency: The frequency of the sinusoid, e.g. f for cos(f x)
     :return: The exponentially decaying sinusoid evaluated at the point(s) x
     """
-    return amplitude * np.exp(-1 * x / decay_time) * np.cos(frequency * (x - offset)) + baseline
+    return amplitude * np.exp(-1 * x / decay_time) * np.cos(2 * pi * frequency * x + offset) + \
+           baseline
 
 
 def fit_decaying_cosine(x: np.ndarray, y: np.ndarray, weights: np.ndarray = None,
@@ -113,7 +115,7 @@ def fit_decaying_cosine(x: np.ndarray, y: np.ndarray, weights: np.ndarray = None
 
 
 def shifted_cosine(x: np.ndarray, amplitude: float, offset: float, baseline: float,
-                   frequency: float) -> np.ndarray:
+                   angular_freq: float) -> np.ndarray:
     """
     Model for a cosine shifted vertically by the amount baseline.
 
@@ -121,10 +123,10 @@ def shifted_cosine(x: np.ndarray, amplitude: float, offset: float, baseline: flo
     :param amplitude: The amplitude of the cosine.
     :param offset: The argument offset of the sinusoidal curve, o for sin(x - o)
     :param baseline: The baseline of the sinusoid, e.g. b for sin(x) + b
-    :param frequency: The frequency of the sinusoid, e.g. f for sin(f x)
+    :param angular_freq: The frequency of the sinusoid, e.g. f for sin(f x)
     :return: The sinusoidal response at the given phases(s).
     """
-    return amplitude * np.cos(frequency * x + offset) + baseline
+    return amplitude * np.cos(angular_freq * x + offset) + baseline
 
 
 def fit_shifted_cosine(x: np.ndarray, y: np.ndarray, weights: np.ndarray = None,
@@ -142,7 +144,7 @@ def fit_shifted_cosine(x: np.ndarray, y: np.ndarray, weights: np.ndarray = None,
     decay_model = Model(shifted_cosine)
     params = decay_model.make_params(amplitude=param_guesses[0], offset=param_guesses[1],
                                      baseline=param_guesses[2],
-                                     frequency=param_guesses[3])
+                                     angular_freq=param_guesses[3])
     return decay_model.fit(y, x=x, params=params, weights=weights)
 
 
