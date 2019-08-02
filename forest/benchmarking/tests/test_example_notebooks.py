@@ -2,7 +2,7 @@ import pytest
 from os.path import dirname, join, realpath
 from subprocess import PIPE, run
 
-EXAMPLES_PATH = join(dirname(realpath(__file__)), '..', '..', '..', 'examples')
+EXAMPLES_PATH = join(dirname(realpath(__file__)), '..', '..', '..', 'docs', 'examples')
 
 
 # from https://stackoverflow.com/a/36058256
@@ -22,13 +22,13 @@ def _is_not_empty_str(string: str) -> bool:
 
 
 def check_for_failure_and_empty_output(output: str):
-    '''
+    """
     Searches the string for the word 'failed' and checks if the string is empty of full of spaces.
     If any of those conditions are met False is returned.
 
     :param output: stdout from 'pytest --nbval-lax notebook.ipynb'
     :return: bool
-    '''
+    """
     return (output.find('failed') is -1) and _is_not_empty_str(output)
 
 
@@ -44,10 +44,6 @@ def check_for_failure_and_empty_output(output: str):
 # (2) We are skipping any test that is longer than 30 seconds.
 #
 # (3) Each test function has a print, if the test fails then you can see where it fails from stdout.
-
-
-# TODO: go through the slow notebooks and add the comment `# NBVAL_SKIP` on the offending slow
-#  cells. This will allow us to test imports and other functionality without sacrificing runtime.
 
 
 # ~ 6 min; passed 2019/05/13

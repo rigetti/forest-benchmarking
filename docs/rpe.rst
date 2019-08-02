@@ -18,6 +18,7 @@ API Reference
     :toctree: autogen
     :template: autosumm.rst
 
+    do_rpe
     bloch_rotation_to_eigenvectors
     get_change_of_basis_from_eigvecs
     change_of_basis_matrix_to_quil
