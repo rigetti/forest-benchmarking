@@ -37,6 +37,20 @@ def make_default_pattern(num_generators):
 
 @dataclass
 class CircuitTemplate:
+    """
+    We want to be able to specify various families of circuits and, once specified, randomly
+    sample from the family circuits of various width and depth. 'Width' is simply the number of
+    qubits. 'Depth' is not simply circuit depth but rather the number of some repeated group of
+    gates that constitute some distinctive unit. A depth d circuit could consist of d consecutive
+    rounds of random single qubit, then two qubit gates. It could also mean d consecutive
+    random Cliffords followed by the d conjugated Cliffords that invert the first d gates.
+
+    Because these families of circuits are quite diverse, specifying the family and drawing
+    samples can potentially require a wide variety of parameters. The compiler may be required to
+    map an abstract circuit into native quil; a sample acting on a specific qubit topology
+    may be desired; the sequence of 'layers' generated so far may be necessary to compute an
+    inverse.
+    """
     generators: List[Callable] = field(default_factory=lambda : [])
     pattern: List[Union[int, Tuple[List, int], Tuple[List, str]]] = field(init=False, repr=False)
 
@@ -80,6 +94,45 @@ class CircuitTemplate:
         return self
 
     def sample_sequence(self, graph, repetitions, qc=None, width=None, sequence=None, pattern=None):
+        """
+        The introduction of `pattern` is an attempt to enable some flexibility in specifying what
+        exactly constitutes a single unit of 'depth'. The default behavior is to sample from each
+        generator in series and consider these combined samples as a single unit. Thus,
+        the default pattern is
+
+            [(list(range(num_generators)), 'n')]
+
+        indicating that we combine samples from the generators at sequential indices and repeat
+        this depth many, or 'n' times.
+
+        Another common family this will enable is 'do depth many layers of gates, then invert
+        them at the end'. If the last generator is the inversion generator this is specified by the
+        pattern
+
+            [(list(range(num_generators - 1)), 'n'), -1]
+
+        In general, a `pattern` is a list whose elements are either
+
+            1) an index of a generator
+            2) a tuple of a `pattern` and a number of repetitions
+            3) a tuple of a `pattern` and 'n', indicating depth many repetitions
+
+        TODO:
+        A family that does not easily fit into the current paradigm is the following:
+
+            C_0 P_0 C_1 P_1 ... P_{N-1} C_N P_N C_N^t P_{N+1} ... C_1^t P_{2N-1} C_0^t
+
+        where C_j is a clifford, P_j is a random local Pauli. It could be accommodated if we
+        provided the depth to the inverse layers.
+
+        :param graph:
+        :param repetitions:
+        :param qc:
+        :param width:
+        :param sequence:
+        :param pattern:
+        :return:
+        """
         if width is not None:
             graph = random.choice(generate_connected_subgraphs(graph, width))
 
@@ -152,8 +205,7 @@ def random_two_qubit_gates(graph: nx.Graph, gates:  Sequence[Gate]):
     :return: A program that has two qubit gates randomly placed on the graph edges.
     """
     program = Program()
-    # do the two coloring with pragmas?
-    # no point until fencing is over
+    # TODO: two coloring with pragmas
     for a, b in graph.edges:
         gate = random.choice(gates)
         program += gate(a, b)
@@ -384,16 +436,17 @@ def get_param_local_RX_template():
     return CircuitTemplate([func])
 
 
-def get_param_maxcut_graph_cost_template(maxcut_graph=None):
-    if maxcut_graph is None:
-        def default_graph_func(graph, qc, sequence, **kwargs):
+def get_param_maxcut_graph_cost_template(graph_family: Callable[[int], nx.Graph] = None):
+    if graph_family is None:
+        def default_func(graph, qc, sequence, **kwargs):
             prog = maxcut_cost_unitary(graph, len(sequence))
             native_quil = qc.compiler.quil_to_native_quil(prog)
             # remove gate definition and HALT
             return Program([instr for instr in native_quil.instructions][:-1])
-        return CircuitTemplate([default_graph_func])
+        return CircuitTemplate([default_func])
     else:
         def func(graph, qc, sequence, **kwargs):
+            maxcut_graph = graph_family(len(graph.nodes))
             if len(maxcut_graph.nodes) > len(graph.nodes):
                 raise ValueError("The maxcut graph must have fewer nodes than the number of "
                                  "qubits.")
@@ -403,7 +456,9 @@ def get_param_maxcut_graph_cost_template(maxcut_graph=None):
             return Program([instr for instr in native_quil.instructions][:-1])
         return CircuitTemplate([func])
 
-
+# ==================================================================================================
+# Data acquisition
+# ==================================================================================================
 def generate_volumetric_program_array(qc: QuantumComputer, ckt: CircuitTemplate, widths: List[int],
                                       depths: List[int], num_circuit_samples: int,
                                       graph: nx.Graph = None, pattern = None):
