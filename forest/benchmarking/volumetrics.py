@@ -529,11 +529,11 @@ def acquire_volumetric_data(qc: QuantumComputer, program_array, num_shots: int =
 # ==================================================================================================
 # Analysis
 # ==================================================================================================
-def get_error_hamming_weight_distributions(noisy_results, perfect_results):
+def get_error_hamming_weight_distributions(noisy_results, ideal_results):
 
-    # allow for perfect result to depend only on width (pass in a list)
-    if not isinstance(perfect_results, dict):
-        perfect_results = {width: {depth: perfect_results[width] for depth in depth_array.keys()}
+    # allow for ideal result to depend only on width (pass in a list)
+    if not isinstance(ideal_results, dict):
+        ideal_results = {width: {depth: ideal_results[width] for depth in depth_array.keys()}
               for width, depth_array in noisy_results.items()}
 
     distrs = {width: {depth: [] for depth in depth_array.keys()}
@@ -543,10 +543,10 @@ def get_error_hamming_weight_distributions(noisy_results, perfect_results):
         for depth, samples in depth_array.items():
 
             noisy_ckt_sample_results = noisy_results[width][depth]
-            perfect_ckt_sample_results = perfect_results[width][depth]
+            ideal_ckt_sample_results = ideal_results[width][depth]
 
             for noisy_shots, ideal_result in zip(noisy_ckt_sample_results,
-                                                 perfect_ckt_sample_results):
+                                                 ideal_ckt_sample_results):
                 if len(ideal_result) > 1:
                     raise ValueError("You have provided ideal results with more than one shot; "
                                      "this method is intended to analyze results where the ideal "
@@ -562,53 +562,32 @@ def get_error_hamming_weight_distributions(noisy_results, perfect_results):
     return distrs
 
 
-def get_average_of_distributions(distrs):
-    # take in output of `get_error_hamming_weight_distributions`
-    return {w: {d: sum(distr_list) / len(distr_list) for d, distr_list in d_arr.items()}
-            for w, d_arr in distrs.items()}
-
-
-def get_success_probabilities(noisy_results, perfect_results,
+def get_single_target_success_probabilities(noisy_results, ideal_results,
                               allowed_errors: Union[int, Callable[[int], int]] = 0):
     if isinstance(allowed_errors, int):
         error_func = lambda num_bits: allowed_errors
     else:
         error_func = allowed_errors
 
-    avg_distrs = get_average_of_distributions(get_error_hamming_weight_distributions(
-        noisy_results, perfect_results))
+    hamming_distrs = get_error_hamming_weight_distributions(noisy_results, ideal_results)
 
-    return {w: {d: sum(distr[0:error_func(w)+1]) for d, distr in d_distrs.items()}
-            for w, d_distrs in avg_distrs.items()}
+    return {w: {d: [sum(distr[0:error_func(w)+1]) for distr in distrs]
+                for d, distrs in d_distrs.items()} for w, d_distrs in hamming_distrs.items()}
+
+
+def average_distributions(distrs):
+    """
+    E.g. take in output of :func:`get_error_hamming_weight_distributions` or
+    :func:`get_single_target_success_probabilities`
+    :param distrs:
+    :return:
+    """
+    return {w: {d: sum([np.asarray(distr) for distr in distr_list]) / len(distr_list)
+                for d, distr_list in d_arr.items()} for w, d_arr in distrs.items()}
 
 
 def get_total_variation_dist(distr1, distr2):
     return tvd(np.asarray([distr1]).T, np.asarray([distr2]).T)
-
-                # TODO: separate these out
-
-                # Probability of success with basement[ log_2(width) - 1 ] errors
-                # I.e. error when you allow for a logarithmic number of bit flips from the answer
-                # num_bit_flips_allowed_from_answer = int(basement_function(np.log2(width) - 1))
-                # pr_suc_log_err_data = sum(
-                #     [wt_dist_data[idx] for idx in range(0, num_bit_flips_allowed_from_answer + 1)])
-                # pr_suc_log_err_rand = sum(
-                #     [wt_dist_rand[idx] for idx in range(0, num_bit_flips_allowed_from_answer + 1)])
-                #
-                #
-                # sample_stats = {
-                #     'Hamming dist. data': wt_dist_data,
-                #     'TVD(data, ideal)': tvd_data_ideal,
-                #     'TVD(data, rand)': tvd_data_rand,
-                #     'Pr. success data': pr_suc_data,
-                #     # 'Pr. success rand': pr_suc_rand,
-                #     'loge = basement[log_2(Width)-1]': num_bit_flips_allowed_from_answer,
-                #     'Pr. success loge data': pr_suc_log_err_data}
-                #     # 'Pr. success loge rand': pr_suc_log_err_rand}
-                #
-                # samples.append(sample_stats)
-
-    # return stats
 
 
 def hamming_distance(arr1, arr2):
