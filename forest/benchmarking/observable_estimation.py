@@ -174,10 +174,13 @@ def zeros_state(qubits: Iterable[int]):
 class ExperimentSetting:
     """
     Input and output settings for an ObservablesExperiment.
+
     Many near-term quantum algorithms and QCVV protocols take the following form:
+
      - Start in a pauli state
      - Do some interesting quantum circuit (e.g. prepare some ansatz)
      - Measure the output of the circuit w.r.t. expectations of Pauli observables.
+
     Where we typically use a large number of (start, measure) pairs but keep the quantum circuit
     program consistent. This class represents the (start, measure) pairs. Typically a large
     number of these :py:class:`ExperimentSetting` objects will be created and grouped into
@@ -209,7 +212,9 @@ class ExperimentSetting:
 
 
 def _abbrev_program(program: Program, max_len=10):
-    """Create an abbreviated string representation of a Program.
+    """
+    Create an abbreviated string representation of a Program.
+
     This will join all instructions onto a single line joined by '; '. If the number of
     instructions exceeds ``max_len``, some will be excluded from the string representation.
     """
@@ -230,10 +235,12 @@ class ObservablesExperiment:
     observables measured on a core program, possibly with a collection of different preparations.
 
     Many near-term quantum algorithms involve:
+
      - some limited state preparation, e.g. prepare a Pauli eigenstate
      - enacting a quantum process (like in tomography) or preparing a variational ansatz state
        (like in VQE) with some circuit.
      - Measure the output of the circuit w.r.t. expectations of Pauli observables
+
     Where we typically use a large number of (state_prep, measure_observable) pairs but keep the
     quantum circuit program consistent. This class stores the circuit program as a
     :py:class:`~pyquil.Program` and maintains a list of :py:class:`ExperimentSetting` objects
@@ -243,6 +250,7 @@ class ObservablesExperiment:
     Settings sharing an inner list will be estimated simultaneously. If you don't want this,
     provide a list of length-1-lists. As a convenience, if you pass a 1D list to the constructor
     will expand it to a list of length-1-lists.
+
     This class will not group settings for you. Please see :py:func:`group_settings` for
     a function that will automatically process a ObservablesExperiment to group Experiments sharing
     a TPB.
@@ -618,35 +626,49 @@ def group_settings_greedy(obs_expt: ObservablesExperiment):
 
 def group_settings(obs_expt: ObservablesExperiment,
                    method: str = 'greedy') -> ObservablesExperiment:
-    """
+    r"""
     Group settings that are diagonal in a shared tensor product basis (TPB) to minimize number
     of QPU runs.
 
-    Background
-    ----------
+    :Background:
+
     Given some PauliTerm operator, the 'natural' tensor product basis to
     diagonalize this term is the one which diagonalizes each Pauli operator in the
     product term-by-term.
+
     For example, X(1) * Z(0) would be diagonal in the 'natural' tensor product basis
-    {(|0> +/- |1>)/Sqrt[2]} * {|0>, |1>}, whereas Z(1) * X(0) would be diagonal
-    in the 'natural' tpb {|0>, |1>} * {(|0> +/- |1>)/Sqrt[2]}. The two operators
-    commute but are not diagonal in each others 'natural' tpb (in fact, they are
-    anti-diagonal in each others 'natural' tpb). This function tests whether two
-    operators given as PauliTerms are both diagonal in each others 'natural' tpb.
-    Note that for the given example of X(1) * Z(0) and Z(1) * X(0), we can construct
-    the following basis which simultaneously diagonalizes both operators:
-      -- |0>' = |0> (|+>) + |1> (|->)
-      -- |1>' = |0> (|+>) - |1> (|->)
-      -- |2>' = |0> (|->) + |1> (|+>)
-      -- |3>' = |0> (-|->) + |1> (|+>)
+
+    .. math::
+
+        \{ (|0> + |1>)/ \sqrt{2}, (|0> - |1>)/ \sqrt{2} \} * \{ |0>, |1> \}
+
+    whereas, Z(1) * X(0) would be diagonal in the 'natural' TPB
+
+    .. math::
+
+        \{ |0>, |1> \} * \{ (|0> + |1>)/ \sqrt{2}, (|0> - |1>)/ \sqrt{2} \}
+
+    The two operators commute but are not diagonal in each others 'natural' TPB (in fact, they are
+    anti-diagonal in each others 'natural' TPB). This function tests whether two operators given
+    as PauliTerms are both diagonal in each others 'natural' TPB. Note that for the given example
+    of X(1) * Z(0) and Z(1) * X(0), we can construct the following basis which simultaneously
+    diagonalizes both operators::
+
+        |a> =  |0> |+> + |1> |->
+        |b> =  |0> |+> - |1> |->
+        |c> =  |0> |-> + |1> |+>
+        |d> = -|0> |-> + |1> |+>
+
     In this basis, X Z looks like diag(1, -1, 1, -1), and Z X looks like diag(1, 1, -1, -1).
     Notice however that this basis cannot be constructed with single-qubit operations, as each
     of the basis vectors are entangled states.
-    Methods
-    -------
+
+    :Methods:
+
     The "greedy" method will keep a running set of 'buckets' into which grouped ExperimentSettings
     will be placed. Each new ExperimentSetting considered is assigned to the first applicable
     bucket and a new bucket is created if there are no applicable buckets.
+
     The "clique-removal" method maps the term grouping problem onto Max Clique graph problem.
     This method constructs a NetworkX graph where an edge exists between two settings that
     share an nTPB and then uses networkx's algorithm for clique removal. This method can give
@@ -1137,7 +1159,9 @@ def ratio_variance(a: Union[float, np.ndarray],
     var_a = Var[A] and var_b = Var[B] and the covariance as Cov[A,B]. The following expression
     approximates the variance of Y
 
-    Var[Y] \approx (a/b) ^2 * ( var_a /a^2 + var_b / b^2 - 2 * Cov[A,B]/(a*b) )
+    .. math::
+
+        Var[Y] \approx (a/b)^2 * ( var_a /a^2 + var_b / b^2 - 2 * Cov[A,B]/(a*b) )
 
     We assume the covariance of A and B is negligible, resting on the assumption that A and B
     are independently measured. The expression above rests on the assumption that B is non-zero,
@@ -1145,11 +1169,14 @@ def ratio_variance(a: Union[float, np.ndarray],
     about A. If we allow E[A] = 0, then calculating the expression above via numpy would complain
     about dividing by zero. Instead, we can re-write the above expression as
 
-    Var[Y] \approx var_a /b^2 + (a^2 * var_b) / b^4
+    .. math::
+
+        Var[Y] \approx var_a /b^2 + (a^2 * var_b) / b^4
 
     where we have dropped the covariance term as noted above.
 
     See the following for more details:
+
       - https://doi.org/10.1002/(SICI)1097-0320(20000401)39:4<300::AID-CYTO8>3.0.CO;2-O
       - http://www.stat.cmu.edu/~hseltman/files/ratio.pdf
       - https://en.wikipedia.org/wiki/Taylor_expansions_for_the_moments_of_functions_of_random_variables

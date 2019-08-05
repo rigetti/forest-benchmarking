@@ -7,16 +7,18 @@ import numpy as np
 def tensor_channel_kraus(k2: Sequence[np.ndarray],
                          k1: Sequence[np.ndarray]) -> Sequence[np.ndarray]:
     r"""
-    Given the Kraus representaion for two channels, $\mathcal E$ and $\mathcal F$, acting on
-    different systems this function returns the Kraus operators representing the composition of
-    these independent channels.
+    Given the Kraus representation for two channels, :math:`\mathcal E` and :math:`\mathcal F`,
+    acting on different systems this function returns the Kraus operators representing the
+    composition of these independent channels.
 
-    Suppose $\mathcal E$ and $\mathcal F$ both have one Kraus operator K_1 = X and K_2 = H,
-    that is they are unitary. Then, with respect to the tensor product structure
+    Suppose :math:`\mathcal E` and :math:`\mathcal F` each have one Kraus operator,
+    :math:`K_1 = X` and :math:`K_2 = H`, so each channel is unitary. Then, with respect to the
+    tensor product structure :math:`H_2 \otimes H_1` of the individual systems, this function
+    returns
 
-            $H_2 \otimes H_1$
+    .. math::
 
-    of the individual systems this function returns $K_{\rm tot} = H \otimes X$.
+        K_{\rm tot} = H \otimes X
 
     :param k1: The list of Kraus operators on the first system.
     :param k2: The list of Kraus operators on the second system.
@@ -28,7 +30,7 @@ def tensor_channel_kraus(k2: Sequence[np.ndarray],
 
 def compose_channel_kraus(k2: Sequence[np.ndarray],
                           k1: Sequence[np.ndarray]) -> Sequence[np.ndarray]:
-    r"""
+    """
     Given two channels, K_1 and K_2, acting on the same system in the Kraus representation this
     function return the Kraus operators representing the composition of the channels.
 

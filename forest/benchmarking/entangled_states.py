@@ -50,26 +50,27 @@ def ghz_state_statistics(bitstrings):
 
 
 def create_graph_state(graph: nx.Graph, use_pragmas=False):
-    """Write a program to create a graph state according to the specified graph
+    """
+    Write a program to create a graph state according to the specified graph
 
     A graph state involves Hadamarding all your qubits and then applying a CZ for each
     edge in the graph. A graph state and the ability to measure it however you want gives
-    you universal quantum computation. Some good references are
-
-    [MBQC] A One-Way Quantum Computer
-           Raussendorf et al.,
-           Phys. Rev. Lett. 86, 5188 (2001)
-           https://doi.org/10.1103/PhysRevLett.86.5188
-           https://arxiv.org/abs/quant-ph/0010033
-
-    [MBCS] Measurement-based quantum computation with cluster states
-           Raussendorf et al.,
-           Phys. Rev. A 68, 022312 (2003)
-           https://dx.doi.org/10.1103/PhysRevA.68.022312
-           https://arxiv.org/abs/quant-ph/0301052
+    you universal quantum computation. Some good references are [MBQC]_ and [MBCS]_.
 
     Similar to a Bell state / GHZ state, we can try to prepare a graph state and measure
     how well we've done according to expected parities.
+
+    .. [MBQC] A One-Way Quantum Computer.
+           Raussendorf et al.
+           Phys. Rev. Lett. 86, 5188 (2001).
+           https://doi.org/10.1103/PhysRevLett.86.5188
+           https://arxiv.org/abs/quant-ph/0010033
+
+    .. [MBCS] Measurement-based quantum computation with cluster states.
+           Raussendorf et al.
+           Phys. Rev. A 68, 022312 (2003).
+           https://dx.doi.org/10.1103/PhysRevA.68.022312
+           https://arxiv.org/abs/quant-ph/0301052
 
     :param graph: The graph. Nodes are used as arguments to gates, so they should be qubit-like.
     :param use_pragmas: Use COMMUTING_BLOCKS pragmas to hint at the compiler
@@ -94,16 +95,14 @@ def create_graph_state(graph: nx.Graph, use_pragmas=False):
 
 
 def measure_graph_state(graph: nx.Graph, focal_node: int):
-    """Given a graph state, measure a focal node and its neighbors with a particular measurement
+    """
+    Given a graph state, measure a focal node and its neighbors with a particular measurement
     angle.
 
-    :param prep_program: Probably the result of :py:func:`create_graph_state`.
-    :param qs: List of qubits used in prep_program or anything that can be indexed by the nodes
-        in the graph ``graph``.
     :param graph: The graph state graph. This is needed to figure out what the neighbors are
     :param focal_node: The node in the graph to serve as the focus. The focal node is measured
         at an angle and all its neighbors are measured in the Z basis
-    :return Program, list of classical offsets into the ``ro`` register.
+    :return: Program, list of classical offsets into the ``ro`` register.
     """
     program = Program()
     theta = program.declare('theta', 'REAL')
@@ -120,7 +119,8 @@ def measure_graph_state(graph: nx.Graph, focal_node: int):
     return program, classical_addresses
 
 
-def compiled_parametric_graph_state(graph, focal_node, compiler: QPUCompiler, n_shots=1000):
+def compiled_parametric_graph_state(compiler: QPUCompiler, graph: nx.Graph, focal_node: int,
+                                    num_shots: int = 1000):
     """
     Construct a program to create and measure a graph state, map it to qubits using ``addressing``,
     and compile to an ISA.
@@ -132,13 +132,13 @@ def compiled_parametric_graph_state(graph, focal_node, compiler: QPUCompiler, n_
     :param graph: A networkx graph defining the graph state
     :param focal_node: The node of the graph to measure
     :param compiler: The compiler to do the compiling.
-    :param n_shots: The number of shots to take when measuring the graph state.
+    :param num_shots: The number of shots to take when measuring the graph state.
     :return: an executable that constructs and measures a graph state.
     """
     program = create_graph_state(graph)
     measure_prog, c_addrs = measure_graph_state(graph, focal_node)
     program += measure_prog
-    program.wrap_in_numshots_loop(n_shots)
+    program.wrap_in_numshots_loop(num_shots)
     nq_program = basic_compile(program)
     executable = compiler.native_quil_to_executable(nq_program)
     return executable

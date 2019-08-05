@@ -57,7 +57,7 @@ def hinton_real(matrix: np.ndarray,
                 ax=None,
                 cmap=None,
                 label_top: bool = True):
-    '''
+    """
     Draw Hinton diagram for visualizing a real valued weight matrix.
 
     In the traditional Hinton diagram positive and negative values are represented by white and
@@ -72,9 +72,9 @@ def hinton_real(matrix: np.ndarray,
     :param ax: The matplotlib axes.
     :param cmap: A matplotlib colormap to use when plotting.
     :param label_top: If True, x-axis labels will be placed on top, otherwise they will appear
-    below the plot.
+        below the plot.
     :return: A tuple of the matplotlib figure and axes instances used to produce the figure.
-    '''
+    """
     if ax is None:
         fig, ax = plt.subplots(1, 1, figsize=(8, 6))
 

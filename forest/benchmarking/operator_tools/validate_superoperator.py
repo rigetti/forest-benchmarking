@@ -99,6 +99,8 @@ def choi_is_completely_positive(choi: np.ndarray, rtol: float = 1e-05, atol: flo
     """
     Checks if a quantum process, specified by a Choi matrix, is completely positive (CP).
 
+    See equation 3.35 of [GRAPTN]_
+
     :param choi: A dim**2 by dim**2 Choi matrix
     :param rtol: The relative tolerance parameter in np.allclose
     :param atol: The absolute tolerance parameter in np.allclose

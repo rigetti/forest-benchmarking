@@ -112,7 +112,7 @@ def generate_rb_sequence(benchmarker: BenchmarkConnection, qubits: Sequence[int]
     :param qubits: qubits on which the sequence will act
     :param depth: The total number of Cliffords in the sequence (including inverse)
     :param random_seed: Random seed passed to the benchmarker to seed sequence generation.
-    :param interleaved_gate: See [IRB]; this gate will be interleaved into the sequence
+    :param interleaved_gate: See [IRB]_; this gate will be interleaved into the sequence
     :return: A list of programs constituting Clifford gates in a self-inverting sequence.
     """
     if depth < 2:
@@ -144,7 +144,7 @@ def generate_rb_experiment_sequences(benchmarker: BenchmarkConnection, qubits: S
     :param benchmarker: object returned from get_benchmarker() used to generate clifford sequences
     :param qubits: the qubits for a single isolated rb experiment
     :param depths: the depth of each sequence in the experiment.
-    :param interleaved_gate: optional gate to interleave throughout the sequence, see [IRB]
+    :param interleaved_gate: optional gate to interleave throughout the sequence, see [IRB]_
     :param random_seed: Random seed passed to benchmarker to seed sequence generation.
     :param use_self_inv_seqs: by default True, the last Clifford of the sequence will be the
         inverse of the composition of the previous Cliffords in the sequence; the entire sequence
@@ -229,14 +229,16 @@ def generate_rb_experiments(benchmarker: BenchmarkConnection, qubit_groups: Sequ
 
     The number of ObservablesExperiments returned is equal to len(depths). A particular
     ObservablesExperiment consists of
-        - a program, which is a random sequence of Clifford gates compiled down to native gates.
-            If len(qubit_groups) > 1 then the program is actually the sum of len(qubit_groups) many
-            separate random sequences; each sequence acts only on the group of qubits in a
-            particular element of the input 'qubit_groups' list.
-        - settings; for each group within qubit_groups there will be settings which dictate that
-            each qubit in that group is initialized to the |0> state and that some observable
-            which is a tensor product of Z and I factors is measured for that group. All of these
-            settings are initialized within the ObservablesExperiment to be run in parallel.
+
+    - a program, which is a random sequence of Clifford gates compiled down to native gates.
+        If len(qubit_groups) > 1 then the program is actually the sum of len(qubit_groups) many
+        separate random sequences; each sequence acts only on the group of qubits in a
+        particular element of the input 'qubit_groups' list.
+
+    - settings; for each group within qubit_groups there will be settings which dictate that
+        each qubit in that group is initialized to the `|0>` state and that some observable
+        which is a tensor product of Z and I factors is measured for that group. All of these
+        settings are initialized within the ObservablesExperiment to be run in parallel.
 
     Specifying a interleaved_gate will generate a Clifford sequence which alternates depth many
     times between a random Clifford and the specified gate. The gate itself should be a Program
@@ -244,17 +246,17 @@ def generate_rb_experiments(benchmarker: BenchmarkConnection, qubit_groups: Sequ
     still contain depth many random Cliffords (excluding the interleaved gate) including the
     final inverting Clifford.
 
-    For standard RB see
-    [RB] Scalable and Robust Randomized Benchmarking of Quantum Processes
-         Magesan et al.,
-         Phys. Rev. Lett. 106, 180504 (2011)
+    For standard RB see [RB]_. For interleaved RB see [IRB]_.
+
+    .. [RB] Scalable and Robust Randomized Benchmarking of Quantum Processes.
+         Magesan et al.
+         Phys. Rev. Lett. 106, 180504 (2011).
          https://dx.doi.org/10.1103/PhysRevLett.106.180504
          https://arxiv.org/abs/1009.3639
 
-    For interleaved RB see
-    [IRB] Efficient measurement of quantum gate error by interleaved randomized benchmarking
-        Magesan et al.,
-        Phys. Rev. Lett. 109, 080505 (2012)
+    .. [IRB] Efficient measurement of quantum gate error by interleaved randomized benchmarking.
+        Magesan et al.
+        Phys. Rev. Lett. 109, 080505 (2012).
         https://dx.doi.org/10.1103/PhysRevLett.109.080505
         https://arxiv.org/abs/1203.4550
 
@@ -305,18 +307,23 @@ def covariances_of_all_iz_obs(expectations: Sequence[float], num_shots: int):
     Calculate the sum of the pairwise covariance of every distinct pair of observables whose
     expectations are given.
 
-    It is assumed that the list of expectations corresponds to 2**num_qubits-1 == dim - 1 many
+    It is assumed that the list of expectations corresponds to 2**num_qubits - 1 = dim - 1 many
     observables, where the observables all consist of every combination of I and Z acting on
     different qubits. Calculating this covariance is necessary if
+
         1) all observables were calculated from the same set of shot data
         2) you are calculating the variance for a sum of the expectations.
 
     We calculate the covariance using
-        cov(O_i, O_j) = E[O_i O_j] - E[O_i] E[O_j]
-    and noticing that the product of two distinct observables O_i O_j from our list is simply a
-    second observable O_k in the list. Furthermore, taking every possible pairwise product simply
-    results in two copies of our original list. Hence if we take the sum over all distinct pairs
-    we can calculate the covariance purely as a function of observable expectations.
+
+    .. math::
+
+        COVAR(O_i, O_j) = E[O_i O_j] - E[O_i] E[O_j]
+
+    and noticing that the product of two distinct observables :math:`O_i O_j` from our list is
+    simply a second observable :math:`1O_k` in the list. Furthermore, taking every possible pairwise
+    product simply results in two copies of our original list. Hence if we take the sum over all
+    distinct pairs we can calculate the covariance purely as a function of observable expectations.
 
     :param expectations:
     :param num_shots: the number of shots used to estimate each expectation
@@ -442,10 +449,11 @@ def generate_unitarity_experiments(benchmarker: BenchmarkConnection,
             be estimate simultaneously and we use the simultaneous grouping offered by
             operator_estimation
 
-    Unitarity algorithm is due to
-    [ECN]  Estimating the Coherence of Noise
-           Wallman et al.,
-           New Journal of Physics 17, 113020 (2015)
+    Unitarity algorithm is due to [ECN]_.
+
+    .. [ECN]  Estimating the Coherence of Noise.
+           Wallman et al.
+           New Journal of Physics 17, 113020 (2015).
            https://dx.doi.org/10.1088/1367-2630/17/11/113020
            https://arxiv.org/abs/1503.07865
 
@@ -477,7 +485,7 @@ def generate_unitarity_experiments(benchmarker: BenchmarkConnection,
 
 def estimate_purity(dim: int, op_expect: np.ndarray, renorm: bool=True):
     """
-    The renormalized, or 'shifted', purity is given in equation (10) of [ECN]
+    The renormalized, or 'shifted', purity is given in equation (10) of [ECN]_
     where d is the dimension of the Hilbert space, 2**num_qubits
 
     :param dim: dimension of the hilbert space
@@ -533,7 +541,7 @@ def fit_unitarity_results(depths: Sequence[int], expectations: Sequence[Sequence
     :param std_errs: the groups of std_errs for each expectation estimate
     :param param_guesses: guesses for the (amplitude, decay, baseline) parameters
     :return: a ModelResult fit with estimates of the Model parameters, including the 'decay',
-        which is the unitarity parameter. Note that [ECN] parameterizes the decay differently;
+        which is the unitarity parameter. Note that [ECN]_ parameterizes the decay differently;
         effectively, the 'amplitude' reported here absorbs a factor 1/unitarity.
         Comparing to 'B' in equation 8), fit.params['amplitude'] = B / fit.params['decay']
     """
@@ -580,15 +588,26 @@ def fit_unitarity_results(depths: Sequence[int], expectations: Sequence[Sequence
 
 def unitarity_to_rb_decay(unitarity, dimension) -> float:
     """
-    This allows comparison of measured unitarity and RB decays. This function provides an upper bound on the
-    RB decay given the input unitarity, where the upperbound is saturated when no unitary errors are present,
-    e.g. in the case of depolarizing noise. For more, see Proposition 8. in [ECN]
-        unitarity >= (1-dr/(d-1))^2
-    where r is the average gate error and d is the dimension
+    Converts a unitarity decay to a standard RB decay under the assumption that no unitary errors
+    present.
+
+    Proposition 8. in [ECN]_ gives the unitarity u as an upper bound of a function of the average
+    gate error r and the dimension d:
+
+    .. math::
+
+        u >= (1 - d r/(d-1))^2
+
+    This upper bound is saturated when no unitary errors are present, i.e. the noise is purely
+    stochastic, like in the case of depolarizing noise. We can use this saturated equality to
+    upper bound the standard RB decay. This allows comparison of measured unitarity and RB
+    decays. We might hope that the gates are well calibrated and finely controlled so that the RB
+    decay is very close to the upper bound given by the unitarity passed into this function.
 
     :param unitarity: The measured decay parameter in a unitarity measurement
-    :param dimension: The dimension of the Hilbert space, 2^num_qubits
-    :return: The upperbound on RB decay, saturated if no unitary errors are present Proposition 8 [ECN]
+    :param dimension: The dimension of the Hilbert space, 2**num_qubits
+    :return: The upper bound on RB decay, saturated if no unitary errors are present, Proposition
+        8 of [ECN]_
     """
     r = (np.sqrt(unitarity) - 1)*(1-dimension)/dimension
     return average_gate_error_to_rb_decay(r, dimension)
@@ -618,6 +637,7 @@ def do_rb(qc: QuantumComputer, benchmarker: BenchmarkConnection,
     :param num_shots: The number of shots collected for each experiment setting on each sequence.
     :param active_reset: Boolean flag indicating whether experiments should begin with an
         active reset instruction (this can make the collection of experiments run a lot faster).
+    :param show_progress_bar: displays a progress bar via tqdm if true.
     :return: The estimated rb decays for each group of qubits, along with the experiment and
         corresponding results.
     """
@@ -627,7 +647,8 @@ def do_rb(qc: QuantumComputer, benchmarker: BenchmarkConnection,
         expts = generate_rb_experiments(benchmarker, qubit_groups, depths,
                                         interleaved_gate=interleaved_gate)
 
-    results = list(acquire_rb_data(qc, expts, num_shots, active_reset=active_reset))
+    results = list(acquire_rb_data(qc, expts, num_shots, active_reset=active_reset,
+                                   show_progress_bar=show_progress_bar))
 
     stats_by_group = get_stats_by_qubit_group(qubit_groups, results)
 
@@ -650,7 +671,7 @@ def do_rb(qc: QuantumComputer, benchmarker: BenchmarkConnection,
 
 def coherence_angle(rb_decay, unitarity):
     """
-    Equation 29 of [U+IRB]
+    Equation 29 of [U+IRB]_
 
     :param rb_decay: Observed decay parameter in standard rb experiment
     :param unitarity: Observed decay parameter in unitarity experiment
@@ -661,7 +682,7 @@ def coherence_angle(rb_decay, unitarity):
 
 def gamma(irb_decay, unitarity):
     """
-    Corollary 5 of [U+IRB], second line
+    Corollary 5 of [U+IRB]_, second line
 
     :param irb_decay: Observed decay parameter in irb experiment with desired gate interleaved between Cliffords
     :param unitarity: Observed decay parameter in unitarity experiment
@@ -675,12 +696,11 @@ def interleaved_gate_fidelity_bounds(irb_decay, rb_decay, dim, unitarity = None)
     Use observed rb_decay to place a bound on fidelity of a particular gate with given interleaved rb decay.
     Optionally, use unitarity measurement result to provide improved bounds on the interleaved gate's fidelity.
 
-    Bounds due to [IRB]
+    Bounds are due to [IRB]_. Improved bounds using unitarity are due to [U+IRB]_
 
-    Improved bounds using unitarity due to
-    [U+IRB]  Efficiently characterizing the total error in quantum circuits
-             Dugas et al.,
-             arXiv:1610.05296 (2016)
+    .. [U+IRB]  Efficiently characterizing the total error in quantum circuits.
+             Dugas et al.
+             arXiv:1610.05296 (2016).
              https://arxiv.org/abs/1610.05296
 
     :param irb_decay: Observed decay parameter in irb experiment with desired gate interleaved between Cliffords
@@ -717,7 +737,7 @@ def interleaved_gate_fidelity_bounds(irb_decay, rb_decay, dim, unitarity = None)
 
 def gate_error_to_irb_decay(irb_error, rb_decay, dim):
     """
-    For convenience, inversion of Eq. 4 of [IRB]. See irb_decay_to_error
+    For convenience, inversion of Eq. 4 of [IRB]_. See irb_decay_to_error
 
     :param irb_error: error of the interleaved gate.
     :param rb_decay: Observed decay parameter in standard rb experiment.
@@ -729,7 +749,7 @@ def gate_error_to_irb_decay(irb_error, rb_decay, dim):
 
 def irb_decay_to_gate_error(irb_decay, rb_decay, dim):
     """
-    Eq. 4 of [IRB], which provides an estimate of the error of the interleaved gate,
+    Eq. 4 of [IRB]_, which provides an estimate of the error of the interleaved gate,
     given both the observed interleaved and standard decay parameters.
 
     :param irb_decay: Observed decay parameter in irb experiment with desired gate interleaved between Cliffords
@@ -742,7 +762,7 @@ def irb_decay_to_gate_error(irb_decay, rb_decay, dim):
 
 def average_gate_error_to_rb_decay(gate_error, dimension):
     """
-    Inversion of eq. 5 of [RB] arxiv paper.
+    Inversion of eq. 5 of [RB]_ arxiv paper.
 
     :param gate_error: The average gate error.
     :param dimension: Dimension of the Hilbert space, 2^num_qubits
@@ -753,7 +773,7 @@ def average_gate_error_to_rb_decay(gate_error, dimension):
 
 def rb_decay_to_gate_error(rb_decay, dimension):
     """
-    Eq. 5 of [RB] arxiv paper. Note that 'gate' here typically means an element of the Clifford
+    Eq. 5 of [RB]_ arxiv paper. Note that 'gate' here typically means an element of the Clifford
     group, which comprise standard rb sequences.
 
     :param rb_decay: Observed decay parameter in standard rb experiment.

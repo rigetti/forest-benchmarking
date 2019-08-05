@@ -1,6 +1,5 @@
 .. currentmodule:: forest.benchmarking.operator_tools.compose_superoperators
 
-
 Compose Superoperators
 ======================
 
