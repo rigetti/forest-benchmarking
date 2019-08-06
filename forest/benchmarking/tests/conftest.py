@@ -18,6 +18,40 @@ RACK_YAML = os.path.join(PATH, "example_rack.yaml")
 
 
 @pytest.fixture(scope='module')
+def test_qc():
+    import networkx as nx
+    from requests.exceptions import RequestException
+    from rpcq.messages import PyQuilExecutableResponse
+    from forest.benchmarking.compilation import basic_compile
+    from pyquil.api import ForestConnection, QuantumComputer, QVM
+    from pyquil.api._compiler import _extract_attribute_dictionary_from_program
+    from pyquil.api._qac import AbstractCompiler
+    from pyquil.device import NxDevice
+    from pyquil.gates import I
+
+    class BasicQVMCompiler(AbstractCompiler):
+
+        def quil_to_native_quil(self, program: Program, protoquil=None):
+            return basic_compile(program)
+
+        def native_quil_to_executable(self, nq_program: Program):
+            return PyQuilExecutableResponse(
+                program=nq_program.out(),
+                attributes=_extract_attribute_dictionary_from_program(nq_program))
+    try:
+        qc = QuantumComputer(
+            name='testing-qc',
+            qam=QVM(connection=ForestConnection(), random_seed=52),
+            device=NxDevice(nx.complete_graph(2)),
+            compiler=BasicQVMCompiler(),
+        )
+        qc.run_and_measure(Program(I(0)), trials=1)
+        return qc
+    except (RequestException, TimeoutError) as e:
+        return pytest.skip("This test requires a running local QVM: {}".format(e))
+
+
+@pytest.fixture(scope='module')
 def qvm():
     try:
         qc = get_qc('9q-square-qvm')
