@@ -8,7 +8,6 @@ from pyquil.numpy_simulator import NumpyWavefunctionSimulator
 from forest.benchmarking.observable_estimation import _one_q_state_prep
 
 from numpy.testing import assert_almost_equal, assert_allclose
-from test_process_tomography import test_qc
 
 
 def test_exhaustive_state_dfe(benchmarker: BenchmarkConnection):
@@ -75,6 +74,7 @@ def test_monte_carlo_process_dfe(benchmarker: BenchmarkConnection):
         print(setting.in_state, setting.observable)
         expectation = wfnsim.reset().do_program(prog).expectation(setting.observable)
         assert_almost_equal(expectation, 1., decimal=7)
+
 
 def test_monte_carlo_state_dfe(benchmarker: BenchmarkConnection):
     process = Program(H(0), CNOT(0, 1))
