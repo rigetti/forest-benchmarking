@@ -29,7 +29,7 @@ def test_qc():
 
     class BasicQVMCompiler(AbstractCompiler):
 
-        def quil_to_native_quil(self, program: Program):
+        def quil_to_native_quil(self, program: Program, protoquil=None):
             return basic_compile(program)
 
         def native_quil_to_executable(self, nq_program: Program):
