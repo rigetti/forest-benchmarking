@@ -1,23 +1,15 @@
-import networkx as nx
 import numpy as np
 import pytest
 from functools import partial
-from requests.exceptions import RequestException
-from forest.benchmarking.compilation import basic_compile
 from forest.benchmarking.operator_tools.random_operators import haar_rand_unitary
 from forest.benchmarking.tomography import generate_state_tomography_experiment, _R, \
     iterative_mle_state_estimate, estimate_variance, linear_inv_state_estimate, do_tomography
-from pyquil.api import ForestConnection, QuantumComputer, QVM
-from pyquil.api._compiler import _extract_attribute_dictionary_from_program
-from pyquil.api._qac import AbstractCompiler
-from pyquil.device import NxDevice
 from pyquil.gates import I, H, CZ
 from pyquil.numpy_simulator import NumpyWavefunctionSimulator
 from forest.benchmarking.observable_estimation import estimate_observables, ExperimentResult, \
     ExperimentSetting, zeros_state, exhaustive_symmetrization, calibrate_observable_estimates
 from pyquil.paulis import sI, sZ, sX
 from pyquil.quil import Program
-from rpcq.messages import PyQuilExecutableResponse
 
 from forest.benchmarking import distance_measures as dm
 
@@ -123,33 +115,9 @@ def test_R_operator_fixed_point_2_qubit():
     np.testing.assert_allclose(actual, P00, atol=1e-12)
 
 
-def get_test_qc(n_qubits):
-    class BasicQVMCompiler(AbstractCompiler):
-        def quil_to_native_quil(self, program: Program):
-            return basic_compile(program)
-
-        def native_quil_to_executable(self, nq_program: Program):
-            return PyQuilExecutableResponse(
-                program=nq_program.out(),
-                attributes=_extract_attribute_dictionary_from_program(nq_program))
-
-    try:
-        qc = QuantumComputer(
-            name='testing-qc',
-            qam=QVM(connection=ForestConnection(), random_seed=52),
-            device=NxDevice(nx.complete_graph(n_qubits)),
-            compiler=BasicQVMCompiler(),
-        )
-        qc.run_and_measure(Program(I(0)), trials=1)
-        return qc
-    except (RequestException, TimeoutError) as e:
-        return pytest.skip("This test requires a running local QVM: {}".format(e))
-
-
 @pytest.fixture(scope='module')
-def single_q_tomo_fixture():
+def single_q_tomo_fixture(test_qc):
     qubits = [0]
-    qc = get_test_qc(n_qubits=len(qubits))
 
     # Generate random unitary
     u_rand = haar_rand_unitary(2 ** 1, rs=np.random.RandomState(52))
@@ -163,17 +131,16 @@ def single_q_tomo_fixture():
 
     # Get data from QVM
     tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
-    results = list(estimate_observables(qc=qc, obs_expt=tomo_expt, num_shots=500,
+    results = list(estimate_observables(qc=test_qc, obs_expt=tomo_expt, num_shots=500,
                                         symmetrization_method=exhaustive_symmetrization))
-    results = list(calibrate_observable_estimates(qc, results))
+    results = list(calibrate_observable_estimates(test_qc, results))
 
     return results, rho_true
 
 
 @pytest.fixture(scope='module')
-def two_q_tomo_fixture():
+def two_q_tomo_fixture(test_qc):
     qubits = [0, 1]
-    qc = get_test_qc(n_qubits=len(qubits))
 
     # Generate random unitary
     u_rand1 = haar_rand_unitary(2 ** 1, rs=np.random.RandomState(52))
@@ -191,9 +158,9 @@ def two_q_tomo_fixture():
 
     # Get data from QVM
     tomo_expt = generate_state_tomography_experiment(state_prep, qubits)
-    results = list(estimate_observables(qc=qc, obs_expt=tomo_expt, num_shots=500,
+    results = list(estimate_observables(qc=test_qc, obs_expt=tomo_expt, num_shots=500,
                                         symmetrization_method=exhaustive_symmetrization))
-    results = list(calibrate_observable_estimates(qc, results))
+    results = list(calibrate_observable_estimates(test_qc, results))
 
     return results, rho_true
 
