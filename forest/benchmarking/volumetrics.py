@@ -118,12 +118,18 @@ class CircuitTemplate:
             3) a tuple of a `pattern` and 'n', indicating depth many repetitions
 
         TODO:
-        A family that does not easily fit into the current paradigm is the following:
+        A family that does not neatly fit into the current paradigm is the following:
 
             C_0 P_0 C_1 P_1 ... P_{N-1} C_N P_N C_N^t P_{N+1} ... C_1^t P_{2N-1} C_0^t
 
-        where C_j is a clifford, P_j is a random local Pauli. It could be accommodated if we
-        provided the depth to the inverse layers.
+        where C_j is a clifford, P_j is a random local Pauli. We could accomplish this with a
+        'alternate conjugate and random local pauli layer' that is applied as the last step
+        after P_N is added to the sequence and steps through the entire sequence in reverse.
+        An alternative accommodation is to allow for some post-processing of the sequence,
+        e.g. do a sequential build phase that appends sequence elements and then a transform
+        phase that takes in a sequence and outputs a new sequence. This makes conjugation in
+        general more natural, and easily compatible with pauli frame randomization. (we could
+        also achieve this by requiring each layer to take in a sequence and output a sequence)
 
         :param graph:
         :param repetitions:
@@ -172,7 +178,7 @@ class CircuitTemplate:
 
         return sequence
 
-    def sample_program(self, graph, repetitions, qc=None, width=None, sequence = None,
+    def sample_program(self, graph, repetitions, qc=None, width=None, sequence=None,
                        pattern = None):
         return merge_programs(self.sample_sequence(graph, repetitions, qc, width, sequence, pattern))
 
@@ -524,8 +530,6 @@ def acquire_volumetric_data(qc: QuantumComputer, program_array, num_shots: int =
 #
 #     return []
 
-
-
 # ==================================================================================================
 # Analysis
 # ==================================================================================================
@@ -573,6 +577,12 @@ def get_single_target_success_probabilities(noisy_results, ideal_results,
 
     return {w: {d: [sum(distr[0:error_func(w)+1]) for distr in distrs]
                 for d, distrs in d_distrs.items()} for w, d_distrs in hamming_distrs.items()}
+
+
+def determine_successes_from_ckt_success_probs(ckt_success_probs,
+                                               threshold_probability: float = 2/3):
+    return {w: {d: prob > threshold_probability for d, prob in d_ckt_succ_probs.items()}
+            for w, d_ckt_succ_probs in ckt_success_probs.items()}
 
 
 def average_distributions(distrs):
@@ -644,10 +654,10 @@ def get_random_hamming_wt_distr(num_bits: int):
 def plot_error_distributions(distr_arr: Dict[int, Dict[int, Sequence[float]]], widths=None,
                              depths=None, plot_rand_distr=False):
     if widths is None:
-        widths = distr_arr.keys()
+        widths = list(distr_arr.keys())
 
     if depths is None:
-        depths = list(distr_arr.values())[0].keys()
+        depths = list(list(distr_arr.values())[0].keys())
 
     legend = ['data']
     if plot_rand_distr:
@@ -694,6 +704,33 @@ def plot_error_distributions(distr_arr: Dict[int, Dict[int, Sequence[float]]], w
     plt.subplots_adjust(wspace=0, hspace=.15, left=.1)
 
     return fig, axs
+
+
+def plot_success(successes, widths=None,
+                 depths=None):
+    if widths is None:
+        widths = list(successes.keys())
+
+    if depths is None:
+        depths = list(set(d for w in widths for d in successes[w].keys()))
+
+    fig, ax = plt.subplots(figsize=(len(widths), len(depths)))
+
+    margin = .5
+    ax.set_xlim(widths[0] - margin, widths[-1] + margin)
+    ax.set_ylim(depths[0] - margin, depths[-1] + margin)
+    ax.set_xticks(widths)
+    ax.set_yticks(depths)
+
+    for w_idx, w in enumerate(widths):
+        depth_succ = successes[w]
+        for d_idx, (d, succ) in enumerate(depth_succ.items()):
+            color = 'white'
+            if succ:
+                color = 'lightblue'
+            ax.scatter(w, d, marker='s', s=1000, color=color, edgecolors='black')
+
+    return fig, ax
 
 
 def basement_log_function(number: float):
