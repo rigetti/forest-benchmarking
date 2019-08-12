@@ -7,7 +7,7 @@ from copy import copy
 
 from pyquil.api import QuantumComputer
 from pyquil.numpy_simulator import NumpyWavefunctionSimulator
-from pyquil.quil import DefGate, Program
+from pyquil.quil import DefGate, Program, Pragma
 from rpcq.messages import TargetDevice
 from rpcq._utils import RPCErrorError
 
@@ -41,7 +41,7 @@ def _naive_program_generator(qc: QuantumComputer, qubits: Sequence[int],
     measure_qubits = qubits[:num_measure_qubits]
 
     # create a simple program that uses the compiler to directly generate 2q gates from the matrices
-    prog = Program()
+    prog = Program(Pragma('INITIAL_REWIRING', ['"PARTIAL"']))
     for layer_idx, (perm, layer) in enumerate(zip(permutations, gates)):
         for gate_idx, gate in enumerate(layer):
             # get the Quil definition for the new gate
