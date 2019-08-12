@@ -706,15 +706,12 @@ def plot_error_distributions(distr_arr: Dict[int, Dict[int, Sequence[float]]], w
     return fig, axs
 
 
-def plot_success(successes, widths=None, depths=None, boxsize=None):
+def plot_success(successes, title, widths=None, depths=None, boxsize=1500):
     if widths is None:
         widths = list(successes.keys())
 
     if depths is None:
-        depths = list(set(d for w in widths for d in successes[w].keys()))
-
-    if boxsize is None:
-        boxsize = 1500
+        depths = list(set(d for w in successes.keys() for d in successes[w].keys()))
 
     fig_width = min(len(widths), 15)
     fig_depth = min(len(depths), 15)
@@ -724,8 +721,14 @@ def plot_success(successes, widths=None, depths=None, boxsize=None):
     margin = .5
     ax.set_xlim(-margin, len(widths) + margin - 1)
     ax.set_ylim(-margin, len(depths) + margin - 1)
-    plt.xticks(ticks=np.array(range(len(widths))), labels=widths)
-    plt.yticks(ticks=np.array(range(len(depths))), labels=depths)
+    ax.set_xticks(range(len(widths)))
+    ax.set_xticklabels(widths)
+    ax.set_yticks(range(len(depths)))
+    ax.set_yticklabels(depths)
+    ax.set_xlabel('Width')
+    ax.set_ylabel('Depth')
+
+    colors = ['white', 'lightblue']
 
     for w_idx, w in enumerate(widths):
         if w not in successes.keys():
@@ -734,11 +737,79 @@ def plot_success(successes, widths=None, depths=None, boxsize=None):
         for d_idx, d in enumerate(depths):
             if d not in depth_succ.keys():
                 continue
-            color = 'white'
+            color = colors[0]
             if depth_succ[d]:
-                color = 'lightblue'
-            ax.scatter(w_idx, d_idx, marker='s', s=boxsize, color=color, edgecolors='black')
+                color = colors[1]
+            ax.scatter(w_idx, d_idx, marker='s', s=boxsize, color=color,
+                       edgecolors='black')
 
+    # legend
+    labels = ['Fail', 'Pass']
+    for color, label in zip(colors, labels):
+        plt.scatter([], [], marker='s', c=color, label=label, edgecolors='black')
+    ax.legend()
+
+    ax.set_title(title)
+
+    return fig, ax
+
+
+def plot_pareto_frontier(successes, title, widths=None, depths=None):
+    if widths is None:
+        widths = list(successes.keys())
+
+    if depths is None:
+        depths = list(set(d for w in successes.keys() for d in successes[w].keys()))
+
+    fig_width = min(len(widths), 15)
+    fig_depth = min(len(depths), 15)
+
+    fig, ax = plt.subplots(figsize=(fig_width, fig_depth))
+
+    margin = .5
+    ax.set_xlim(-margin, len(widths) + margin - 1)
+    ax.set_ylim(-margin, len(depths) + margin - 1)
+    ax.set_xticks(range(len(widths)))
+    ax.set_xticklabels(widths)
+    ax.set_yticks(range(len(depths)))
+    ax.set_yticklabels(depths)
+    ax.set_xlabel('Width')
+    ax.set_ylabel('Depth')
+
+    min_depth_failure_at_width = []
+    for w_idx, w in enumerate(widths):
+        if w not in successes.keys():
+            min_depth_failure_at_width.append(None)
+            continue
+
+        depth_succ = successes[w]
+        min_depth_failure = len(depths)
+        for d_idx, d in enumerate(depths):
+            if d not in depth_succ.keys():
+                continue
+            if not depth_succ[d]:
+                min_depth_failure = d_idx
+                break
+        min_depth_failure_at_width.append(min_depth_failure)
+
+    for idx, depth in enumerate(min_depth_failure_at_width):
+        if depth is None:
+            continue  # the depth was not determined, so leave this boundary open
+
+        # horizontal line for this width
+        if depth < len(depths):
+            ax.plot((idx - margin, idx + margin), (depth - margin, depth - margin), color='black')
+
+        # vertical lines
+        if idx < len(min_depth_failure_at_width) - 1:
+            for d_idx in range(len(depths)):
+                if depths[d_idx] not in [d for d in successes[widths[idx]].keys()]:
+                    continue  # do not plot line if this depth was not measured
+                if depth > d_idx >= min_depth_failure_at_width[idx + 1]:
+                    ax.plot((idx + margin, idx + margin), (d_idx - margin, d_idx + margin),
+                            color='black')
+
+    ax.set_title(title)
     return fig, ax
 
 
