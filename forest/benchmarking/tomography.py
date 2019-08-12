@@ -3,20 +3,23 @@ import itertools
 from operator import mul
 from typing import Callable, Tuple, List, Sequence, Iterator
 import warnings
+import random
 
 import numpy as np
+import cvxpy as cp
 from scipy.linalg import logm, pinv
 
 from pyquil import Program
 from pyquil.unitary_tools import lifted_pauli as pauli2matrix, lifted_state_operator as state2matrix
 
+from forest.benchmarking.compilation import basic_compile
 import forest.benchmarking.distance_measures as dm
 from forest.benchmarking.utils import all_traceless_pauli_terms
 from forest.benchmarking.operator_tools import vec, unvec, proj_choi_to_physical
 from forest.benchmarking.operator_tools.project_state_matrix import project_state_matrix_to_physical
 from forest.benchmarking.observable_estimation import ExperimentSetting, ObservablesExperiment, \
     ExperimentResult, SIC0, SIC1, SIC2, SIC3, plusX, minusX, plusY, minusY, plusZ, minusZ, \
-    TensorProductState, zeros_state
+    TensorProductState, zeros_state, estimate_observables, group_settings
 
 MAXITER = "maxiter"
 OPTIMAL = "optimal"
@@ -49,7 +52,7 @@ def generate_state_tomography_experiment(program: Program, qubits: List[int]):
     To collect data, try::
 
         from forest.benchmarking.operator_estimation import estimate_observables
-        results = list(measure_observables(qc=qc, experiment, num_shots=100_000))
+        results = list(estimate_observables(qc=qc, experiment, num_shots=100_000))
 
     :param program: The program to prepare a state to tomographize
     :param qubits: The qubits to tomographize
@@ -157,6 +160,97 @@ def linear_inv_state_estimate(results: List[ExperimentResult],
     # add in the traceful identity term
     dim = 2**len(qubits)
     return unvec(rho) + np.eye(dim)/dim
+
+def compressed_sensing_state_estimate(results: List[ExperimentResult],
+                              qubits: List[int]) -> np.ndarray:
+    """
+    Estimate a quantum state using compressed sensing via the matrix Dantzig selector.
+
+    The matrix Dantzig selector is constrained trace minimization. See [QTvCS] for more information.
+
+    [QTvCS] Quantum Tomography via Compressed Sensing: Error Bounds, Sample Complexity, and ...
+            Flammia et. al.
+            New J. Phys. 14, 095022 (2012)
+            https://dx.doi.org/10.1088/1367-2630/14/9/095022
+            https://arxiv.org/pdf/1205.2300.pdf
+
+    :param results: A tomographically complete list of results.
+    :param qubits: All qubits that were tomographized. This specifies the order in
+        which qubits will be kron'ed together.
+    :return: A point estimate of the quantum state rho.
+    """
+    n_pauli = len(results)
+    n_qubits = len(qubits)
+    d = 2 ** n_qubits
+
+    # Convert the Pauli term into a matrix
+    pauli_list = [pauli2matrix(r.setting.observable, qubits) for r in results]
+    # a list of expectations
+    y_list = [r.expectation for r in results]
+
+    # The objective and constraint in terms of Eqn (3) and (34) in [QTvCS]
+    x = cp.Variable((d, d), complex = True)
+    obj = cp.Minimize(cp.norm(x, 'nuc'))
+    # A[i] = y[i] * scale_factor
+    constraints = [cp.trace(cp.matmul(pauli_list[i], x)) - y_list[i] == 0 for i in range(n_pauli)]
+    constraints.insert(0, cp.trace(x) == 1)
+
+    # Form and solve problem.
+    prob = cp.Problem(obj, constraints)
+    prob.solve()
+    rho = x.value
+
+    return rho
+
+def lasso_state_estimate(results: List[ExperimentResult],
+                              qubits: List[int]) -> np.ndarray:
+    """
+    Estimate a quantum state using compressed sensing via a matrix Lasso.
+
+    For more information see https://en.wikipedia.org/wiki/Lasso_(statistics) and the reference
+    [QTvCS].
+
+    [QTvCS] Quantum Tomography via Compressed Sensing: Error Bounds, Sample Complexity, and ...
+            Flammia et. al.
+            New J. Phys. 14, 095022 (2012)
+            https://dx.doi.org/10.1088/1367-2630/14/9/095022
+            https://arxiv.org/pdf/1205.2300.pdf
+
+    :param results: A tomographically complete list of results.
+    :param qubits: All qubits that were tomographized. This specifies the order in
+        which qubits will be kron'ed together.
+    :return: A point estimate of the quantum state rho.
+    """
+    n_pauli = len(results)
+    n_qubits = len(qubits)
+    d = 2 ** n_qubits
+
+    # Convert the Pauli term into a matrix
+    pauli_list = [pauli2matrix(r.setting.observable, qubits) for r in results]
+
+    # shape of y is (num_pauli,1)
+    y = np.array([[r.expectation] for r in results])
+
+    x = cp.Variable((d, d), complex=True)
+    # Eqn 1 of [QTvCS]
+    A = cp.vstack([cp.trace(cp.matmul(pauli_list[i], x)) * np.sqrt(d / n_pauli)
+                   for i in range(n_pauli)])
+
+    # look at section V. A of [QTvCS] for more information related to mu
+    num_experiments = (results[0].total_counts) * n_pauli
+    mu = 4 * n_pauli / np.sqrt(num_experiments)
+
+    # The equation below is Eqn. (4) and Eqn. (35) from [QTvCS]
+    # Minimize trace norm
+    obj = cp.Minimize(0.5 * cp.norm((A - y), 2) + mu * cp.norm(x, 'nuc'))
+    constraints = [cp.trace(x) == 1]
+
+    # Form and solve problem.
+    prob = cp.Problem(obj, constraints)
+    prob.solve()
+    rho = x.value
+
+    return rho
 
 
 def iterative_mle_state_estimate(results: List[ExperimentResult], qubits: List[int], epsilon=.1,
@@ -612,3 +706,50 @@ def _grad_cost(A, n, estimate, eps=1e-6):
     p = np.clip(p, a_min=eps, a_max=None)
     eta = n / p
     return unvec(-A.conj().T @ eta)
+
+def tomographize(qc, program: Program, qubits: List[int], num_shots=1000, t_type='lasso', pauli_num=None):
+    """
+    Runs tomography on the state generated by program and estimates the state. Can be used as a debugger
+
+    :param qc: the quantum computer to run the debugger on
+    :param program: which program to run the tomography on
+    :param quibits: whihc qubits to run the tomography debugger on
+    :param num_shots: the number of times to run each tomography experiment to get the expected value
+    :param t_type: which tomography type to use. Possible values: "linear_inv", "mle", "compressed_sensing", "lasso"
+    :param pauli_num: the number of pauli matrices to use in the tomography
+    :return: the density matrix as an ndarray
+    """
+
+    # if no pauli_num is specified use the maximum
+    if pauli_num==None:
+        pauli_num=len(qubits)
+
+    #Generate experiments
+    qubit_experiments = generate_state_tomography_experiment(program=program, qubits=qubits)
+    
+    exp_list = []
+    #Experiment holds all 2^n possible pauli matrices for the given number of qubits
+    #Now take pauli_num random pauli matrices as per the paper's advice
+    if (pauli_num > len(qubit_experiments)):
+        print("Cannot sample more Pauli matrices thatn d^2!")
+        return None
+    exp_list = random.sample(list(qubit_experiments), pauli_num)
+    input_exp = ObservablesExperiment(settings=exp_list, program=program)
+
+    #Group experiments if possible to minimize QPU runs
+    input_exp = group_settings(input_exp)
+
+    #NOTE: Change qvm depending on whether we are simulating qvm
+    qc.compiler.quil_to_native_quil = basic_compile
+
+    results = list(estimate_observables(qc=qc, obs_expt=input_exp, num_shots=num_shots))
+    
+    if t_type == 'compressed_sensing':
+        return compressed_sensing_state_estimate(results=results, qubits=qubits)
+    elif t_type == 'mle':
+        return iterative_mle_state_estimate(results=results, qubits=qubits)      
+    elif t_type == "linear_inv":
+        return linear_inv_state_estimate(results=results, qubits=qubits)
+    elif t_type == "lasso":
+        return lasso_state_estimate(results=results, qubits=qubits)
+

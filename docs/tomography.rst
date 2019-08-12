@@ -75,6 +75,14 @@ Finally, we analyze our data with one of the analysis routines::
     [ 0.23 +0.027j  0.175-0.j     0.277-0.j    -0.173+0.004j]
     [-0.203+0.01j  -0.168+0.019j -0.173-0.004j  0.229-0.j   ]]
 
+Debugger
+~~~~~~~~~
+
+The above steps can be automated to create a basic debugger that can be used to 
+peek into the state of a program running on a qc. This can be done using the
+tomographize function::
+
+    rho = tomographize(qc, program, qubits, pauli_num=10, t_type="compressed_sensing")
 
 
 State Tomography
@@ -88,6 +96,7 @@ State Tomography
     linear_inv_state_estimate
     iterative_mle_state_estimate
     estimate_variance
+    tomographize
 
 
 Process Tomography
