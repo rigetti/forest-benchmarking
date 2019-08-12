@@ -706,29 +706,38 @@ def plot_error_distributions(distr_arr: Dict[int, Dict[int, Sequence[float]]], w
     return fig, axs
 
 
-def plot_success(successes, widths=None,
-                 depths=None):
+def plot_success(successes, widths=None, depths=None, boxsize=None):
     if widths is None:
         widths = list(successes.keys())
 
     if depths is None:
         depths = list(set(d for w in widths for d in successes[w].keys()))
 
-    fig, ax = plt.subplots(figsize=(len(widths), len(depths)))
+    if boxsize is None:
+        boxsize = 1500
+
+    fig_width = min(len(widths), 15)
+    fig_depth = min(len(depths), 15)
+
+    fig, ax = plt.subplots(figsize=(fig_width, fig_depth))
 
     margin = .5
-    ax.set_xlim(widths[0] - margin, widths[-1] + margin)
-    ax.set_ylim(depths[0] - margin, depths[-1] + margin)
-    ax.set_xticks(widths)
-    ax.set_yticks(depths)
+    ax.set_xlim(-margin, len(widths) + margin - 1)
+    ax.set_ylim(-margin, len(depths) + margin - 1)
+    plt.xticks(ticks=np.array(range(len(widths))), labels=widths)
+    plt.yticks(ticks=np.array(range(len(depths))), labels=depths)
 
     for w_idx, w in enumerate(widths):
+        if w not in successes.keys():
+            continue
         depth_succ = successes[w]
-        for d_idx, (d, succ) in enumerate(depth_succ.items()):
+        for d_idx, d in enumerate(depths):
+            if d not in depth_succ.keys():
+                continue
             color = 'white'
-            if succ:
+            if depth_succ[d]:
                 color = 'lightblue'
-            ax.scatter(w, d, marker='s', s=1000, color=color, edgecolors='black')
+            ax.scatter(w_idx, d_idx, marker='s', s=boxsize, color=color, edgecolors='black')
 
     return fig, ax
 
