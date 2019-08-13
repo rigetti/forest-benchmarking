@@ -195,7 +195,7 @@ class CircuitTemplate:
         _do_pattern(pattern)
 
         for sequence_transform in self.sequence_transforms:
-            sequence = sequence_transform(sequence)
+            sequence = sequence_transform(graph=graph, qc=qc, width=width, sequence=sequence)
 
         return sequence
 
@@ -375,11 +375,11 @@ def graph_restricted_compilation(qc, graph, program):
 ###
 # Sequence Transforms
 ###
-def dagger_sequence(sequence: List[Program]):
+def dagger_sequence(sequence: List[Program], **kwargs):
     return sequence + [prog.dagger() for prog in reversed(sequence)]
 
 
-def pauli_frame_randomize_sequence(sequence: List[Program], graph: nx.Graph):
+def pauli_frame_randomize_sequence(sequence: List[Program], graph: nx.Graph, **kwargs):
     paulis = [I, X, Y, Z]
     random_paulis = [random_single_qubit_gates(graph, paulis) for _ in range(len(sequence) + 1)]
     new_sequence = [None for _ in range(2*len(sequence) + 1)]
