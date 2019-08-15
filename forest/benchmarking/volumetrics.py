@@ -66,6 +66,11 @@ class CircuitTemplate:
         Blume-Kohout and Young.
         arXiv:1904.05546v2 (2019)
         https://arxiv.org/pdf/1904.05546.pdf
+
+    .. [QVol] Validating quantum computers using randomized model circuits.
+        Cross et al.
+        arXiv:1811.12926v1  (2018).
+        https://arxiv.org/abs/1811.12926
     """
     generators: List[Callable] = field(default_factory=lambda : [])
     sequence_transforms: List[Callable] = field(default_factory=lambda : [])
@@ -612,10 +617,48 @@ def get_single_target_success_probabilities(noisy_results, ideal_results,
                 for d, distrs in d_distrs.items()} for w, d_distrs in hamming_distrs.items()}
 
 
-def determine_successes_from_ckt_success_probs(ckt_success_probs,
-                                               threshold_probability: float = 2/3):
-    return {w: {d: prob > threshold_probability for d, prob in d_ckt_succ_probs.items()}
-            for w, d_ckt_succ_probs in ckt_success_probs.items()}
+def calculate_success_prob_est_and_err(num_success: int, num_circuits: int, num_shots: int) \
+        -> Tuple[float, float]:
+    """
+    Helper to calculate the estimate for the probability of sampling a successful output at a
+    particular depth as well as the 2 sigma one-sided confidence interval on this estimate.
+
+    :param num_success: total number of successful outputs sampled at particular depth across all
+        circuits and shots
+    :param num_circuits: the total number of model circuits of a particular depth and width whose
+        output was sampled
+    :param num_shots: the total number of shots taken for each circuit
+    :return: estimate for the probability of sampling a successful output at a particular depth as
+        well as the 2 sigma one-sided confidence interval on this estimate.
+    """
+    total_sampled_outputs = num_circuits * num_shots
+    prob_sample_heavy = num_success / total_sampled_outputs
+
+    # Eq. (C3) of [QVol]. Assume that num_heavy/num_shots is worst-case binomial with param
+    # num_circuits and take gaussian approximation. Get 2 sigma one-sided confidence interval.
+    one_sided_confidence_interval = prob_sample_heavy - \
+        2 * np.sqrt(num_success * (num_shots - num_success / num_circuits)) / total_sampled_outputs
+
+    return prob_sample_heavy, one_sided_confidence_interval
+
+
+def determine_prob_success_lower_bounds(ckt_success_probs, num_shots_per_ckt):
+    return {w:
+                {d:
+                     calculate_success_prob_est_and_err(
+                         sum(np.asarray(succ_probs) * num_shots_per_ckt),
+                         len(succ_probs),
+                         num_shots_per_ckt
+                     )[1] for d, succ_probs in d_ckt_succ_probs.items()
+                }  for w, d_ckt_succ_probs in ckt_success_probs.items()
+            }
+
+
+def determine_successes(ckt_success_probs, num_shots_per_ckt,
+                                     success_threshold: float = 2 / 3):
+    lower_bounds = determine_prob_success_lower_bounds(ckt_success_probs, num_shots_per_ckt)
+    return {w: {d: lb > success_threshold for d, lb in d_lower_bounds.items()}
+            for w, d_lower_bounds in lower_bounds.items()}
 
 
 def average_distributions(distrs):
@@ -851,10 +894,10 @@ def plot_pareto_frontier(successes, title, widths=None, depths=None):
     ax.set_xlabel('Width')
     ax.set_ylabel('Depth')
 
-    min_depth_failure_at_width = []
+    min_depth_idx_failure_at_width = []
     for w_idx, w in enumerate(widths):
         if w not in successes.keys():
-            min_depth_failure_at_width.append(None)
+            min_depth_idx_failure_at_width.append(None)
             continue
 
         depth_succ = successes[w]
@@ -865,23 +908,33 @@ def plot_pareto_frontier(successes, title, widths=None, depths=None):
             if not depth_succ[d]:
                 min_depth_failure = d_idx
                 break
-        min_depth_failure_at_width.append(min_depth_failure)
+        min_depth_idx_failure_at_width.append(min_depth_failure)
 
-    for idx, depth in enumerate(min_depth_failure_at_width):
-        if depth is None:
-            continue  # the depth was not determined, so leave this boundary open
+    for w_idx, failure_idx in enumerate(min_depth_idx_failure_at_width):
+        if failure_idx is None:
+            continue  # this width was not measured, so leave the boundary open
 
         # horizontal line for this width
-        if depth < len(depths):
-            ax.plot((idx - margin, idx + margin), (depth - margin, depth - margin), color='black')
+        if failure_idx < len(depths): # measured a failure
+            ax.plot((w_idx - margin, w_idx + margin), (failure_idx - margin, failure_idx - margin),
+                    color='black')
 
         # vertical lines
-        if idx < len(min_depth_failure_at_width) - 1:
+        if w_idx < len(widths) - 1:  # check not at max width
             for d_idx in range(len(depths)):
-                if depths[d_idx] not in [d for d in successes[widths[idx]].keys()]:
+                # check that the current depth was measured for this width
+                if depths[d_idx] not in [d for d in successes[widths[w_idx]].keys()]:
                     continue  # do not plot line if this depth was not measured
-                if depth > d_idx >= min_depth_failure_at_width[idx + 1]:
-                    ax.plot((idx + margin, idx + margin), (d_idx - margin, d_idx + margin),
+
+                # if the adjacent width is not measured leave the boundary open
+                if min_depth_idx_failure_at_width[w_idx + 1] is None:
+                    continue
+
+                # check if in the interior but adjacent to exterior
+                # or if in the exterior but adjacent to interior
+                if failure_idx > d_idx >= min_depth_idx_failure_at_width[w_idx + 1] \
+                        or failure_idx <= d_idx < min_depth_idx_failure_at_width[w_idx + 1]:
+                    ax.plot((w_idx + margin, w_idx + margin), (d_idx - margin, d_idx + margin),
                             color='black')
 
     ax.set_title(title)
