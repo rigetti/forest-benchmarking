@@ -8,6 +8,7 @@ from scipy.spatial.distance import hamming
 from scipy.special import comb
 from dataclasses import dataclass, field
 import matplotlib.pyplot as plt
+from statistics import median
 
 from pyquil.quilbase import Pragma, Gate, DefGate, DefPermutationGate
 from pyquil.quilatom import QubitPlaceholder
@@ -15,12 +16,14 @@ from pyquil.quil import Program, address_qubits, merge_programs
 from pyquil.api import QuantumComputer, BenchmarkConnection
 from pyquil.gates import *
 from pyquil.paulis import exponential_map, sX, sZ
+from pyquil.numpy_simulator import NumpyWavefunctionSimulator
 from rpcq.messages import TargetDevice
 from rpcq._utils import RPCErrorError
 
 from forest.benchmarking.randomized_benchmarking import get_rb_gateset
 from forest.benchmarking.distance_measures import total_variation_distance as tvd
 from forest.benchmarking.operator_tools.random_operators import haar_rand_unitary
+from forest.benchmarking.utils import bit_array_to_int
 
 
 def make_default_pattern(num_generators):
@@ -503,17 +506,30 @@ def get_param_maxcut_graph_cost_template(graph_family: Callable[[int], nx.Graph]
 # ==================================================================================================
 # Data acquisition
 # ==================================================================================================
+def sample_random_connected_graphs(graph: nx.Graph, widths: List[int], num_ckts_per_width):
+    samples = {w: [] for w in widths}
+    for w in widths:
+        connected_subgraphs = generate_connected_subgraphs(graph, w)
+        random_indices = np.random.choice(range(len(connected_subgraphs)), size=num_ckts_per_width)
+        samples[w] = [connected_subgraphs[idx] for idx in random_indices]
+    return samples
+
+
 def generate_volumetric_program_array(qc: QuantumComputer, ckt: CircuitTemplate, widths: List[int],
                                       depths: List[int], num_circuit_samples: int,
-                                      graph: nx.Graph = None, pattern = None):
-    if graph is None:
-        graph = qc.qubit_topology()
+                                      graphs: Dict[int, List[nx.Graph]] = None, pattern = None):
+    if graphs is None:
+        graphs = sample_random_connected_graphs(qc.qubit_topology(), widths,
+                                                len(depths)*num_circuit_samples)
 
     programs = {width: {depth: [] for depth in depths} for width in widths}
 
     for width, depth_array in programs.items():
+        circuit_number = 0
         for depth, prog_list in depth_array.items():
             for _ in range(num_circuit_samples):
+                graph = graphs[width][circuit_number]
+                circuit_number += 1
                 prog = ckt.sample_program(graph, repetitions=depth, width=width,
                                           qc=qc, pattern=pattern)
                 prog_list.append(prog)
@@ -522,8 +538,9 @@ def generate_volumetric_program_array(qc: QuantumComputer, ckt: CircuitTemplate,
 
 
 def acquire_volumetric_data(qc: QuantumComputer, program_array, num_shots: int = 500,
-                                  use_active_reset:  bool = False,
-                                  use_compiler: bool = False):
+                            measure_qubits: Dict[int, List[int]] = None,
+                            use_active_reset:  bool = False,
+                            use_compiler: bool = False):
     reset_prog = Program()
     if use_active_reset:
         reset_prog += RESET()
@@ -533,11 +550,13 @@ def acquire_volumetric_data(qc: QuantumComputer, program_array, num_shots: int =
 
     for width, depth_array in program_array.items():
         for depth, prog_list in depth_array.items():
-            for program in prog_list:
+            for idx, program in enumerate(prog_list):
                 prog = program.copy()
 
-                # TODO: provide some way to ensure spectator qubits measured when relevant.
-                qubits = sorted(list(program.get_qubits()))
+                if measure_qubits is not None:
+                    qubits = measure_qubits[width][depth][idx]
+                else:
+                    qubits = sorted(list(program.get_qubits()))
 
                 ro = prog.declare('ro', 'BIT', len(qubits))
                 for idx, q in enumerate(qubits):
@@ -553,6 +572,54 @@ def acquire_volumetric_data(qc: QuantumComputer, program_array, num_shots: int =
                 results[width][depth].append(shots)
 
     return results
+
+
+def collect_heavy_outputs(wfn_sim: NumpyWavefunctionSimulator, program_array,
+                          measure_qubits: Dict[int, List[int]] = None):
+    """
+    Collects and returns those 'heavy' bitstrings which are output with greater than median
+    probability among all possible bitstrings on the given qubits.
+
+    The method uses the provided wfn_sim to calculate the probability of measuring each bitstring
+    from the output of the circuit comprised of the given permutations and gates.
+
+    :param wfn_sim: a NumpyWavefunctionSimulator that can simulate the provided program
+    :return: a list of the heavy outputs of the circuit, represented as ints
+    """
+    heavy_output_array = {w: {d: [] for d in d_arr.keys()} for w, d_arr in program_array.items()}
+
+    for w, d_progs in program_array.items():
+        for d, ckts in d_progs.items():
+            for idx, ckt in enumerate(ckts):
+                wfn_sim.reset()
+                for gate in ckt:
+                    wfn_sim.do_gate(gate)
+
+                if measure_qubits is not None:
+                    qubits = measure_qubits[w][d][idx]
+                else:
+                    qubits = sorted(list(ckt.get_qubits()))
+
+                # Note that probabilities are ordered lexicographically with qubit 0 leftmost.
+                # we need to restrict attention to the subset `qubits`
+                probs = abs(wfn_sim.wf)**2
+                probs = probs.reshape([2]*wfn_sim.n_qubits)
+                marginal = probs
+                for q in reversed(range(wfn_sim.n_qubits)):
+                    if q in qubits:
+                        continue
+                    marginal = np.sum(marginal, axis=q)
+
+                probabilities = marginal.reshape(-1)
+
+                median_prob = median(probabilities)
+
+                # store the integer indices, which implicitly represent the bitstring outcome.
+                heavy_outputs = [idx for idx, prob in enumerate(probabilities) if prob > median_prob]
+                heavy_output_array[w][d].append(heavy_outputs)
+
+    return heavy_output_array
+
 
 # TODO:
 # def do_volumetric_measurements(qc: QuantumComputer, ckt: CircuitTemplate, widths: List[int],
@@ -573,10 +640,10 @@ def acquire_volumetric_data(qc: QuantumComputer, program_array, num_shots: int =
 # ==================================================================================================
 def get_error_hamming_weight_distributions(noisy_results, ideal_results):
 
-    # allow for ideal result to depend only on width (pass in a list)
-    if not isinstance(ideal_results, dict):
-        ideal_results = {width: {depth: ideal_results[width] for depth in depth_array.keys()}
-              for width, depth_array in noisy_results.items()}
+    # allow for ideal result to depend only on width (pass in a dict {w: result})
+    # if not isinstance(ideal_results.values()[0], dict):
+    #     ideal_results = {width: {depth: ideal_results[width] for depth in depth_array.keys()}
+    #           for width, depth_array in noisy_results.items()}
 
     distrs = {width: {depth: [] for depth in depth_array.keys()}
               for width, depth_array in noisy_results.items()}
@@ -615,6 +682,63 @@ def get_single_target_success_probabilities(noisy_results, ideal_results,
 
     return {w: {d: [sum(distr[0:error_func(w)+1]) for distr in distrs]
                 for d, distrs in d_distrs.items()} for w, d_distrs in hamming_distrs.items()}
+
+
+def get_success_probabilities(noisy_results, ideal_results):
+    prob_success = {width: {depth: [] for depth in depth_array.keys()}
+                    for width, depth_array in noisy_results.items()}
+
+    for width, depth_array in prob_success.items():
+        for depth, samples in depth_array.items():
+
+            noisy_ckt_sample_results = noisy_results[width][depth]
+            ideal_ckt_sample_results = ideal_results[width][depth]
+
+            for noisy_shots, ideal_results in zip(noisy_ckt_sample_results,
+                                                 ideal_ckt_sample_results):
+                targets = ideal_results
+                if not isinstance(ideal_results[0], int):
+                    targets = [bit_array_to_int(res) for res in ideal_results]
+
+                pr_success = 0
+                # determine if each result bitstring is a success, i.e. matches an ideal_result
+                for result in noisy_shots:
+                    # convert result to int for comparison with heavy outputs.
+                    output = bit_array_to_int(result)
+                    if output in targets:
+                         pr_success += 1 / len(noisy_shots)
+                prob_success[width][depth].append(pr_success)
+
+    return prob_success
+
+
+def count_heavy_hitters_sampled(noisy_results, heavy_hitters):
+    """
+    Simple helper to count the number of heavy hitters sampled given the sampled results for a
+    number of circuits along with the the actual heavy hitters for each circuit.
+
+    :param noisy_results: results from running each circuit on a quantum computer.
+    :param heavy_hitters: the heavy hitters for each circuit (presumably calculated through
+        simulating the circuit classically)
+    :return: the number of samples which were heavy for each circuit.
+    """
+    num_sampled = {w: {d: [] for d in depth_array.keys()}
+                   for w, depth_array in noisy_results.items()}
+
+    for w, d_results in noisy_results.items():
+        for d, ckts_results in d_results.items():
+            ckts_hh = heavy_hitters[w][d]
+            for ckt_results, ckt_hh in zip(ckts_results, ckts_hh):
+                num_hh = 0
+                # determine if each result bitstring is a heavy output, as determined from simulation
+                for result in ckt_results:
+                    # convert result to int for comparison with heavy outputs.
+                    output = bit_array_to_int(result)
+                    if output in ckt_hh:
+                         num_hh += 1
+                num_sampled[w][d].append(num_hh)
+
+    return num_sampled
 
 
 def calculate_success_prob_est_and_err(num_success: int, num_circuits: int, num_shots: int) \
@@ -958,18 +1082,18 @@ def basement_function(number: float):
 # ==================================================================================================
 # Graph tools
 # ==================================================================================================
-def generate_connected_subgraphs(G: nx.Graph, n_vert: int):
+def generate_connected_subgraphs(graph: nx.Graph, n_vert: int):
     """
     Given a lattice on the QPU or QVM, specified by a networkx graph, return a list of all
     subgraphs with n_vert connect vertices.
 
     :params n_vert: number of vertices of connected subgraph.
-    :params G: networkx Graph
+    :params graph: networkx graph
     :returns: list of subgraphs with n_vert connected vertices
     """
     subgraph_list = []
-    for sub_nodes in itertools.combinations(G.nodes(), n_vert):
-        subg = G.subgraph(sub_nodes)
+    for sub_nodes in itertools.combinations(graph.nodes(), n_vert):
+        subg = graph.subgraph(sub_nodes)
         if nx.is_connected(subg):
             subgraph_list.append(subg)
     return subgraph_list
