@@ -12,9 +12,7 @@ from pyquil.gates import I, MEASURE
 from pyquil.device import ISA, Device
 
 
-
 PATH = os.path.dirname(os.path.realpath(__file__))
-RACK_YAML = os.path.join(PATH, "example_rack.yaml")
 
 
 @pytest.fixture(scope='module')
@@ -142,3 +140,9 @@ def pytest_collection_modifyitems(config, items):
     for item in items:
         if "slow" in item.keywords:
             item.add_marker(skip_slow)
+
+
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers", "slow: mark test to run only with --runslow option."
+    )

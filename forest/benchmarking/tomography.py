@@ -8,6 +8,7 @@ import numpy as np
 from scipy.linalg import logm, pinv
 
 from pyquil import Program
+from pyquil.api import QuantumComputer
 from pyquil.unitary_tools import lifted_pauli as pauli2matrix, lifted_state_operator as state2matrix
 
 import forest.benchmarking.distance_measures as dm
@@ -16,7 +17,8 @@ from forest.benchmarking.operator_tools import vec, unvec, proj_choi_to_physical
 from forest.benchmarking.operator_tools.project_state_matrix import project_state_matrix_to_physical
 from forest.benchmarking.observable_estimation import ExperimentSetting, ObservablesExperiment, \
     ExperimentResult, SIC0, SIC1, SIC2, SIC3, plusX, minusX, plusY, minusY, plusZ, minusZ, \
-    TensorProductState, zeros_state
+    TensorProductState, zeros_state, group_settings
+from forest.benchmarking.direct_fidelity_estimation import acquire_dfe_data # TODO: replace
 
 MAXITER = "maxiter"
 OPTIMAL = "optimal"
@@ -41,15 +43,16 @@ def _state_tomo_settings(qubits: Sequence[int]):
         )
 
 
-def generate_state_tomography_experiment(program: Program, qubits: List[int]):
+def generate_state_tomography_experiment(program: Program, qubits: List[int]) \
+        -> ObservablesExperiment:
     """
-    Generate a (pyQuil) TomographyExperiment containing the experimental settings required
+    Generate an ObservablesExperiment containing the experimental settings required
     to characterize a quantum state.
 
     To collect data, try::
 
-        from forest.benchmarking.operator_estimation import estimate_observables
-        results = list(measure_observables(qc=qc, experiment, num_shots=100_000))
+        from forest.benchmarking.observable_estimation import estimate_observables
+        results = list(estimate_observables(qc=qc, experiment, num_shots=100_000))
 
     :param program: The program to prepare a state to tomographize
     :param qubits: The qubits to tomographize
@@ -58,7 +61,8 @@ def generate_state_tomography_experiment(program: Program, qubits: List[int]):
 
 
 def _sic_process_tomo_settings(qubits: Sequence[int]):
-    """Yield settings over SIC basis cross I,X,Y,Z operators
+    """
+    Yield settings over SIC basis across I, X, Y, Z operators
 
     Used as a helper function for generate_process_tomography_experiment
 
@@ -75,7 +79,8 @@ def _sic_process_tomo_settings(qubits: Sequence[int]):
 
 
 def _pauli_process_tomo_settings(qubits):
-    """Yield settings over +-XYZ basis cross I,X,Y,Z operators
+    """
+    Yield settings over +-XYZ basis across I, X, Y, Z operators
 
     Used as a helper function for generate_process_tomography_experiment
 
@@ -92,15 +97,16 @@ def _pauli_process_tomo_settings(qubits):
             )
 
 
-def generate_process_tomography_experiment(program: Program, qubits: List[int], in_basis='pauli'):
+def generate_process_tomography_experiment(program: Program, qubits: List[int], in_basis='pauli')\
+        -> ObservablesExperiment:
     """
-    Generate a (pyQuil) TomographyExperiment containing the experiment settings required to
+    Generate an ObservablesExperiment containing the experiment settings required to
     characterize a quantum process.
 
     To collect data, try::
 
-        from pyquil.operator_estimation import measure_observables
-        results = list(measure_observables(qc=qc, tomo_experiment=experiment, n_shots=100_000))
+        from forest.benchmarking.observable_estimation import estimate_observables
+        results = list(estimate_observables(qc=qc, experiment, num_shots=100_000))
 
     :param program: The program describing the process to tomographize.
     :param qubits: The qubits to tomographize.
@@ -128,14 +134,14 @@ def linear_inv_state_estimate(results: List[ExperimentResult],
 
     This is the simplest state tomography post processing. To use this function,
     collect state tomography data with :py:func:`generate_state_tomography_experiment`
-    and :py:func:`~pyquil.operator_estimation.measure_observables`.
+    and :py:func:`~observable_estimation.estimate_observables`.
 
     For more details on this post-processing technique,
     see https://en.wikipedia.org/wiki/Quantum_tomography#Linear_inversion or
-    see section 3.4 of
+    see section 3.4 of [WOOD]_
 
-    [WOOD] Initialization and characterization of open quantum systems
-           C. Wood,
+    .. [WOOD] Initialization and characterization of open quantum systems.
+           C. Wood.
            PhD thesis from University of Waterloo, (2015).
            http://hdl.handle.net/10012/9557
 
@@ -166,50 +172,51 @@ def iterative_mle_state_estimate(results: List[ExperimentResult], qubits: List[i
     Given tomography data, use one of three iterative algorithms to return an estimate of the
     state.
     
-    "... [The iterative] algorithm is characterized by a very high convergence rate and features a
-    simple adaptive procedure that ensures likelihood increase in every iteration and
-    convergence to the maximum-likelihood state." [DIMLE1]
+        "... [The iterative] algorithm is characterized by a very high convergence rate and
+        features a simple adaptive procedure that ensures likelihood increase in every iteration
+        and convergence to the maximum-likelihood state." [DIMLE1]_
+
+    There are three options triggered by appropriately setting input parameters:
+
+        - MLE only:                 ``entropy_penalty=0.0``         and ``beta=0.0``
+        - MLE + maximum entropy:    ``entropy_penalty=`` (non-zero)  and ``beta=0.0``
+        - MLE + hedging:            ``entropy_penalty=0.0``         and ``beta=`` (non-zero).
     
-    For MLE only option, set:        entropy_penalty=0.0 and beta=0.0.
-    For MLE + maximum entropy, set:  entropy_penalty=(non-zero) and beta=0.0.
-    For MLE + hedging, set:          entropy_penalty=0.0 and beta=(non-zero).
+    The basic algorithm is due to [DIMLE1]_, with improvements from [DIMLE2]_, [HMLE]_,
+    and [IHMLE]_.
     
-    The basic algorithm is due to
-    
-    [DIMLE1] Diluted maximum-likelihood algorithm for quantum tomography
-             Řeháček et al.,
-             PRA 75, 042108 (2007)
+    .. [DIMLE1] Diluted maximum-likelihood algorithm for quantum tomography.
+             Řeháček et al.
+             PRA 75, 042108 (2007).
              https://doi.org/10.1103/PhysRevA.75.042108
              https://arxiv.org/abs/quant-ph/0611244
 
-    with improvements from
-
-    [DIMLE2] Quantum-State Reconstruction by Maximizing Likelihood and Entropy
-             Teo et al.,
-             PRL 107, 020404 (2011)
+    .. [DIMLE2] Quantum-State Reconstruction by Maximizing Likelihood and Entropy.
+             Teo et al.
+             PRL 107, 020404 (2011).
              https://doi.org/10.1103/PhysRevLett.107.020404
              https://arxiv.org/abs/1102.2662
                 
-    [HMLE]   Hedged Maximum Likelihood Quantum State Estimation
-             Blume-Kohout,
-             PRL, 105, 200504 (2010)
+    .. [HMLE]   Hedged Maximum Likelihood Quantum State Estimation.
+             Blume-Kohout.
+             PRL, 105, 200504 (2010).
              https://doi.org/10.1103/PhysRevLett.105.200504
              https://arxiv.org/abs/1001.2029
 
-    [IHMLE]  Iterative Hedged MLE from Yong Siah Teo's PhD thesis, see Eqn. 1.5.13 on page 88:
-             Numerical Estimation Schemes for Quantum Tomography
-             Y. S. Teo
-             PhD Thesis, from National University of Singapore, (2013)
+    .. [IHMLE]  Iterative Hedged MLE from Yong Siah Teo's PhD thesis. see Eqn. 1.5.13 on page 88:
+             Numerical Estimation Schemes for Quantum Tomography.
+             Y. S. Teo.
+             PhD Thesis, from National University of Singapore, (2013).
              https://arxiv.org/pdf/1302.3399.pdf
 
     :param results: Measured results from a state tomography experiment
     :param qubits: All qubits that were tomographized. This specifies the order in
         which qubits will be kron'ed together; the first qubit in the list is the left-most
         tensor factor.
-    :param epsilon: the dilution parameter used in [DIMLE1]. In practice epsilon ~ 1/num_shots
-    :param entropy_penalty: the entropy penalty parameter from [DIMLE2], i.e. lambda
-    :param beta: The Hedging parameter from [HMLE], i.e. beta
-    :param tol: The largest difference in the frobenious norm between update steps that will cause
+    :param epsilon: the dilution parameter used in [DIMLE1]_. In practice epsilon ~ 1/num_shots
+    :param entropy_penalty: the entropy penalty parameter from [DIMLE2]_, i.e. lambda
+    :param beta: The Hedging parameter from [HMLE]_, i.e. beta
+    :param tol: The largest difference in the Frobenious norm between update steps that will cause
          the algorithm to conclude that it has converged.
     :param maxiter: The maximum number of iterations to perform before aborting the procedure.
     :return: A point estimate of the quantum state rho
@@ -265,35 +272,50 @@ def iterative_mle_state_estimate(results: List[ExperimentResult], qubits: List[i
 
 def _R(state, results, qubits):
     r"""
-    This implements Eqn 4 in [DIMLE1]
+    This implements Eqn 4 in [DIMLE1]_
 
-    As stated in [DIMLE1] eqn 4 reads
+    As stated in [DIMLE1]_ eqn 4 reads
 
-    R(rho) = (1/N) \sum_j (f_j/Pr_j) Pi_j
+    .. math::
 
-    N = total number of measurements
-    f_j = number of times j'th outcome was observed
-    Pi_j = measurement operator or projector, with \sum_j Pi_j = Id and Pi_j \geq 0
-    Pr_j = Tr[Pi_j \rho]  (up to some normalization of the Pi_j)
+        R(\rho) = (1/N) \sum_j (f_j/Pr_j) \Pi_j
+
+    where
+    :math:`N` is the total number of measurements,
+    :math:`f_j` is the number of times j'th outcome was observed,
+    :math:`\Pi_j` is the measurement operator or projector, :math:`\sum_j \Pi_j = Id` and
+    :math:`\Pi_j \geq 0`,
+    and where :math:`Pr_j = Tr[\Pi_j \rho]` (up to some normalization of the :math:`\Pi_j`)
 
     We are working with results whose observables are elements of the un-normalized Pauli
-    basis. Each Pauli P_j can be split into projectors onto the plus and minus eigenspaces
-        P_k = Pi_k^+ - Pi_k^-   ;   Pi_k^+ = (I + P_k) / 2   ;   Pi_k^- = (I - P_k) / 2
-    where each Pi \geq 0 as required above. Hence for each P_k we associate two Pi_k,
-    and subsequently two f_k. We can express these in terms of Exp[P_k] := exp_k
-        plus: f_k^+ / N = (1 + exp_k) / 2
-        minus: f_k^- / N = (1 - exp_k) / 2
+    basis. Each Pauli :math:`P_j` can be split into projectors onto the plus and minus eigenspaces
 
-    We use these f_k and Pi_k to arrive at the code below.
+    .. math::
 
-    Finally, since our Pauli's are not normalized, i.e. Pi_k^+ + Pi_k^- = Id, in order to enforce
-    the condition  \sum_j Pi_j = Id stated above we need to divide our final answer by the number
-    of Paulis.
+        P_k = \Pi_k^+ - \Pi_k^-
+        \Pi_k^+ = (I + P_k) / 2
+        \Pi_k^- = (I - P_k) / 2
+
+    where each :math:`Pi \geq 0` as required above. Hence for each :math:`P_k` we associate two
+    :math:`\Pi_k`, and subsequently two :math:`f_k`. We can express these in terms of
+    :math:`Exp[P_k] := exp_k`
+
+    .. math::
+
+        \rm{plus: }  f_k^+ / N = (1 + exp_k) / 2
+        \rm{minus: } f_k^- / N = (1 - exp_k) / 2
+
+    We use these :math:`f_k` and :math:`Pi_k` to arrive at the code below.
+
+    Finally, since our Pauli's are not normalized, i.e. :math:`Pi_k^+ + Pi_k^- = Id`, in order to
+    enforce the condition  :math:`\sum_j Pi_j = Id` stated above we need to divide our final answer by
+    the number of Paulis.
 
     :param state: The state (given as a density matrix) that we think we have.
     :param results: Measured results from a state tomography experiment. (assumes Pauli basis)
     :param qubits: Qubits that were tomographized.
-    :return: the operator of equation 4 in [DIMLE1] which fixes rho by left and right multiplication
+    :return: the operator of equation 4 in [DIMLE1]_ which fixes rho by left and right
+        multiplication
     """
     # this small number ~ 10^-304 is added so that we don't get divide by zero errors
     machine_eps = np.finfo(float).tiny
@@ -321,7 +343,7 @@ def state_log_likelihood(state: np.ndarray, results: Iterator[ExperimentResult],
     """
     The log Likelihood function used in the diluted MLE tomography routine.
 
-    Equation 2 of [DIMLE1]
+    Equation 2 of [DIMLE1]_
 
     :param state: The state (given as a density matrix) that we think we have.
     :param results: Measured results from a state tomography experiment
@@ -354,7 +376,8 @@ def state_log_likelihood(state: np.ndarray, results: Iterator[ExperimentResult],
 
 
 def _resample_expectations_with_beta(results, prior_counts=1):
-    """Resample expectation values by constructing a beta distribution and sampling from it.
+    """
+    Resample expectation values by constructing a beta distribution and sampling from it.
 
     Used by :py:func:`estimate_variance`.
 
@@ -362,7 +385,7 @@ def _resample_expectations_with_beta(results, prior_counts=1):
     :param prior_counts: Number of "counts" to add to alpha and beta for the beta distribution
         from which we sample.
     :return: A new list of ``results`` where each ExperimentResult's ``expectation`` field
-        contained a resampled expectation value
+        contained a re-sampled expectation value
     """
     resampled_results = []
     for result in results:
@@ -394,7 +417,7 @@ def estimate_variance(results: List[ExperimentResult],
                       n_resamples: int = 40,
                       project_to_physical: bool = False) -> Tuple[float, float]:
     """
-    Use a simple bootstrap-like method to return an errorbar on some functional of the
+    Use a simple bootstrap-like method to return an error bar on some functional of the
     quantum state.
 
     :param results: Measured results from a state tomography experiment
@@ -404,7 +427,7 @@ def estimate_variance(results: List[ExperimentResult],
     :param functional: Which functional to find variance, e.g. ``dm.purity``.
     :param target_state: A density matrix of the state with respect to which the distance
         functional is measured. Not applicable if functional is ``dm.purity``.
-    :param n_resamples: The number of times to resample.
+    :param n_resamples: The number of times to re-sample.
     :param project_to_physical: Whether to project the estimated state to a physical one
         with :py:func:`project_state_matrix_to_physical`.
     """
@@ -443,12 +466,7 @@ def linear_inv_process_estimate(results: List[ExperimentResult], qubits: List[in
 
     For more details on this post-processing technique,
     see https://en.wikipedia.org/wiki/Quantum_tomography#Linear_inversion or
-    see section 3.5 of
-
-    [WOOD] Initialization and characterization of open quantum systems
-           C. Wood,
-           PhD thesis from University of Waterloo, (2015).
-           http://hdl.handle.net/10012/9557
+    see section 3.5 of [WOOD]_
 
     :param results: A tomographically complete list of results.
     :param qubits: All qubits that were tomographized. This specifies the order in
@@ -524,13 +542,13 @@ def _extract_from_results(results: List[ExperimentResult], qubits: List[int]):
 def pgdb_process_estimate(results: List[ExperimentResult], qubits: List[int],
                           trace_preserving=True) -> np.ndarray:
     """
-    Provide an estimate of the process via Projected Gradient Descent with Backtracking.
+    Provide an estimate of the process via Projected Gradient Descent with Backtracking [PGD]_.
 
-    [PGD] Maximum-likelihood quantum process tomography via projected gradient descent
-          Knee et al.,
-          Phys. Rev. A 98, 062336 (2018)
-          https://dx.doi.org/10.1103/PhysRevA.98.062336
-          https://arxiv.org/abs/1803.10062
+    .. [PGD] Maximum-likelihood quantum process tomography via projected gradient descent.
+        Knee et al.
+        Phys. Rev. A 98, 062336 (2018).
+        https://dx.doi.org/10.1103/PhysRevA.98.062336
+        https://arxiv.org/abs/1803.10062
 
     :param results: A tomographically complete list of ExperimentResults
     :param qubits: A list of qubits giving the tensor order of the resulting Choi matrix.
@@ -578,9 +596,9 @@ def pgdb_process_estimate(results: List[ExperimentResult], qubits: List[int],
 def _cost(A, n, estimate, eps=1e-6):
     """
     Computes the cost (negative log likelihood) of the estimated process using the vectorized
-    version of equation 3 of [PGD].
+    version of equation 3 of [PGD]_.
 
-    See the appendix of [PGD].
+    See the appendix of [PGD]_.
 
     :param A: a matrix constructed from the input states and POVM elements (eq. A1) that aids
         in calculating the model probabilities p.
@@ -597,7 +615,7 @@ def _cost(A, n, estimate, eps=1e-6):
 
 def _grad_cost(A, n, estimate, eps=1e-6):
     """
-    Computes the gradient of the cost, leveraging the vectorized equation 6 of [PGD] given in the
+    Computes the gradient of the cost, leveraging the vectorized equation 6 of [PGD]_ given in the
     appendix.
 
     :param A: a matrix constructed from the input states and POVM elements (eq. A1) that aids
@@ -612,3 +630,57 @@ def _grad_cost(A, n, estimate, eps=1e-6):
     p = np.clip(p, a_min=eps, a_max=None)
     eta = n / p
     return unvec(-A.conj().T @ eta)
+
+
+def do_tomography(qc: QuantumComputer, program: Program, qubits: List[int], kind: str,
+                  num_shots: int = 1_000, active_reset: bool = False,
+                  group_tpb_settings: bool = True, mitigate_readout_errors: bool = True,
+                  show_progress_bar: bool = False) \
+        -> Tuple[np.ndarray, ObservablesExperiment, List[ExperimentResult]]:
+    """
+    A wrapper around experiment generation, data acquisition, and estimation that runs a tomography
+    experiment and returns the state or process estimate along with the experiment and results.
+
+    :param qc: A quantum computer object on which the experiment will run.
+    :param program: A program that either constructs the state or defines the process to be
+        estimated, depending on whether ``kind`` is 'state' or 'process' respectively.
+    :param qubits: The qubits on which the estimated state or process are supported. This can be a
+        superset of the qubits used in ``program``, in which case it is assumed the identity
+        acts on these extra qubits. Note that we assume qubits are initialized to the `|0>` state.
+    :param kind: A string describing the kind of tomography to do ('state' or 'process')
+    :param num_shots: The number of shots to run for each experiment setting.
+    :param active_reset: Boolean flag indicating whether experiments should begin with an
+        active reset instruction (this can make the collection of experiments run a lot faster).
+    :param group_tpb_settings: if true, compatible settings will be formed into groups that can
+        be estimated concurrently from the same shot data. This will speed up the data
+        acquisition time by reducing the total number of runs, but be aware that grouped settings
+        will have non-zero covariance.
+    :param mitigate_readout_errors: Boolean flag indicating whether bias due to imperfect
+        readout should be corrected
+    :param show_progress_bar: displays a progress bar via tqdm if true.
+    :return: The estimated state prepared by or process represented by the input ``program``,
+        as implemented on the provided ``qc``, along with the experiment and corresponding
+        results.
+    """
+    if kind.lower() == 'state':
+        expt = generate_state_tomography_experiment(program, qubits)
+    elif kind.lower() == 'process':
+        expt = generate_process_tomography_experiment(program, qubits)
+    else:
+        raise ValueError('Kind must be either \'state\' or \'process\'.')
+
+    if group_tpb_settings:
+        expt = group_settings(expt)
+
+    results = list(acquire_dfe_data(qc, expt, num_shots, active_reset=active_reset,
+                                    mitigate_readout_errors=mitigate_readout_errors,
+                                    show_progress_bar=show_progress_bar))
+
+    if kind.lower() == 'state':
+        # estimate the state matrix
+        est = iterative_mle_state_estimate(results, qubits)
+    else:
+        # estimate the process represented by a choi matrix
+        est = pgdb_process_estimate(results, qubits)
+
+    return est, expt, results

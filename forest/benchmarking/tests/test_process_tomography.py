@@ -4,13 +4,13 @@ import pytest
 from forest.benchmarking.operator_tools.random_operators import haar_rand_unitary
 from forest.benchmarking.operator_tools.superoperator_transformations import kraus2choi
 from forest.benchmarking.tomography import generate_process_tomography_experiment, \
-    pgdb_process_estimate, linear_inv_process_estimate
+    pgdb_process_estimate, linear_inv_process_estimate, do_tomography
 from forest.benchmarking.observable_estimation import estimate_observables, ExperimentResult, \
     ObservablesExperiment, \
     _one_q_state_prep
 from pyquil import Program
 from pyquil import gate_matrices as mat
-from pyquil.gates import CNOT, X
+from pyquil.gates import CNOT, X, H
 from pyquil.numpy_simulator import NumpyWavefunctionSimulator
 
 
@@ -110,3 +110,11 @@ def test_two_q(two_q_tomo_fixture):
     process_choi_true = kraus2choi(u_rand)
     np.testing.assert_allclose(process_choi_true, process_choi_lin_inv_est, atol=.1)
     np.testing.assert_allclose(process_choi_true, process_choi_est, atol=0.05)
+
+
+def test_do_tomography(qvm):
+    qubit = 1
+    process = Program(H(qubit))
+    est, _, _ = do_tomography(qvm, process, qubits=[qubit], kind='process')
+
+    np.testing.assert_allclose(est, kraus2choi(mat.H), atol=.1)

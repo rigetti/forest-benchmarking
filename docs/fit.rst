@@ -1,4 +1,4 @@
-.. currentmodule:: forest.benchmarking.analysis
+.. module:: forest.benchmarking.analysis
 
 Estimate parameters from Fits
 =============================

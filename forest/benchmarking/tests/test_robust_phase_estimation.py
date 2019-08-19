@@ -1,6 +1,6 @@
 import numpy as np
 from numpy import pi
-from pyquil.gates import I, H, RY, RZ
+from pyquil.gates import I, H, RY, RZ, RX
 from pyquil.noise import damping_after_dephasing
 from pyquil.quil import Program
 from pyquil.quilbase import Measurement
@@ -40,7 +40,7 @@ def test_noiseless_rpe(qvm):
                                          *rpe.all_eigenvector_prep_meas_settings([q], I(q)),
                                          num_depths=num_depths)
     results = rpe.acquire_rpe_data(qvm, expts, multiplicative_factor=mult_factor)
-    est = rpe.robust_phase_estimate([q], results)
+    est = rpe.robust_phase_estimate(results, [q])
     assert np.abs(angle - est) < 2 * np.sqrt(rpe.get_variance_upper_bound(num_depths, mult_factor))
 
 
@@ -79,5 +79,19 @@ def test_noisy_rpe(qvm):
         add_noise_to_experiments(expts, 25 * 10 ** (-6.), 20 * 10 ** (-6.), .92, .87, q)
         results = rpe.acquire_rpe_data(qvm, expts, multiplicative_factor=5.,
                                        additive_error=add_error)
-        phase_estimate = rpe.robust_phase_estimate([q], results)
+        phase_estimate = rpe.robust_phase_estimate(results, [q])
         assert np.allclose(phase_estimate, angle, atol=tolerance)
+
+
+def test_do_rpe(qvm):
+    angles = [-pi / 2, pi]
+    qubits = [0, 1]
+    qubit_groups = [(qubit,) for qubit in qubits]
+    changes_of_basis = [H(qubit) for qubit in qubits]
+
+    for angle in angles:
+        rotation = Program([RX(angle, qubit) for qubit in qubits])
+        phases, expts, ress = rpe.do_rpe(qvm, rotation, changes_of_basis, qubit_groups,
+                                         num_depths=6)
+        for group in qubit_groups:
+            assert np.allclose(phases[group], angle % (2*pi), atol=.1)

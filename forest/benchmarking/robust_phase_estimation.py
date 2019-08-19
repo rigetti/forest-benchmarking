@@ -1,10 +1,11 @@
-from typing import Tuple, List, Sequence, Union
+from typing import Tuple, List, Sequence, Union, Dict
 import warnings
 
 import numpy as np
 from numpy import pi
 from functools import reduce
 from operator import mul
+from tqdm import tqdm
 
 from pyquil.quil import Program, merge_programs, DefGate, Pragma
 from pyquil.quilbase import Gate
@@ -13,7 +14,8 @@ from pyquil.paulis import PauliTerm
 from forest.benchmarking.utils import bloch_vector_to_standard_basis, is_pos_pow_two
 from forest.benchmarking.observable_estimation import ExperimentSetting, plusZ, minusZ, \
     ObservablesExperiment, ExperimentResult, estimate_observables, plusX, _OneQState, \
-    TensorProductState, group_settings
+    TensorProductState, group_settings, get_results_by_qubit_groups, \
+    calibrate_observable_estimates, exhaustive_symmetrization
 
 import matplotlib.pyplot as plt
 
@@ -148,7 +150,7 @@ def pick_two_eigenvecs_prep_meas_settings(fix_qubit: Tuple[int, int], rotate_qub
 
 
 def generate_rpe_experiments(rotation: Program, prep_prog: Program, pre_meas_prog: Program,
-                            settings: Sequence[ExperimentSetting], num_depths: int = 6) \
+                             settings: Sequence[ExperimentSetting], num_depths: int = 6) \
         -> List[ObservablesExperiment]:
     """
     Generate a dataframe containing all the experiments needed to perform robust phase estimation
@@ -156,6 +158,7 @@ def generate_rpe_experiments(rotation: Program, prep_prog: Program, pre_meas_pro
 
     In general, this experiment consists of multiple iterations of the following steps performed for
     different depths and measurement in different "directions":
+
         1) Prepare a superposition between computational basis states (i.e. the eigenvectors
             of a rotation about the Z axis)
         2) Perform a change of basis which maps the computational basis to eigenvectors of the
@@ -168,17 +171,17 @@ def generate_rpe_experiments(rotation: Program, prep_prog: Program, pre_meas_pro
         5) Prepare (one of) the qubit(s) for measurement along either the X or Y axis.
         6) Measure this qubit, and in the multi-qubit case other qubits participating in rotation.
 
-    The single qubit algorithm is due to:
+    The single qubit algorithm is due to [RPE]_. See also [RPE2]_
 
-    [RPE]  Robust Calibration of a Universal Single-Qubit Gate-Set via Robust Phase Estimation
-           Kimmel et al.,
-           Phys. Rev. A 92, 062315 (2015)
+    .. [RPE]  Robust Calibration of a Universal Single-Qubit Gate-Set via Robust Phase Estimation.
+           Kimmel et al.
+           Phys. Rev. A 92, 062315 (2015).
            https://doi.org/10.1103/PhysRevA.92.062315
            https://arxiv.org/abs/1502.02677
 
-    [RPE2] Experimental Demonstration of a Cheap and Accurate Phase Estimation
-           Rudinger et al.,
-           Phys. Rev. Lett. 118, 190502 (2017)
+    .. [RPE2] Experimental Demonstration of a Cheap and Accurate Phase Estimation.
+           Rudinger et al.
+           Phys. Rev. Lett. 118, 190502 (2017).
            https://doi.org/10.1103/PhysRevLett.118.190502
            https://arxiv.org/abs/1702.01763
 
@@ -189,17 +192,17 @@ def generate_rpe_experiments(rotation: Program, prep_prog: Program, pre_meas_pro
         the computational basis into the basis formed by eigenvectors of the rotation. The sign
         of the estimate will be determined by which computational basis states are mapped to
         which eigenvectors. Following the right-hand-rule convention, a rotation of RX(phi) for
-        phi>0 about the +X axis should be paired with a change of basis mapping |0> to |+> and
-        |1> to |-> . This is achieved by the gate RY(pi/2, qubit). This program should be
+        phi>0 about the +X axis should be paired with a change of basis mapping `|0>` to `|+>` and
+        `|1>` to `|->`. This is achieved by the gate RY(pi/2, qubit). This program should be
         provided in native gates, or gates which can be custom-compiled by basic_compile.
     :param pre_meas_prog: typically the program which performs the inverse of the unitary change
         of basis in prep_prog; that is, this should map eigenvectors back to computational basis.
     :param settings: the ExperimentSettings appropriate for the given experiment. These can be
         generated along with the prep_prog and meas_prog by the helpers above.
-    :param num_depths: the number of depths in the protocol described in [RPE]. A depth is the
+    :param num_depths: the number of depths in the protocol described in [RPE]_. A depth is the
         number of consecutive applications of the rotation in a single iteration. The maximum
         depth is 2**(num_depths-1)
-    :return: experiments necessary for the RPE protocol in [RPE]
+    :return: experiments necessary for the RPE protocol in [RPE]_
     """
     expts = []
     for exponent in range(num_depths):
@@ -213,7 +216,7 @@ def generate_rpe_experiments(rotation: Program, prep_prog: Program, pre_meas_pro
 
 def get_additive_error_factor(M_j: float, max_additive_error: float) -> float:
     """
-    Calculate the factor in Equation V.17 of [RPE].
+    Calculate the factor in Equation V.17 of [RPE]_.
 
     This factor multiplies the number of trials at the jth iteration in order to maintain
     Heisenberg scaling with the same variance upper bound as if there were no additive error
@@ -233,16 +236,16 @@ def num_trials(depth, max_depth, multiplicative_factor: float = 1.0,
     """
     Calculate the optimal number of shots per program with a given depth.
 
-    The calculation is given by equations V.11 and V.17 in [RPE]. A non-default multiplicative
+    The calculation is given by equations V.11 and V.17 in [RPE]_. A non-default multiplicative
     factor breaks the optimality guarantee. Larger additive_error leads to a longer experiment,
     but the variance bounds only apply if the additive_error sufficiently reflects reality.
 
     :param depth: the depth of the program whose number of trials is calculated
     :param max_depth: maximum depth of programs in the experiment
     :param multiplicative_factor: extra add-hoc factor that multiplies the optimal number of shots
-    :param additive_error: estimate of the max additive error in the experiment, eq. V.15 of [RPE]
-    :param alpha: a hyper-parameter in equation V.11 of [RPE], suggested to be 5/2, > 2
-    :param beta: a hyper-parameter in equation V.11 of [RPE], suggested to be 1/2, > 0
+    :param additive_error: estimate of the max additive error in the experiment, eq. V.15 of [RPE]_
+    :param alpha: a hyper-parameter in equation V.11 of [RPE]_, suggested to be 5/2, > 2
+    :param beta: a hyper-parameter in equation V.11 of [RPE]_, suggested to be 1/2, > 0
     :return: Mj, the number of shots for program with depth 2**(j-1) in iteration j of RPE
     """
     j = np.log2(depth) + 1
@@ -256,7 +259,9 @@ def num_trials(depth, max_depth, multiplicative_factor: float = 1.0,
 def acquire_rpe_data(qc: QuantumComputer,
                      experiments: Sequence[ObservablesExperiment],
                      multiplicative_factor: float = 1.0, additive_error: float = None,
-                     min_shots: int = 500) -> List[List[ExperimentResult]]:
+                     min_shots: int = 500,  active_reset: bool = False,
+                     mitigate_readout_errors: bool = False, show_progress_bar: bool = False) \
+        -> List[List[ExperimentResult]]:
     """
     Run each experiment in the sequence of experiments.
 
@@ -272,16 +277,32 @@ def acquire_rpe_data(qc: QuantumComputer,
         in contrast to the theoretical assumption that shot-rate is independent of number of shots,
         in practice the shot-rate is approximately proportional to the number of shots up to about
         500 so taking fewer shots is sub-optimal.
+    :param active_reset: Boolean flag indicating whether experiments should begin with an
+        active reset instruction (this can make the collection of experiments run a lot faster).
+    :param mitigate_readout_errors: Boolean flag indicating whether bias due to imperfect
+        readout should be corrected
+    :param show_progress_bar: displays a progress bar via tqdm if true.
     :return: a copy of the input experiments populated with results in each layer.
     """
     depths = [2**idx for idx in range(len(experiments))]
     max_depth = max(depths)
 
     results = []
-    for depth, expt in zip(depths, experiments):
+    for depth, expt in zip(tqdm(depths, disable=not show_progress_bar), experiments):
         theoretical_optimum = num_trials(depth, max_depth, multiplicative_factor, additive_error)
         num_shots = max(min_shots, theoretical_optimum)
-        results.append(list(estimate_observables(qc, expt, num_shots)))
+
+        # TODO: fix up mitigate_readout_errors.
+        if mitigate_readout_errors:
+            res = list(
+                estimate_observables(qc, expt, num_shots=num_shots, active_reset=active_reset,
+                                     symmetrization_method=exhaustive_symmetrization))
+
+            results.append(list(calibrate_observable_estimates(qc, res, num_shots=num_shots)))
+        else:
+            results.append(list(
+                estimate_observables(qc, expt, num_shots=num_shots, active_reset=active_reset)))
+
     return results
 
 
@@ -293,7 +314,7 @@ def acquire_rpe_data(qc: QuantumComputer,
 def _p_max(M_j: int) -> float:
     """
     Calculate an upper bound on the probability of error in the estimate on the jth iteration.
-    Equation V.6 in [RPE]
+    Equation V.6 in [RPE]_
 
     :param M_j: The number of shots for the jth iteration of RPE
     :return: p_max(M_j), an upper bound on the probability of error on the estimate k_j * Angle
@@ -304,7 +325,7 @@ def _p_max(M_j: int) -> float:
 def _xci(h: int) -> float:
     """
     Calculate the maximum error in the estimate after h iterations given that no errors occurred in
-    all previous iterations. Equation V.7 in [RPE]
+    all previous iterations. Equation V.7 in [RPE]_
 
     :param h: the iteration before which we assume no errors have occured in our estimation.
     :return: the maximum error in our estimate, given h
@@ -315,7 +336,7 @@ def _xci(h: int) -> float:
 def get_variance_upper_bound(num_depths: int, multiplicative_factor: float = 1.0,
                              additive_error: float = None) -> float:
     """
-    Equation V.9 in [RPE]
+    Equation V.9 in [RPE]_
 
     :param num_depths: the number of depths in the experiment
     :param multiplicative_factor: ad-hoc factor to multiply the number of shots per iteration. See
@@ -339,10 +360,10 @@ def get_variance_upper_bound(num_depths: int, multiplicative_factor: float = 1.0
 def estimate_phase_from_moments(xs: List, ys: List, x_stds: List, y_stds: List,
                                 bloch_data: List = None) -> float:
     """
-    Estimate the phase in an iterative fashion as described in section V. of [RPE]
+    Estimate the phase in an iterative fashion as described in section V. of [RPE]_
 
     Note: in the realistic case that additive errors are present, the estimate is biased.
-    See Appendix B of [RPE] for discussion/comparison to other techniques.
+    See Appendix B of [RPE]_ for discussion/comparison to other techniques.
 
     :param xs: expectation value <X> operator for each iteration
     :param ys: expectation value <Y> operator for each iteration
@@ -382,23 +403,23 @@ def estimate_phase_from_moments(xs: List, ys: List, x_stds: List, y_stds: List,
     return theta_est % (2 * pi)  # return value between 0 and 2pi
 
 
-def robust_phase_estimate(qubits: Sequence[int], results: List[List[ExperimentResult]]) \
+def robust_phase_estimate(results: List[List[ExperimentResult]], qubits: Sequence[int]) \
         -> Union[float, Sequence[float]]:
     """
     Provides the estimate of the phase for an RPE experiment with results.
 
-    In the 1q case this is simply a convenient wrapper around get_moments() and
-    estimate_phase_from_moments() which do all of the analysis; see those methods above for details.
+    In the 1q case this is simply a convenient wrapper around :func:`estimate_phase_from_moments`
+    which does all of the analysis.
+
     For multiple qubits this method determines which possible outputs are consistent with the
     post-selection-state and the possible non-z-basis measurement qubit. For each choice of the
     latter, all such possible outcomes correspond to measurement of a different relative phase.
-    get_moments() is called on a dataframe with rows consistent with the particular non-z-basis
-    measurement qubit and each outcome. If there is no post-select state then the number of
-    relative phases estimated is equal to the dimension of the Hilbert space.
 
     :return: an estimate of the phase of the rotation program passed into generate_rpe_experiments
-        If the rotation program is multi-qubit then there will be
+        If the rotation program is multi-qubit then there will be::
+
             2**(len(meas_qubits) - len(post_select_state) - 1)
+
         different relative phases estimated and returned.
     """
     if len(qubits) == 1:
@@ -546,3 +567,73 @@ def plot_rpe_iterations(xs, ys, x_stds, y_stds, expected_positions: List = None)
     ax.grid(True)
 
     return ax
+
+
+def do_rpe(qc: QuantumComputer, rotation: Program, changes_of_basis: List[Program],
+           qubit_groups: Sequence[Sequence[int]],  num_depths: int = 6,
+           multiplicative_factor: float = 1.0, additive_error: float = None,
+           active_reset: bool = False,
+           mitigate_readout_errors: bool = False,
+           show_progress_bar: bool = False) \
+        -> Tuple[Dict[Tuple[int, ...], float],
+                 List[ObservablesExperiment],
+                 List[List[ExperimentResult]]]:
+    """
+    A wrapper around experiment generation, data acquisition, and estimation that runs robust
+    phase estimation.
+
+    The `changes_of_basis` paired with `qubit_groups` implicitly specify the accumulation of
+    which phases are being measured with respect to increasing applications of `rotation`. This
+    can be used to facilitate multiple 'parallel' RPE experiments that measure the phase of
+    several single qubit gates in parallel. It also allows for cross talk experiments where one
+    physical gate drives effective rotations that are monitored on spectator qubits.
+
+    :param qc: A quantum computer object on which the experiment will run.
+    :param rotation: the program or gate whose angle of rotation is to be estimated. Note that
+        this program will be run through forest_benchmarking.compilation.basic_compile().
+    :param changes_of_basis: a list of programs implementing the change of basis transformation
+        which maps the computational basis states to the appropriate eigenvectors on each group
+        of qubits provided.
+    :param qubit_groups: The partition of qubits into groups. For each group we will estimate an
+        rb decay. Each decay should be interpreted as a 'simultaneous rb decay' as the sequences
+        on each group of qubits will be run concurrently.
+    :param num_depths: the number of depths in the experiment
+    :param multiplicative_factor: ad-hoc factor to multiply the number of shots per iteration. See
+        num_trials() which computes the optimal number of shots per iteration.
+    :param additive_error: estimate of the max additive error in the experiment, see num_trials()
+    :param active_reset: Boolean flag indicating whether experiments should begin with an
+        active reset instruction (this can make the collection of experiments run a lot faster).
+    :param mitigate_readout_errors: Boolean flag indicating whether bias due to imperfect
+        readout should be corrected
+    :param show_progress_bar: displays a progress bar via tqdm if true.
+    :return: The estimated rb decays for each group of qubits, along with the experiment and
+        corresponding results.
+    """
+    prep_prog_tot = Program()
+    pre_meas_prog_tot = Program()
+    all_settings = []
+    for qubits, cob in zip(qubit_groups, changes_of_basis):
+        prep_prog, pre_meas_prog, settings = all_eigenvector_prep_meas_settings(qubits, cob)
+        prep_prog_tot += prep_prog
+        pre_meas_prog_tot += pre_meas_prog
+        all_settings += settings
+
+    expts = generate_rpe_experiments(rotation, prep_prog_tot, pre_meas_prog_tot, all_settings,
+                                     num_depths)
+
+    # TODO: fix up mitigate_readout_errors.
+    results = acquire_rpe_data(qc, expts, multiplicative_factor=multiplicative_factor,
+                               additive_error=additive_error,
+                               active_reset=active_reset,
+                               mitigate_readout_errors=mitigate_readout_errors,
+                               show_progress_bar=show_progress_bar)
+    results_by_group = [get_results_by_qubit_groups(depth_results, qubit_groups)
+                        for depth_results in results]
+
+    estimates_by_qubit_group = {}
+    for qubits in qubit_groups:
+        group_results = [res[tuple(qubits)] for res in results_by_group]
+        estimates = robust_phase_estimate(group_results, qubits)
+        estimates_by_qubit_group[tuple(qubits)] = estimates
+
+    return estimates_by_qubit_group, expts, results

@@ -12,16 +12,10 @@ from pyquil import Program, get_qc
 from pyquil.gates import *
 from pyquil.api import WavefunctionSimulator, QVMConnection
 from pyquil.paulis import sI, sX, sY, sZ, PauliSum, PauliTerm
-from forest.benchmarking.observable_estimation import ExperimentSetting, ObservablesExperiment, \
-    to_json, read_json, \
-    SIC0, SIC1, SIC2, SIC3, \
-    plusX, minusX, plusY, minusY, plusZ, minusZ, _one_q_sic_prep, _OneQState,\
+from forest.benchmarking.observable_estimation import *
+from forest.benchmarking.observable_estimation import _OneQState,\
     _max_tpb_overlap, _max_weight_operator, _max_weight_state, \
-    TensorProductState, zeros_state, \
-    group_settings, ExperimentResult, estimate_observables, \
-    _flip_array_to_prog, shots_to_obs_moments, \
-    ratio_variance, exhaustive_symmetrization, get_calibration_program, \
-    consolidate_symmetrization_outputs, calibrate_observable_estimates, _measure_bitstrings
+    _flip_array_to_prog,  _measure_bitstrings, _one_q_sic_prep
 
 
 def _generate_random_states(n_qubits, n_terms):
@@ -1994,3 +1988,52 @@ def test_unitary_state_fidelity_readout_error(forest):
     # how close is this state to |0>
     expected_fidelity = (np.cos(theta / 2)) ** 2
     np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
+
+
+def test_merge_disjoint_experiments():
+    sett1 = ExperimentSetting(TensorProductState(), sX(0) * sY(1))
+    sett2 = ExperimentSetting(plusZ(1), sY(1))
+    sett3 = ExperimentSetting(plusZ(0), sX(0))
+    sett4 = ExperimentSetting(minusX(1), sY(1))
+    sett5 = ExperimentSetting(TensorProductState(), sZ(2))
+
+    expt1 = ObservablesExperiment(settings=[sett1, sett2], program=Program(X(1)))
+    expt2 = ObservablesExperiment(settings=[sett3, sett4], program=Program(Z(0)))
+    expt3 = ObservablesExperiment(settings=[sett5], program=Program())
+
+    merged_expt = merge_disjoint_experiments([expt1, expt2, expt3])
+    assert len(merged_expt) == 2
+
+
+def test_results_by_qubit_groups():
+    er1 = ExperimentResult(
+        setting=ExperimentSetting(plusX(0), sZ(0)),
+        expectation=0.,
+        std_err=0.,
+        total_counts=1,
+    )
+
+    er2 = ExperimentResult(
+        setting=ExperimentSetting(plusX(0), sZ(1)),
+        expectation=0.,
+        std_err=0.,
+        total_counts=1,
+    )
+
+    er3 = ExperimentResult(
+        setting=ExperimentSetting(plusX(0), sX(0)*sZ(1)),
+        expectation=0.,
+        std_err=0.,
+        total_counts=1,
+    )
+
+    er4 = ExperimentResult(
+        setting=ExperimentSetting(plusX(0), sX(0)*sZ(2)),
+        expectation=0.,
+        std_err=0.,
+        total_counts=1,
+    )
+    groups = [(0,), (1,), (2, 0)]
+    res_by_group = get_results_by_qubit_groups([er1, er2, er3, er4], groups)
+
+    assert res_by_group == {(0,): [er1], (1,): [er2], (0, 2): [er1, er4]}

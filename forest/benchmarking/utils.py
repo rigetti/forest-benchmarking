@@ -18,6 +18,7 @@ from pyquil.api import QuantumComputer
 def is_pos_pow_two(x: int) -> bool:
     """
     Simple check that an integer is a positive power of two.
+
     :param x: number to check
     :return: whether x is a positive power of two
     """
@@ -59,7 +60,7 @@ def bloch_vector_to_standard_basis(theta: float, phi: float) -> Tuple[complex, c
 
     :param theta: azimuthal angle given in radians
     :param phi: polar angle given in radians
-    :return: tuple of the two coefficients a and b for the state a|0> + b|1> where a is real
+    :return: tuple of the two coefficients a and b for the state ``a|0> + b|1>`` where a is real
     """
     return np.cos(theta / 2), np.exp(1j * phi) * np.sin(theta / 2)
 
@@ -69,7 +70,7 @@ def standard_basis_to_bloch_vector(qubit_state: Sequence[complex]) -> Tuple[floa
     Converts a standard representation of a single qubit state in the computational basis to the
     spherical coordinates theta, phi of its representation on the Bloch sphere.
 
-    :param qubit_state: a sequence of the two coefficients a and b for the state a|0> + b|1>
+    :param qubit_state: a sequence of the two coefficients a and b for the state ``a|0> + b|1>``
     :return: the azimuthal and polar angle, theta and phi, representing a point on the Bloch sphere.
     """
     alpha, beta = qubit_state
@@ -83,16 +84,26 @@ def standard_basis_to_bloch_vector(qubit_state: Sequence[complex]) -> Tuple[floa
 
 
 def prepare_state_on_bloch_sphere(qubit: int, theta: float, phi: float):
-    """
+    r"""
     Returns a program which prepares the given qubit in the state (theta, phi) on the bloch sphere,
-    assuming the initial state |0> where (theta=0, phi=0).
+    assuming the initial state `|0>` where (theta=0, phi=0).
 
     Theta and phi are the usual polar coordinates, given in radians. Theta is the angle of the
     state from the +Z axis, or zero state, and phi is the rotation angle from the XZ plane.
     Equivalently, the state
-        alpha |0> + beta |1>
-    in these coordinates has alpha = cos(theta/2) and e^(i*phi) = beta.imag, modulo some global
-    phase.
+
+    .. math::
+
+        \alpha |0> + \beta |1>
+
+    in these coordinates has, up to some global phase factored out,
+
+    .. math::
+
+        \alpha = \cos(\theta/2)
+        e^{i \phi} = \rm{Im}[\beta]
+
+    where :math:`\rm{Im}[\beta]=` ``beta.imag``
 
     See https://en.wikipedia.org/wiki/Qubit#Bloch_sphere_representation for more information.
 
@@ -115,7 +126,7 @@ def pack_shot_data(shot_data):
 
 def str_to_pauli_term(pauli_str: str, qubit_labels=None):
     """
-    Convert a string into a pyquil.paulis.PauliTerm.
+    Convert a string into a :class:`~pyquil.paulis.PauliTerm`.
 
     >>> str_to_pauli_term('XY', [])
 
@@ -137,7 +148,7 @@ def all_traceless_pauli_terms(qubits: Sequence[int]):
     Generate list of all Pauli terms (with weight > 0) on N qubits.
 
     :param qubits: The integer labels for the qubits
-    :return: list of `PauliTerm`s
+    :return: list of `PauliTerm`
     :rtype: list
     """
     all_ixyz_strs = [''.join(x) for x in itertools.product('IXYZ', repeat=len(qubits))][1:]
@@ -153,7 +164,7 @@ def all_traceless_pauli_choice_terms(qubits: Sequence[int], pauli_choice: str):
 
     :param qubits: The integer labels for the qubits
     :param pauli_choice: choice of which pauli to form combinations.
-    :return: list of `PauliTerm`s made from combinations of I and the given choice pauli
+    :return: list of `PauliTerm` made from combinations of I and the given choice pauli
     """
     all_ichoice_strs = [''.join(x) for x in itertools.product('I' + pauli_choice.upper(),
                                                               repeat=len(qubits))][1:]
@@ -166,8 +177,7 @@ def all_traceless_pauli_z_terms(qubits: Sequence[int]):
     Generate list of all Pauli Z terms (with weight > 0) on N qubits
 
     :param qubits: The integer labels for the qubits
-    :return: list of `PauliTerm`s
-    :rtype: list
+    :return: list of `PauliTerm`
     """
     all_iz_strs = [''.join(x) for x in itertools.product('IZ', repeat=len(qubits))][1:]
     list_of_terms = [str_to_pauli_term(s, qubits) for s in all_iz_strs]
@@ -175,9 +185,9 @@ def all_traceless_pauli_z_terms(qubits: Sequence[int]):
 
 
 def local_pauli_eig_prep(op, qubit):
-    """
+    r"""
     Generate gate sequence to prepare a the +1 eigenstate of a Pauli operator, assuming
-    we are starting from the ground state ( the +1 eigenstate of Z^{\\otimes n})
+    we are starting from the ground state ( the +1 eigenstate of :math:`Z^{\otimes n}`)
 
     :param str op: A string representation of the Pauli operator whose eigenstate we'd like to prepare.
     :param int qubit: The index of the qubit that the preparation is acting on
@@ -418,7 +428,7 @@ def transform_pauli_moments_to_bit(mean_p, var_p):
     """
     Changes the first of a Pauli operator to the moments of a bit (a Bernoulli process).
 
-    E.g. if the original mean is on [-1,+1] the returned mean is on [0,1].
+    E.g. if the original mean is on [-1, +1] the returned mean is on [0, 1].
 
     :param mean_p: mean of some Pauli operator
     :param var_p: variance of a Pauli operator
@@ -433,7 +443,7 @@ def transform_bit_moments_to_pauli(mean_c, var_c):
     """
     Changes the first two moments of a bit (a Bernoulli process) to Pauli operator moments.
 
-    E.g. if the original mean is on [0,1] the returned mean is on [-1,+1].
+    E.g. if the original mean is on [0, 1] the returned mean is on [-1, +1].
 
     :param mean_c: bit probability of heads or tails.
     :param var_c: variance of bit

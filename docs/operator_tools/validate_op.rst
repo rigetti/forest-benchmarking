@@ -1,7 +1,7 @@
 .. currentmodule:: forest.benchmarking.operator_tools.validate_operator
 
-Validate operators
-=======================
+Validate Operators
+==================
 
 ``validate_operator`` is a module allowing one to check properties of operators or matrices.
 

@@ -1,4 +1,4 @@
-.. currentmodule:: forest.benchmarking.utils
+.. module:: forest.benchmarking.utils
 
 Utilities
 =========
@@ -46,7 +46,7 @@ Pauli Functions
 
 
 Operator Basis
----------
+--------------
 .. autosummary::
     :toctree: autogen
     :template: autosumm.rst
