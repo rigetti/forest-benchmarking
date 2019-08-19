@@ -209,7 +209,8 @@ class CircuitTemplate:
 
     def sample_program(self, graph, repetitions, qc=None, width=None, sequence=None,
                        pattern = None):
-        return merge_programs(self.sample_sequence(graph, repetitions, qc, width, sequence, pattern))
+        # TODO: replace with merge_programs after permutation issue fixed.
+        return sum(self.sample_sequence(graph, repetitions, qc, width, sequence, pattern), Program())
 
 
 # ==================================================================================================
@@ -326,13 +327,16 @@ def random_qubit_permutation(graph: nx.Graph):
     return p
 
 
-def random_su4_pairs(graph: nx.Graph):
+def random_su4_pairs(graph: nx.Graph, idx_label, randomly_permute_qubits: bool = True):
     qubits = list(graph.nodes)
+    if randomly_permute_qubits:
+        permutation = list(np.random.permutation(range(len(qubits))))
+        qubits = [qubits[idx] for idx in permutation]
     prog = Program()
     # ignore the edges in the graph
     for q1, q2 in zip(qubits[::2], qubits[1::2]):
         matrix = haar_rand_unitary(4)
-        gate_definition = DefGate(f"RSU4_{q1}_{q2}", matrix)
+        gate_definition = DefGate(f"LYR{idx_label}_RSU4_{q1}_{q2}", matrix)
         RSU4 = gate_definition.get_constructor()
         prog += gate_definition
         prog += RSU4(q1, q2)
@@ -362,7 +366,7 @@ def graph_restricted_compilation(qc, graph, program):
     new_2q = {}
     for key, val in two_qs.items():
         q1, q2 = key.split('-')
-        if int(q1) in qubits and int(q2) in qubits:
+        if (int(q1), int(q2)) in graph.edges:
             new_2q[key] = val
 
     new_isa = {'1Q': new_1q, '2Q': new_2q}
@@ -394,6 +398,22 @@ def pauli_frame_randomize_sequence(sequence: List[Program], graph: nx.Graph, **k
     new_sequence[::2] = random_paulis
     new_sequence[1::2] = sequence
     return new_sequence
+
+
+def compile_individual_sequence_elements(qc, sequence: List[Program], graph: nx.Graph, **kwargs):
+    compiled_sequence = []
+    for prog in sequence:
+        native_quil = graph_restricted_compilation(qc, graph, prog)
+        # remove gate definitions and HALT
+        compiled_sequence.append(Program([instr for instr in native_quil.instructions][:-1]))
+    return compiled_sequence
+
+
+def compile_merged_sequence(qc, sequence: List[Program], graph: nx.Graph, **kwargs):
+    # compile all of the sequence at once.
+    # TODO: replace sum with merge_programs after permutation issue fixed.
+    native_quil = graph_restricted_compilation(qc, graph,  sum(sequence, Program()))
+    return [Program([instr for instr in native_quil.instructions][:-1])]
 ###
 # Templates
 ###
@@ -422,38 +442,26 @@ def get_rand_2q_cliff_template(bm: BenchmarkConnection):
 
 
 def get_dagger_all_template():
-    def func(qc, sequence, **kwargs):
-        prog = dagger_previous(sequence, len(sequence))
-        native_quil = qc.compiler.quil_to_native_quil(prog)
-        # remove gate definition and HALT
-        return Program([instr for instr in native_quil.instructions][:-1])
+    def func(sequence, **kwargs):
+        return dagger_previous(sequence, len(sequence))
     return CircuitTemplate([func])
 
 
 def get_dagger_previous(n: int = 1):
-    def func(qc, sequence, **kwargs):
-        prog = dagger_previous(sequence, n)
-        native_quil = qc.compiler.quil_to_native_quil(prog)
-        # remove gate definition and HALT
-        return Program([instr for instr in native_quil.instructions][:-1])
+    def func(sequence, **kwargs):
+        return dagger_previous(sequence, n)
     return CircuitTemplate([func])
 
 
 def get_rand_qubit_perm_template():
-    def func(graph, qc, **kwargs):
-        prog = random_qubit_permutation(graph)
-        native_quil = qc.compiler.quil_to_native_quil(prog)
-        # remove gate definition and HALT
-        return Program([instr for instr in native_quil.instructions][:-1])
+    def func(graph, **kwargs):
+        return random_qubit_permutation(graph)
     return CircuitTemplate([func])
 
 
-def get_rand_su4_template():
-    def func(graph, qc, **kwargs):
-        prog = random_su4_pairs(graph)
-        native_quil = graph_restricted_compilation(qc, graph, prog)
-        # remove gate definitions and HALT
-        return Program([instr for instr in native_quil.instructions][:-1])
+def get_rand_su4_template(randomly_permute_qubits: bool = True):
+    def func(graph, sequence, **kwargs):
+        return random_su4_pairs(graph, len(sequence), randomly_permute_qubits)
     return CircuitTemplate([func])
 
 
@@ -538,7 +546,7 @@ def generate_volumetric_program_array(qc: QuantumComputer, ckt: CircuitTemplate,
 
 
 def acquire_volumetric_data(qc: QuantumComputer, program_array, num_shots: int = 500,
-                            measure_qubits: Dict[int, List[int]] = None,
+                            measure_qubits: Dict[int,  Dict[int, List[int]]] = None,
                             use_active_reset:  bool = False,
                             use_compiler: bool = False):
     reset_prog = Program()
@@ -575,7 +583,7 @@ def acquire_volumetric_data(qc: QuantumComputer, program_array, num_shots: int =
 
 
 def collect_heavy_outputs(wfn_sim: NumpyWavefunctionSimulator, program_array,
-                          measure_qubits: Dict[int, List[int]] = None):
+                          measure_qubits: Dict[int,  Dict[int, List[int]]] = None):
     """
     Collects and returns those 'heavy' bitstrings which are output with greater than median
     probability among all possible bitstrings on the given qubits.
@@ -710,35 +718,6 @@ def get_success_probabilities(noisy_results, ideal_results):
                 prob_success[width][depth].append(pr_success)
 
     return prob_success
-
-
-def count_heavy_hitters_sampled(noisy_results, heavy_hitters):
-    """
-    Simple helper to count the number of heavy hitters sampled given the sampled results for a
-    number of circuits along with the the actual heavy hitters for each circuit.
-
-    :param noisy_results: results from running each circuit on a quantum computer.
-    :param heavy_hitters: the heavy hitters for each circuit (presumably calculated through
-        simulating the circuit classically)
-    :return: the number of samples which were heavy for each circuit.
-    """
-    num_sampled = {w: {d: [] for d in depth_array.keys()}
-                   for w, depth_array in noisy_results.items()}
-
-    for w, d_results in noisy_results.items():
-        for d, ckts_results in d_results.items():
-            ckts_hh = heavy_hitters[w][d]
-            for ckt_results, ckt_hh in zip(ckts_results, ckts_hh):
-                num_hh = 0
-                # determine if each result bitstring is a heavy output, as determined from simulation
-                for result in ckt_results:
-                    # convert result to int for comparison with heavy outputs.
-                    output = bit_array_to_int(result)
-                    if output in ckt_hh:
-                         num_hh += 1
-                num_sampled[w][d].append(num_hh)
-
-    return num_sampled
 
 
 def calculate_success_prob_est_and_err(num_success: int, num_circuits: int, num_shots: int) \
