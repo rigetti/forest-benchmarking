@@ -151,7 +151,8 @@ def estimate_joint_confusion_in_set(qc: QuantumComputer, qubits: Sequence[int] =
 
                 if use_param_program:
                     # specify bitstring in parameterization at run-time
-                    results = qc.run(executable, memory_map={reg_name: bitstring})
+                    results = qc.run(executable,
+                                     memory_map={reg_name: [float(b) for b in bitstring]})
                 else:
                     # generate program that measures given bitstring on group, and append to start
                     bitstring_program = program_start + bitstring_prep(group, bitstring,
@@ -292,7 +293,8 @@ def estimate_joint_reset_confusion(qc: QuantumComputer, qubits: Sequence[int] = 
                     # try preparation at most 10 times.
                     for _ in range(10):
                         # prepare the given bitstring and measure
-                        result = qc.run(prep_executable, memory_map={reg_name: bitstring})
+                        result = qc.run(prep_executable,
+                                        memory_map={reg_name: [float(b) for b in bitstring]})
 
                         # if the preparation is successful, move on to reset.
                         if np.array_equal(result[0], bitstring):
