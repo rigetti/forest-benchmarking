@@ -18,8 +18,8 @@ def test_cz_ramsey(qvm):
 
     fit = fit_cz_phase_ramsey_results(angles, stats['expectation'], stats['std_err'])
 
-    freq = fit.params['frequency'].value
-    freq_err = fit.params['frequency'].stderr
+    freq = fit.params['angular_freq'].value
+    freq_err = fit.params['angular_freq'].stderr
 
     assert np.isclose(freq, 1, atol=2 * freq_err)
 
