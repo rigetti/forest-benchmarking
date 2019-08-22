@@ -2,11 +2,11 @@
 
 Pseudocode for many of these routines can be found in the appendix of the paper:
 
-[BAYES] Practical Bayesian Tomography
-        Granade et al.,
-        New Journal of Physics 18, 033024 (2016)
-        https://dx.doi.org/10.1088/1367-2630/18/3/033024
-        https://arxiv.org/abs/1509.03770
+.. [BAYES] Practical Bayesian Tomography.
+    Granade et al.
+    New Journal of Physics 18, 033024 (2016).
+    https://dx.doi.org/10.1088/1367-2630/18/3/033024
+    https://arxiv.org/abs/1509.03770
 """
 from typing import Optional, List, Union
 
@@ -21,12 +21,18 @@ from forest.benchmarking.operator_tools.calculational import partial_trace
 def ginibre_matrix_complex(dim: int, k: int, rs: Optional[RandomState] = None) -> np.ndarray:
     r"""
     Given a scalars dim and k, returns a dim by k matrix, drawn from the complex Ginibre
-    ensemble, i.e. each element is distributed ~ [N(0, 1) + i · N(0, 1)]. Here X ~ N(0,1)
-    denotes a normally distributed random variable.
+    ensemble [IM]_.
 
-    [IM] Induced measures in the space of mixed quantum states
-         Zyczkowski et al.,
-         J. Phys A: Math. and Gen. 34, 7111 (2001)
+    Each element is distributed
+
+    .. math::
+        \sim [N(0, 1) + i · N(0, 1)]
+
+    Here :math:`X \sim N(0,1)` denotes a normally distributed random variable.
+
+    .. [IM] Induced measures in the space of mixed quantum states.
+         Zyczkowski et al.
+         J. Phys A: Math. and Gen. 34, 7111 (2001).
          https://doi.org/10.1088/0305-4470/34/35/335
          https://arxiv.org/abs/quant-ph/0012101
 
@@ -42,13 +48,13 @@ def ginibre_matrix_complex(dim: int, k: int, rs: Optional[RandomState] = None) -
 
 def haar_rand_unitary(dim: int, rs=None) -> np.ndarray:
     """
-    Given a Hilbert space dimension dim this function
-    returns a unitary operator U ∈ C^(dim by dim) drawn from the Haar measure.
+    Given a Hilbert space dimension dim this function returns a unitary operator
+    U ∈ C^(dim by dim) drawn from the Haar measure [MEZ]_.
 
     The error is of order 10^-16.
 
-    [MEZ] How to generate random matrices from the classical compact groups
-          Mezzadri
+    .. [MEZ] How to generate random matrices from the classical compact groups.
+          Mezzadri.
           Notices of the American Mathematical Society 54, 592 (2007).
           http://www.ams.org/notices/200705/fea-mezzadri-web.pdf
           https://arxiv.org/abs/math-ph/0609050
@@ -84,10 +90,11 @@ def haar_rand_state(dim: int) -> np.ndarray:
 def ginibre_state_matrix(dim: int, rank: int) -> np.ndarray:
     """
     Given a Hilbert space dimension dim and a desired rank K, returns a dim by dim positive
-    semidefinite matrix of rank K drawn from the Ginibre ensemble. For dim = K these are states
-    drawn from the Hilbert-Schmidt measure.
+    semidefinite matrix of rank K drawn from the Ginibre ensemble.
 
-    See reference [IM] for more details.
+    For dim = K these are states drawn from the Hilbert-Schmidt measure.
+
+    See reference [IM]_ for more details.
 
     :param dim: Hilbert space dimension.
     :param rank: The rank of a state.
@@ -103,10 +110,10 @@ def ginibre_state_matrix(dim: int, rank: int) -> np.ndarray:
 def bures_measure_state_matrix(dim: int) -> np.ndarray:
     """
     Given a Hilbert space dimension dim, returns a dim by dim positive semidefinite matrix drawn
-    from the Bures measure.
+    from the Bures measure [OSZ]_.
 
-    [OSZ] Random Bures mixed states and the distribution of their purity
-          Osipov et al.,
+    .. [OSZ] Random Bures mixed states and the distribution of their purity.
+          Osipov et al.
           J. Phys. A: Math. Theor. 43, 055302 (2010).
           https://doi.org/10.1088/1751-8113/43/5/055302
           https://arxiv.org/abs/0909.5094
@@ -125,11 +132,11 @@ def bures_measure_state_matrix(dim: int) -> np.ndarray:
 
 def rand_map_with_BCSZ_dist(dim: int, kraus_rank: int) -> np.ndarray:
     """
-    Given a Hilbert space dimension dim and a Kraus rank K, returns a $dim^2 by dim^2$ Choi
-    matrix $J(Λ)$ of a channel drawn from the BCSZ distribution with Kraus rank $K$.
+    Given a Hilbert space dimension dim and a Kraus rank K, returns a dim^2 by dim^2 Choi
+    matrix J(Λ) of a channel drawn from the BCSZ distribution with Kraus rank K [RQO]_.
 
-    [RQO] Random quantum operations,
-          Bruzda et al.,
+    .. [RQO] Random quantum operations.
+          Bruzda et al.
           Physics Letters A 373, 320 (2009).
           https://doi.org/10.1016/j.physleta.2008.11.043
           https://arxiv.org/abs/0804.2361
@@ -155,24 +162,24 @@ def permute_tensor_factors(dims: Union[int, List[int]], perm: List[int]) -> np.n
     Return a permutation matrix that appropriately swaps spaces of the given dimension(s).
 
     Given a Hilbert space dimension dim and an list representing the permutation perm of the
-    tensor product Hilbert spaces, returns a $dim^len(perm)$ by $dim^len(perm)$ permutation matrix.
+    tensor product Hilbert spaces, returns a dim**len(perm) by dim**len(perm) permutation matrix.
     
-    E.g. 1) Suppose dims=2 and perm=[0,1]
+        1) Suppose dims=2 and perm=[0, 1]
             Returns the identity operator on two qubits
             
-         2) Suppose dims=2 and perm=[1,0]
-            Returns the SWAP operator on two qubits which
-            maps A_1 \otimes A_2 --> A_2 \otimes A_1.
+        2) Suppose dims=2 and perm=[1, 0]
+            Returns the SWAP operator on two qubits which maps
+            :math:`A_1 \otimes A_2 \rightarrow A_2 \otimes A_1`
 
-        3) Suppose dims=[2, 4] and perm=[1,0]
-            Returns the SWAP operator on three qubits which
-            maps A_1 \otimes (A_2 \otimes A_3) -> (A_2 \otimes A_3)
+        3) Suppose dims=[2, 4] and perm=[1, 0]
+            Returns the SWAP operator on three qubits which maps
+            :math:`A_1 \otimes (A_2 \otimes A_3) \rightarrow (A_2 \otimes A_3)`
 
-    See: Equations 5.11, 5.12, and 5.13 in
+    See: Equations 5.11, 5.12, and 5.13 in [SCOTT]_
 
-    [SCOTT] Optimizing quantum process tomography with unitary 2-designs
-            A. J. Scott,
-            J. Phys. A 41, 055308 (2008)
+    .. [SCOTT] Optimizing quantum process tomography with unitary 2-designs.
+            A. J. Scott.
+            J. Phys. A 41, 055308 (2008).
             https://dx.doi.org/10.1088/1751-8113/41/5/055308
             https://arxiv.org/abs/0711.1017
 

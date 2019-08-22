@@ -1,8 +1,9 @@
-from typing import Sequence, List, Dict
+from typing import Sequence, List, Dict, Tuple
 
 import numpy as np
 from numpy import pi
 from lmfit.model import ModelResult
+from tqdm import tqdm
 
 from pyquil.api import QuantumComputer
 from pyquil.gates import RX, RY, RZ, CZ, MEASURE
@@ -24,7 +25,8 @@ MHZ = 1e6  # MHz, megahertz
 
 def acquire_qubit_spectroscopy_data(qc: QuantumComputer,
                                     experiments: Sequence[ObservablesExperiment],
-                                    num_shots: int = 500) -> List[List[ExperimentResult]]:
+                                    num_shots: int = 500, show_progress_bar: bool = False) \
+        -> List[List[ExperimentResult]]:
     """
     A standard data acquisition method for all experiments in this module.
 
@@ -34,11 +36,12 @@ def acquire_qubit_spectroscopy_data(qc: QuantumComputer,
     :param qc: a quantum computer on which to run the experiments
     :param experiments: the ObservablesExperiments to run on the given qc
     :param num_shots: the number of shots to collect for each experiment.
+    :param show_progress_bar: displays a progress bar via tqdm if true.
     :return: a list of ExperimentResults for each ObservablesExperiment, returned in order of the
         input sequence of experiments.
     """
     results = []
-    for expt in experiments:
+    for expt in tqdm(experiments, disable=not show_progress_bar):
         results.append(list(estimate_observables(qc, expt, num_shots)))
     return results
 
@@ -87,7 +90,7 @@ def generate_t1_experiments(qubits: Sequence[int], times: Sequence[float]) \
     measure the decay time from the excited state to ground state for each qubit in qubits.
 
     For each delay time in times a single program will be generated in which all qubits are
-    initialized to the excited state (|1>) and simultaneously measured after the given delay.
+    initialized to the excited state (`|1>`) and simultaneously measured after the given delay.
 
     :param qubits: list of qubits to measure.
     :param times: The times at which to measure, given in seconds. Each time is rounded to the
@@ -149,6 +152,48 @@ def fit_t1_results(times: Sequence[float], z_expectations: Sequence[float],
 
     return fit_decay_time_param_decay(np.asarray(times), probability_one, weights,
                                       param_guesses)
+
+
+def do_t1_or_t2(qc: QuantumComputer, qubits: Sequence[int], times: Sequence[float],
+                kind: str, num_shots: int = 500, show_progress_bar: bool = False) \
+        -> Tuple[Dict[int, float], List[ObservablesExperiment], List[List[ExperimentResult]]]:
+    """
+    A wrapper around experiment generation, data acquisition, and estimation that runs a t1,
+    t2 echo, or t2* experiment on each qubit in qubits and returns the rb_decay along with the
+    experiments and results.
+
+    :param qc: a quantum computer on which to run the experiments
+    :param qubits: list of qubits to measure.
+    :param times: The times at which to measure, given in seconds. Each time is rounded to the
+        nearest .1 microseconds.
+    :param kind: which kind of experiment to do, one of 't1', 't2_star', or 't2_echo'
+    :param num_shots: the number of shots to collect for each experiment.
+    :param show_progress_bar: displays a progress bar via tqdm if true.
+    :return:
+    """
+    if kind.lower() == 't1':
+        gen_method = generate_t1_experiments
+        fit_method = fit_t1_results
+    elif kind.lower() == 't2_star':
+        gen_method = generate_t2_star_experiments
+        fit_method = fit_t2_results
+    elif kind.lower() == 't2_echo':
+        gen_method = generate_t2_echo_experiments
+        fit_method = fit_t2_results
+    else:
+        raise ValueError('Kind must be one of \'t1\', \'t2_star\', or \'t2_echo\'.')
+
+    expts = gen_method(qubits, times)
+    results = acquire_qubit_spectroscopy_data(qc, expts, num_shots, show_progress_bar)
+    stats = get_stats_by_qubit(results)
+    decay_time_by_qubit = {}
+    for qubit in qubits:
+        fit = fit_method(np.asarray(times) / MICROSECOND, stats[qubit]['expectation'],
+                         stats[qubit]['std_err'])
+        decay_time = fit.params['decay_time'].value  # in us
+        decay_time_by_qubit[qubit] = float(decay_time)
+
+    return decay_time_by_qubit, expts, results
 
 
 # ==================================================================================================
@@ -294,7 +339,7 @@ def generate_rabi_experiments(qubits: Sequence[int], angles: Sequence[float]) \
 
     :param qubits: list of qubits to measure.
     :param angles: A list of angles at which to make a measurement
-    :return: ObservablesExperiments which can be run to verify the  RX(*, q) calibration
+    :return: ObservablesExperiments which can be run to verify the  RX(angle, q) calibration
         for each qubit
     """
     expts = []
@@ -317,18 +362,28 @@ def fit_rabi_results(angles: Sequence[float], z_expectations: Sequence[float],
     Wrapper for fitting the results of a rabi experiment on a qubit; simply extracts key parameters
     and passes on to the standard fit.
 
-    Note the following interpretation of the model fit parameters:
-    x: the independent variable is the angle that we specify when writing a gate instruction. If
+    Note the following interpretation of the model fit parameters
+
+    x
+        the independent variable is the angle that we specify when writing a gate instruction. If
         our gates are incorrectly calibrated then a given control angle will result in a different
         angle than intended by the multiplicative 'frequency' of the model
-    amplitude: this will have magnitude (p1_given_1 - p1_given_0) / 2 where
-        p1_given_1 is the probability of measuring 1 when the qubit is in the |1> state.
-        p1_given_0 is the probability of measuring 1 when the qubit is in the |0> state.
-    offset: This is the offset phase, in radians, with respect to the true rotation frequency.
+
+    amplitude
+        this will have magnitude (p1_given_1 - p1_given_0) / 2 where
+        p1_given_1 is the probability of measuring 1 when the qubit is in the `|1>` state.
+        p1_given_0 is the probability of measuring 1 when the qubit is in the `|0>` state.
+
+    offset
+        this is the offset phase, in radians, with respect to the true rotation frequency.
         e.g. if our gate is mis-calibrated resulting in an offset 'off' then we require a control
         angle of RX(-off / frequency) to correct the offset
-    baseline: this is the amplitude + p1_given_0
-    frequency: The ratio of the actual angle rotated over the intended control angle
+
+    baseline
+        this is the amplitude + p1_given_0
+
+    frequency
+        the ratio of the actual angle rotated over the intended control angle
         e.g. If our gates are incorrectly calibrated to apply an over-rotation then
         frequency will be greater than 1; the intended control angle will be smaller than the
         true angle rotated.
@@ -399,20 +454,30 @@ def fit_cz_phase_ramsey_results(angles: Sequence[float], y_expectations: Sequenc
     and passes on to the standard fit.
 
     Note the following interpretation of the model fit:
-    x: the independent variable is the control angle that we specify when writing a gate
+
+    x
+        the independent variable is the control angle that we specify when writing a gate
         instruction. If our gates are incorrectly calibrated then a given control angle will
         result in a different angle than intended by the multiplicative 'frequency' of the model
-    amplitude: this will have magnitude (p1_given_1 - p1_given_0) / 2 where
-        p1_given_1 is the probability of measuring 1 when the qubit is in the |1> state.
-        p1_given_0 is the probability of measuring 1 when the qubit is in the |0> state.
-    offset: This is the offset phase, in radians, with respect to the true rotation frequency.
+
+    amplitude
+        this will have magnitude (p1_given_1 - p1_given_0) / 2 where
+        p1_given_1 is the probability of measuring 1 when the qubit is in the `|1>` state.
+        p1_given_0 is the probability of measuring 1 when the qubit is in the `|0>` state.
+
+    offset
+        this is the offset phase, in radians, with respect to the true rotation frequency.
         e.g. say that our RZ gate is perfectly calibrated and the CZ gate imparts an effective
         RZ(pi/5) rotation to the measure qubit; in this case offset is pi/5, and frequency is one,
         so the offset phase could be corrected by applying the gate RZ(-pi/5, qubit) after CZ. If
         our RZ gate was instead found to be mis-calibrated, a correction using our mis-calibrated
         RZ gate would require a control angle of RZ(-pi/5 / frequency, qubit)
-    baseline: this is the amplitude + p1_given_0
-    frequency: The ratio of the actual angle rotated over the intended control angle
+
+    baseline
+        this is the amplitude + p1_given_0
+
+    frequency
+        the ratio of the actual angle rotated over the intended control angle
         e.g. If our gates are incorrectly calibrated to apply an over-rotation then
         frequency will be greater than 1; the intended control angle will be smaller than the
         true angle rotated.

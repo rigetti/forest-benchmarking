@@ -1,10 +1,13 @@
-.. currentmodule:: forest.benchmarking.entangled_states
+.. module:: forest.benchmarking.entangled_states
 
 Entangled States
 ================
 
 The module ``entangled_states.py`` allows you to simply create graph states GHZ states.
 
+.. toctree::
+
+    examples/entangled_states
 
 .. autosummary::
     :toctree: autogen

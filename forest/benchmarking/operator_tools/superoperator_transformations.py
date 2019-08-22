@@ -7,20 +7,20 @@ For more information about the conventions used, look at the file in
 
 Further references include:
 
-[GRAPTN] Tensor networks and graphical calculus for open quantum systems
+.. [GRAPTN] Tensor networks and graphical calculus for open quantum systems.
          Wood et al.
-         Quant. Inf. Comp. 15, 0579-0811 (2015)
+         Quant. Inf. Comp. 15, 0579-0811 (2015).
          (no DOI)
          https://arxiv.org/abs/1111.6950
 
-[MATQO] On the Matrix Representation of Quantum Operations
-        Nambu et al.,
-        arXiv: 0504091 (2005)
+.. [MATQO] On the Matrix Representation of Quantum Operations.
+        Nambu et al.
+        arXiv: 0504091 (2005).
         https://arxiv.org/abs/quant-ph/0504091
 
-[DUAL] On duality between quantum maps and quantum states
-       Zyczkowski et al.,
-       Open Syst. Inf. Dyn. 11, 3 (2004)
+.. [DUAL] On duality between quantum maps and quantum states.
+       Zyczkowski et al.
+       Open Syst. Inf. Dyn. 11, 3 (2004).
        https://dx.doi.org/10.1023/B:OPSY.0000024753.05661.c2
        https://arxiv.org/abs/quant-ph/0401119
 
@@ -32,14 +32,18 @@ from forest.benchmarking.utils import n_qubit_pauli_basis
 
 def vec(matrix: np.ndarray) -> np.ndarray:
     """
-    Vectorize, i.e. "vec", a matrix by column stacking.
+    Vectorize, or "vec", a matrix by column stacking.
 
-    For example the 2 by 2 matrix A
+    For example the 2 by 2 matrix A::
 
-    A = [[a, b]
-         [c, d]]      becomes  |A>> := vec(A) = (a, c, b, d)^T ,
+        A = [[a, b]
+             [c, d]]
 
-    where |A>> denotes the vec'ed version of A and T denotes transpose.
+    becomes::
+
+      |A>> := vec(A) = (a, c, b, d)^T
+
+    where `|A>>` denotes the vec'ed version of A and :math:`^T` denotes transpose.
 
     :param matrix: A N (rows) by M (columns) numpy array.
     :return: Returns a column vector with  N by M rows.
@@ -54,10 +58,14 @@ def unvec(vector: np.ndarray, shape: Tuple[int, int] = None) -> np.ndarray:
     By default, the unvec'ed matrix is assumed to be square. Specifying shape = [N, M] will
     produce a N by M matrix where N is the number of rows and M is the number of columns.
 
-    Consider |A>> := vec(A) = (a, c, b, d)^T. `unvec(|A>>)` should return
+    Consider::
 
-    A = [[a, b]
-         [c, d]].
+        |A>> := vec(A) = (a, c, b, d)^T
+
+    `unvec(|A>>)` should return::
+
+        A = [[a, b]
+             [c, d]]
 
     :param vector: A (N*M) by 1 numpy array.
     :param shape: The shape of the output matrix; by default, the matrix is assumed to be square.
@@ -72,7 +80,7 @@ def unvec(vector: np.ndarray, shape: Tuple[int, int] = None) -> np.ndarray:
 
 
 def kraus2chi(kraus_ops: Sequence[np.ndarray]) -> np.ndarray:
-    r"""
+    """
     Convert a set of Kraus operators (representing a channel) to
     a chi matrix which is also known as a process matrix.
 
@@ -95,15 +103,21 @@ def kraus2superop(kraus_ops: Sequence[np.ndarray]) -> np.ndarray:
     a superoperator using the column stacking convention.
 
     Suppose the N Kraus operators M_i are dim by dim matrices. Then the
-    the superoperator is a (dim**2) \otimes (dim**2) matrix. Using the relation
-    column stacking relation,
-    vec(ABC) = (C^T\otimes A) vec(B), we can show
+    the superoperator is a (dim**2) by (dim**2) matrix. Using the column stacking relation
 
-    super_operator = \sum_i^N ( M_i^\dagger )^T \otimes M_i
-                   = \sum_i^N M_i^* \otimes M_i
+    .. math::
 
-    where A^* is the complex conjugate of a matrix A, A^T is the transpose,
-    and A^\dagger is the complex conjugate and transpose.
+        vec(ABC) = (C^T \otimes A) vec(B)
+
+    we can show
+
+    .. math::
+
+        \rm{super\_operator} = \sum_i^N ( M_i^\dagger )^T \otimes M_i
+                       = \sum_i^N M_i^* \otimes M_i
+
+    where :math:`A^*` is the complex conjugate of a matrix A, :math:`A^T` is the transpose,
+    and :math:`A^\dagger` is the complex conjugate and transpose.
 
     Note: This function can also convert non-square Kraus operators to a superoperator,
     these frequently arise in quantum measurement theory and quantum error correction. In that
@@ -150,10 +164,13 @@ def kraus2choi(kraus_ops: Sequence[np.ndarray]) -> np.ndarray:
     Suppose the N Kraus operators M_i are dim by dim matrices. Then the
     the Choi matrix is a dim**2 by dim**2 matrix
 
-    choi_matrix = \sum_i^N |M_i>> (|M_i>>)^\dagger
-                = \sum_i^N |M_i>> <<M_i|
+    .. math::
 
-    where |M_i>> = vec(M_i)
+        \rm{choi\_matrix} = \sum_i^N |M_i>> (|M_i>>)^\dagger = \sum_i^N |M_i>> <<M_i|
+
+    where::
+
+        |M_i>> = vec(M_i)
 
     :param kraus_ops: A list of N Kraus operators
     :return: Returns a dim**2 by dim**2 matrix.
@@ -166,7 +183,7 @@ def kraus2choi(kraus_ops: Sequence[np.ndarray]) -> np.ndarray:
 
 
 def chi2pauli_liouville(chi_matrix: np.ndarray) -> np.ndarray:
-    r"""
+    """
     Converts a chi matrix (aka a process matrix) to the Pauli Liouville representation.
 
     :param chi_matrix:  a dim**2 by dim**2 process matrix
@@ -338,12 +355,25 @@ def choi2pauli_liouville(choi: np.ndarray) -> np.ndarray:
 
 
 def pauli2computational_basis_matrix(dim) -> np.ndarray:
-    """
-    Produces a basis transform matrix that converts from a pauli basis to the computational basis.
-        p2c_transform = sum_{k=1}^{dim**2}  | sigma_k >> <k|
-    For example,
-        sigma_x = [0, 1, 0, 0].T in the 'pauli basis'
-        p2c * sigma_x = vec(sigma_x) = | sigma_x >>
+    r"""
+    Produces a basis transform matrix that converts from the unnormalized pauli basis to the
+    computational basis
+
+    .. math::
+
+        \rm{p2c\_transform(dim)} = \sum_{k=1}^{dim^2}  | \sigma_k >> <k|
+
+    For example
+
+    .. math::
+
+        \sigma_x = [0, 1, 0, 0].T
+
+    in the 'pauli basis', so
+
+    .. math::
+
+        p2c * \sigma_x = vec(\sigma_x) = | \sigma_x >>
 
     :param dim: dimension of the hilbert space on which the operators act.
     :return: A dim**2 by dim**2 basis transform matrix
@@ -362,13 +392,28 @@ def pauli2computational_basis_matrix(dim) -> np.ndarray:
 
 
 def computational2pauli_basis_matrix(dim) -> np.ndarray:
-    """
-    Produces a basis transform matrix that converts from a computational basis to a pauli basis.
-    Conjugate transpose of pauli2computational_basis_matrix with an extra dimensional factor.
-        c2p_transform = sum_{k=1}^{dim**2}  | k > << sigma_k |
-    For example,
-        vec(sigma_z) = | sigma_z >> = [1, 0, 0, -1].T in the computational basis
-        c2p * | sigma_z >> = [0, 0, 0, 1].T
+    r"""
+    Produces a basis transform matrix that converts from a computational basis to the unnormalized
+    pauli basis.
+
+    This is the conjugate transpose of pauli2computational_basis_matrix with an extra dimensional
+    factor.
+
+    .. math::
+
+        \rm{c2p\_transform(dim)}  = \frac{1}{dim} sum_{k=1}^{dim^2}  | k > << \sigma_k |
+
+    For example
+
+    .. math::
+
+        vec(\sigma_z) = | \sigma_z >> = [1, 0, 0, -1].T
+
+    in the computational basis, so
+
+    .. math::
+
+        c2p * | \sigma_z >> = [0, 0, 0, 1].T
 
     :param dim: dimension of the hilbert space on which the operators act.
     :return: A dim**2 by dim**2 basis transform matrix

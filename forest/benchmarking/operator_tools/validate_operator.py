@@ -20,11 +20,7 @@ def is_square_matrix(matrix: np.ndarray) -> bool:
 
 def is_symmetric_matrix(matrix: np.ndarray, rtol: float = 1e-05, atol: float = 1e-08) -> bool:
     """
-    Checks if a square matrix is symmetric. That is
-
-    A is symmetric iff $A = A ^T$,
-
-    where $T$ denotes transpose.
+    Checks if a square matrix A is symmetric, :math:`A = A ^T`, where :math:`^T` denotes transpose.
 
     :param matrix: a M by M matrix.
     :param rtol: The relative tolerance parameter in np.allclose
@@ -53,9 +49,7 @@ def is_identity_matrix(matrix: np.ndarray, rtol: float = 1e-05, atol: float = 1e
 
 def is_idempotent_matrix(matrix: np.ndarray, rtol: float = 1e-05, atol: float = 1e-08) -> bool:
     """
-    Checks if a square matrix A is idempotent. That is
-
-    A is idempotent iff $A^2 = A.$
+    Checks if a square matrix A is idempotent, :math:`A^2 = A`.
 
     :param matrix: a M by M matrix.
     :param rtol: The relative tolerance parameter in np.allclose
@@ -69,11 +63,8 @@ def is_idempotent_matrix(matrix: np.ndarray, rtol: float = 1e-05, atol: float = 
 
 def is_normal_matrix(matrix: np.ndarray, rtol: float = 1e-05, atol: float = 1e-08) -> bool:
     r"""
-    Checks if a square matrix A is normal. That is
-
-    A is normal iff $A^{\dagger} A = A A^{\dagger}$,
-
-    where $\dagger$ denotes conjugate transpose.
+    Checks if a square matrix A is normal, :math:`A^\dagger A = A A^\dagger`,
+    where :math:`^\dagger` denotes conjugate transpose.
 
     :param matrix: a M by M matrix.
     :param rtol: The relative tolerance parameter in np.allclose
@@ -89,11 +80,8 @@ def is_normal_matrix(matrix: np.ndarray, rtol: float = 1e-05, atol: float = 1e-0
 
 def is_hermitian_matrix(matrix: np.ndarray, rtol: float = 1e-05, atol: float = 1e-08) -> bool:
     r"""
-    Checks if a square matrix A is Hermitian. That is
-
-    A is Hermitian iff $A = A^{\dagger}$,
-
-    where $\dagger$ denotes conjugate transpose.
+    Checks if a square matrix A is Hermitian, :math:`A = A^\dagger`, where :math:`^\dagger`
+    denotes conjugate transpose.
 
     :param matrix: a M by M matrix.
     :param rtol: The relative tolerance parameter in np.allclose
@@ -107,11 +95,8 @@ def is_hermitian_matrix(matrix: np.ndarray, rtol: float = 1e-05, atol: float = 1
 
 def is_unitary_matrix(matrix: np.ndarray, rtol: float = 1e-05, atol: float = 1e-08) -> bool:
     r"""
-    Checks if a square matrix A is unitary. That is
-
-    A is unitary iff $A^{\dagger} A = A A^{\dagger}$ = Id,
-
-    where $\dagger$ denotes conjugate transpose and Id denotes the identity.
+    Checks if a square matrix A is unitary, :math:`A^\dagger A = A A^\dagger = Id`,
+    where :math:`^\dagger` denotes conjugate transpose and `Id` denotes the identity.
 
     :param matrix: a M by M matrix.
     :param rtol: The relative tolerance parameter in np.allclose
@@ -130,12 +115,10 @@ def is_positive_definite_matrix(matrix: np.ndarray,
                                 rtol: float = 1e-05,
                                 atol: float = 1e-08) -> bool:
     r"""
-    Checks if a square Hermitian matrix A is positive definite. That is
+    Checks if a square Hermitian matrix A is positive definite, :math:`eig(A) > 0`.
 
-    A is positive definite iff eig(A) > 0.
-
-    In this numerical implementation we check if each eigenvalue obeys eig(A) > -|atol|,
-    the strict condition can be recoved by setting `atol = 0`.
+    In this numerical implementation we check if each eigenvalue obeys :math:`eig(A) > -|atol|`,
+    the strict condition can be recovered by setting `atol = 0`.
 
     :param matrix: a M by M Hermitian matrix.
     :param rtol: The relative tolerance parameter in np.allclose
@@ -152,13 +135,9 @@ def is_positive_semidefinite_matrix(matrix: np.ndarray,
                                     rtol: float = 1e-05,
                                     atol: float = 1e-08) -> bool:
     r"""
-    Checks if a square Hermitian matrix A is positive semi-definite. That is
+    Checks if a square Hermitian matrix A is positive semi-definite :math:`eig(A) \geq 0`.
 
-    A is positive semi-definite iff eig(A) >= 0.
-
-    In this numerical implementation we check if each eigenvalue obeys
-
-    eig(A) >= -|atol|.
+    In this numerical implementation we check if each eigenvalue obeys :math:`eig(A) \geq -|atol|`.
 
     :param matrix: a M by M Hermitian matrix.
     :param rtol: The relative tolerance parameter in np.allclose

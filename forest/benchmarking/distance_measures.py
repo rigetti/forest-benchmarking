@@ -2,7 +2,6 @@
 processes"""
 from typing import Tuple
 import numpy as np
-from scipy.linalg import sqrtm
 from scipy.linalg import fractional_matrix_power
 from scipy.optimize import minimize_scalar
 from forest.benchmarking.operator_tools.calculational import sqrtm_psd
@@ -14,7 +13,7 @@ from forest.benchmarking.operator_tools.calculational import sqrtm_psd
 
 def purity(rho: np.ndarray, dim_renorm=False, tol: float = 1000) -> float:
     """
-    Calculates the purity P = tr[ρ**2] of a quantum state ρ.
+    Calculates the purity :math:`P = tr[ρ^2]` of a quantum state ρ.
 
     As stated above lower value of the purity depends on the dimension of ρ's Hilbert space. For
     some applications this can be undesirable. For this reason we introduce an optional dimensional
@@ -39,11 +38,11 @@ def purity(rho: np.ndarray, dim_renorm=False, tol: float = 1000) -> float:
 
 def impurity(rho: np.ndarray, dim_renorm=False, tol: float = 1000) -> float:
     """
-    Calculates the impurity (or linear entropy) L = 1 - tr[ρ**2] of a quantum state ρ.
+    Calculates the impurity (or linear entropy) :math:`L = 1 - tr[ρ^2]` of a quantum state ρ.
 
-    As stated above the lower value of the impurity depends on the dimension of ρ's Hilbert space. For
-    some applications this can be undesirable. For this reason we introduce an optional dimensional
-    renormalization flag with the following behavior
+    As stated above the lower value of the impurity depends on the dimension of ρ's Hilbert space.
+    For some applications this can be undesirable. For this reason we introduce an optional
+    dimensional renormalization flag with the following behavior
 
     If the dimensional renormalization flag is FALSE (default) then  0 ≤ L ≤ 1/dim.
     If the dimensional renormalization flag is TRUE then 0 ≤ L ≤ 1.
@@ -63,12 +62,17 @@ def impurity(rho: np.ndarray, dim_renorm=False, tol: float = 1000) -> float:
 
 
 def fidelity(rho: np.ndarray, sigma: np.ndarray, tol: float = 1000) -> float:
-    """
-    Computes the fidelity F(rho,sigma) between two quantum states rho and sigma.
+    r"""
+    Computes the fidelity :math:`F(\rho, \sigma)` between two quantum states rho and sigma.
 
-    If the states are pure the expression reduces to F(|psi>,|phi>) = |<psi|phi>|^2.
+    If the states are pure the expression reduces to
 
-    The fidelity obeys 0 ≤ F(rho,sigma) ≤ 1, where F(rho,sigma)=1 iff rho = sigma.
+    .. math::
+
+        F(|psi>,|phi>) = |<psi|phi>|^2
+
+    The fidelity obeys :math:`0 ≤ F(\rho, \sigma) ≤ 1`, where
+    :math:`F(\rho, \sigma)=1 iff \rho = \sigma`.
 
     :param rho: Is a dim by dim positive matrix with unit trace.
     :param sigma: Is a dim by dim positive matrix with unit trace.
@@ -81,9 +85,9 @@ def fidelity(rho: np.ndarray, sigma: np.ndarray, tol: float = 1000) -> float:
 
 
 def infidelity(rho: np.ndarray, sigma: np.ndarray, tol: float = 1000) -> float:
-    """
-    Computes the infidelity, 1 - F(rho, sigma), between two quantum states rho and sigma
-    where F(rho, sigma) is the fidelity.
+    r"""
+    Computes the infidelity, :math:`1 - F(\rho, \sigma)`, between two quantum states rho and sigma
+    where :math:`F(\rho, \sigma)` is the fidelity.
 
     :param rho: Is a dim by dim positive matrix with unit trace.
     :param sigma: Is a dim by dim positive matrix with unit trace.
@@ -94,9 +98,14 @@ def infidelity(rho: np.ndarray, sigma: np.ndarray, tol: float = 1000) -> float:
 
 
 def trace_distance(rho: np.ndarray, sigma: np.ndarray) -> float:
-    """
-    Computes the trace distance between two states rho and sigma i.e.
-    T(rho,sigma) = (1/2)||rho-sigma||_1 , where ||X||_1 denotes the 1 norm of X.
+    r"""
+    Computes the trace distance between two states rho and sigma:
+
+    .. math::
+
+        T(\rho, \sigma) = (1/2)||\rho-\sigma||_1
+
+    where :math:`||X||_1` denotes the 1 norm of X.
 
     :param rho: Is a dim by dim positive matrix with unit trace.
     :param sigma: Is a dim by dim positive matrix with unit trace.
@@ -106,9 +115,14 @@ def trace_distance(rho: np.ndarray, sigma: np.ndarray) -> float:
 
 
 def bures_distance(rho: np.ndarray, sigma: np.ndarray) -> float:
-    """
-    Computes the Bures distance between two states rho and sigma i.e.
-    D_B(rho,sigma)^2 = 2(1- sqrt[F(rho,sigma)]) , where F(rho,sigma) is the fidelity.
+    r"""
+    Computes the Bures distance between two states rho and sigma:
+
+    .. math::
+
+        D_B(\rho, \sigma)^2 = 2(1- \sqrt{F(\rho, \sigma)})
+
+    where :math:`F(\rho, \sigma)` is the fidelity.
 
     :param rho: Is a dim by dim positive matrix with unit trace.
     :param sigma: Is a dim by dim positive matrix with unit trace.
@@ -118,9 +132,15 @@ def bures_distance(rho: np.ndarray, sigma: np.ndarray) -> float:
 
 
 def bures_angle(rho: np.ndarray, sigma: np.ndarray) -> float:
-    """
-    Computes the Bures angle (AKA Bures arc or Bures length) between two states rho and sigma i.e.
-    D_A(rho,sigma) = arccos(sqrt[F(rho,sigma)]) , where F(rho,sigma) is the fidelity.
+    r"""
+    Computes the Bures angle (AKA Bures arc or Bures length) between two states rho and sigma:
+
+    .. math::
+
+        D_A(\rho, \sigma) = \arccos(\sqrt{F(\rho, \sigma)})
+
+    where :math:`F(\rho, \sigma)` is the fidelity.
+
     The Bures angle is a measure of statistical distance between quantum states.
 
     :param rho: Is a dim by dim positive matrix with unit trace.
@@ -134,21 +154,27 @@ def quantum_chernoff_bound(rho: np.ndarray,
                            sigma: np.ndarray,
                            tol: float = 1000) -> Tuple[float, float]:
     r"""
-    Computes the quantum Chernoff bound between rho and sigma. It is defined as
+    Computes the quantum Chernoff bound between rho and sigma.
 
-    ξ_{QCB}(rho,sigma) = - log[ min_{0\le s\le 1} tr(rho**s sigma**{1-s} ].
+    It is defined as
 
-    It is also common to study the non-logarithmic variety of the quantum Chernoff bound denoted as
+    .. math::
 
-    Q_{QCB}(rho,sigma) = min_{0\le s\le 1} tr(rho**s sigma**{1-s}.
+        ξ_{QCB}(\rho, \sigma) = - \log[ \min_{0\le s\le 1} tr(\rho^s \sigma^{1-s}) ]
 
-    The quantum Chernoff bound has many nice properties, see [QCB]. Importantly it is
+    It is also common to study the non-logarithmic variety of the quantum Chernoff bound
+
+    .. math::
+
+        Q_{QCB}(\rho, \sigma) = \min_{0\le s\le 1} tr(\rho^s \sigma^{1-s})
+
+    The quantum Chernoff bound has many nice properties, see [QCB]_. Importantly it is
     operationally important in the following context. Given n copies of rho or sigma the minimum
-    error probability for discriminating for rho from sigma is P_{e,min,n} ~ exp[-n ξ_{QCB}].
+    error probability for discriminating rho from sigma is :math:`P_{e,min,n} ~ exp[-n ξ_{QCB}]`.
     
-    [QCB] The Quantum Chernoff Bound
-          Audenaert et al.,
-          Phys. Rev. Lett. 98, 160501 (2007)
+    .. [QCB] The Quantum Chernoff Bound.
+          Audenaert et al.
+          Phys. Rev. Lett. 98, 160501 (2007).
           https://dx.doi.org/10.1103/PhysRevLett.98.160501
           https://arxiv.org/abs/quant-ph/0610027
 
@@ -171,9 +197,15 @@ def quantum_chernoff_bound(rho: np.ndarray,
 
 def hilbert_schmidt_ip(A: np.ndarray, B: np.ndarray, tol: float = 1000) -> float:
     r"""
-    Computes the Hilbert-Schmidt (HS) inner product between two operators A and B as
+    Computes the Hilbert-Schmidt (HS) inner product between two operators A and B.
+
+    This inner product is defined as
+
+    .. math::
+
         HS = (A|B) = Tr[A^\dagger B]
-    where |B) = vec(B) and (A| is the dual vector to |A).
+
+    where :math:`|B) = vec(B)` and :math:`(A|` is the dual vector to :math:`|A)`.
 
     :param A: Is a dim by dim positive matrix with unit trace.
     :param B: Is a dim by dim positive matrix with unit trace.
@@ -185,11 +217,14 @@ def hilbert_schmidt_ip(A: np.ndarray, B: np.ndarray, tol: float = 1000) -> float
 
 
 def smith_fidelity(rho: np.ndarray, sigma: np.ndarray, power) -> float:
-    """
-    Computes the Smith fidelity F_S(rho,sigma,power) between two quantum states rho and sigma.
+    r"""
+    Computes the Smith fidelity :math:`F_S(\rho, \sigma, power)` between two quantum states rho and
+    sigma.
 
-    The Smith fidelity is  defined as F_S = sqrt(F)^power, where F is  standard fidelity
-    F = fidelity(rho, sigma). As the power is only defined for values less than 2, F_S > F.
+    The Smith fidelity is  defined as :math:`F_S = \sqrt{F^{power}}`, where F is  standard fidelity
+    :math:`F = fidelity(\rho, \sigma)`. Since the power is only defined for values less than 2,
+    it is always true that :math:`F_S > F`.
+
     At present there is no known operational interpretation of the Smith fidelity for an arbitrary
     power.
 
@@ -212,9 +247,11 @@ def total_variation_distance(P: np.ndarray, Q: np.ndarray) -> float:
 
     When x is a finite alphabet then the definition is
 
-    tvd(P,Q) = (1/2) \sum_x |P(x) - Q(x)|
+    .. math::
 
-    where tvd(P,Q) is in [0,1]. There is an alternate definition for non-finite alphabet measures
+        tvd(P,Q) = (1/2) \sum_x |P(x) - Q(x)|
+
+    where tvd(P,Q) is in [0, 1]. There is an alternate definition for non-finite alphabet measures
     involving a supremum.
 
     :param P: Is a dim by 1 np.ndarray.
@@ -236,25 +273,29 @@ def entanglement_fidelity(pauli_lio0: np.ndarray,
                           tol: float = 1000) -> float:
     r"""
     Returns the entanglement fidelity (F_e) between two channels, E and F, represented as Pauli
-    Liouville matrix. The expression is
+    Liouville matrix.
 
-            F_e(E,F) = Tr[E^\dagger F] / (dim ** 2),
+    The expression is
+
+    .. math::
+
+            F_e(E,F) = Tr[E^\dagger F] / (dim^2),
 
     where dim is the dimension of the Hilbert space associated with E and F.
 
     See the following references for more information:
 
-    [GRAPTN] referenced in the superoperator_tools module. In particular section V subsection G.
+    [GRAPTN]_ referenced in the superoperator_tools module. In particular section V subsection G.
 
-    [H**3] General teleportation channel, singlet fraction and quasi-distillation
-           Horodecki et al.,
+    .. [H**3] General teleportation channel, singlet fraction and quasi-distillation.
+           Horodecki et al.
            PRA 60, 1888 (1999).
            https://doi.org/10.1103/PhysRevA.60.1888
            https://arxiv.org/abs/quant-ph/9807091
 
-    [GFID] A simple formula for the average gate fidelity of a quantum dynamical operation
-           M. Nielsen,
-           Physics Letters A 303, 249 (2002)
+    .. [GFID] A simple formula for the average gate fidelity of a quantum dynamical operation.
+           M. Nielsen.
+           Physics Letters A 303, 249 (2002).
            https://doi.org/10.1016/S0375-9601(02)01272-0
            https://arxiv.org/abs/quant-ph/0205035
 
@@ -276,11 +317,15 @@ def process_fidelity(pauli_lio0: np.ndarray, pauli_lio1: np.ndarray) -> float:
 
     The expression is
 
-             F_process(E,F) = ( Tr[E^\dagger F] + dim ) / (dim^2 + dim),
+    .. math::
+
+             F_{process}(E,F) = ( Tr[E^\dagger F] + dim ) / (dim^2 + dim),
 
     which is sometimes written as
 
-            F_process(E,F) = ( dim F_e + 1 ) / (dim + 1)
+    .. math::
+
+            F_{process}(E,F) = ( dim F_e + 1 ) / (dim + 1)
 
     where dim is the dimension of the Hilbert space asociated with E and F, and F_e is the
     entanglement fidelity see https://arxiv.org/abs/quant-ph/9807091 .
@@ -291,18 +336,12 @@ def process_fidelity(pauli_lio0: np.ndarray, pauli_lio1: np.ndarray) -> float:
     actual process then the corresponding infidelity 1−F_process(E,F) can be seen as a
     measure of gate error, but it is not a proper metric.
 
-    For more information see:
+    For more information see [GFID]_ and [C]_
 
-    [GFID] A simple formula for the average gate fidelity of a quantum dynamical operation
-           M. Nielsen,
-           Physics Letters A 303, 249 (2002)
-           https://doi.org/10.1016/S0375-9601(02)01272-0
-           https://arxiv.org/abs/quant-ph/0205035
-
-
-    [C] Universal Quantum Gate Set Approaching Fault-Tolerant Thresholds with Superconducting Qubits
+    .. [C] Universal Quantum Gate Set Approaching Fault-Tolerant Thresholds with Superconducting
+        Qubits.
         Jerry M. Chow, et al.
-        Phys. Rev. Lett. 109, 060501 (2012)
+        Phys. Rev. Lett. 109, 060501 (2012).
         https://doi.org/10.1103/PhysRevLett.109.060501
         https://arxiv.org/abs/1202.5344
 
@@ -321,10 +360,11 @@ def process_fidelity(pauli_lio0: np.ndarray, pauli_lio1: np.ndarray) -> float:
 
 
 def process_infidelity(pauli_lio0: np.ndarray, pauli_lio1: np.ndarray) -> float:
-    r"""Returns the infidelity between two channels, E and F, represented as a Pauli-Liouville
-    matrix. That is
+    """
+    Returns the infidelity between two channels, E and F, represented as a Pauli-Liouville
+    matrix. That is::
 
-    process_infidelity(E,F) = 1- F_process(E,F).
+        process_infidelity(E,F) = 1- F_process(E,F).
 
     See the docstrings for process_fidelity for more information.
 
@@ -340,15 +380,17 @@ def diamond_norm_distance(choi0: np.ndarray, choi1: np.ndarray) -> float:
     Return the diamond norm distance between two completely positive
     trace-preserving (CPTP) superoperators, represented as Choi matrices.
 
-    The calculation uses the simplified semidefinite program of Watrous
+    The calculation uses the simplified semidefinite program of Watrous in [CBN]_
 
-    [CBN] Semidefinite programs for completely bounded norms
-          J. Watrous
-          Theory of Computing 5, 11, pp. 217-238 (2009)
+    .. note::
+
+        This calculation becomes very slow for 4 or more qubits.
+
+    .. [CBN] Semidefinite programs for completely bounded norms.
+          J. Watrous.
+          Theory of Computing 5, 11, pp. 217-238 (2009).
           http://theoryofcomputing.org/articles/v005a011
           http://arxiv.org/abs/0901.4709
-
-    This calculation becomes very slow for 4 or more qubits.
 
     :param choi0: A 4**N by 4**N matrix (where N is the number of qubits)
     :param choi1: A 4**N by 4**N matrix (where N is the number of qubits)
@@ -396,12 +438,14 @@ def _is_square(n):
 
 
 def watrous_bounds(choi: np.ndarray) -> Tuple[float, float]:
-    r"""
+    """
     Return the Watrous bounds for the diamond norm of a superoperator in
-    the Choi representation. If this is applied to the difference of two Choi 
-    representations, it yields bounds to the diamond norm distance.
+    the Choi representation.
 
-    The bound can be found in [this](https://cstheory.stackexchange.com/a/4920)
+    If this is applied to the difference of two Choi
+    representations it yields bounds on the diamond norm distance.
+
+    The bound can be found in `this <https://cstheory.stackexchange.com/a/4920>`_
     StackOverflow answer, although the results can also be found scattered in 
     the literature.
 

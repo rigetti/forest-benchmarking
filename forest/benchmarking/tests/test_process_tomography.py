@@ -1,52 +1,17 @@
-import networkx as nx
 import numpy as np
 import pytest
-from requests.exceptions import RequestException
-from rpcq.messages import PyQuilExecutableResponse
 
-from forest.benchmarking.compilation import basic_compile
 from forest.benchmarking.operator_tools.random_operators import haar_rand_unitary
 from forest.benchmarking.operator_tools.superoperator_transformations import kraus2choi
 from forest.benchmarking.tomography import generate_process_tomography_experiment, \
-    pgdb_process_estimate, linear_inv_process_estimate
+    pgdb_process_estimate, linear_inv_process_estimate, do_tomography
 from forest.benchmarking.observable_estimation import estimate_observables, ExperimentResult, \
     ObservablesExperiment, \
     _one_q_state_prep
 from pyquil import Program
 from pyquil import gate_matrices as mat
-from pyquil.api import QVM
-from pyquil.gates import CNOT, X
+from pyquil.gates import CNOT, X, H
 from pyquil.numpy_simulator import NumpyWavefunctionSimulator
-
-
-@pytest.fixture
-def test_qc():
-    from pyquil.api import ForestConnection, QuantumComputer
-    from pyquil.api._compiler import _extract_attribute_dictionary_from_program
-    from pyquil.api._qac import AbstractCompiler
-    from pyquil.device import NxDevice
-    from pyquil.gates import I
-
-    class BasicQVMCompiler(AbstractCompiler):
-
-        def quil_to_native_quil(self, program: Program):
-            return basic_compile(program)
-
-        def native_quil_to_executable(self, nq_program: Program):
-            return PyQuilExecutableResponse(
-                program=nq_program.out(),
-                attributes=_extract_attribute_dictionary_from_program(nq_program))
-    try:
-        qc = QuantumComputer(
-            name='testing-qc',
-            qam=QVM(connection=ForestConnection(), random_seed=52),
-            device=NxDevice(nx.complete_graph(2)),
-            compiler=BasicQVMCompiler(),
-        )
-        qc.run_and_measure(Program(I(0)), trials=1)
-        return qc
-    except (RequestException, TimeoutError) as e:
-        return pytest.skip("This test requires a running local QVM: {}".format(e))
 
 
 def wfn_estimate_observables(n_qubits, tomo_expt: ObservablesExperiment):
@@ -145,3 +110,11 @@ def test_two_q(two_q_tomo_fixture):
     process_choi_true = kraus2choi(u_rand)
     np.testing.assert_allclose(process_choi_true, process_choi_lin_inv_est, atol=.1)
     np.testing.assert_allclose(process_choi_true, process_choi_est, atol=0.05)
+
+
+def test_do_tomography(qvm):
+    qubit = 1
+    process = Program(H(qubit))
+    est, _, _ = do_tomography(qvm, process, qubits=[qubit], kind='process')
+
+    np.testing.assert_allclose(est, kraus2choi(mat.H), atol=.1)

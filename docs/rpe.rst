@@ -1,4 +1,4 @@
-.. currentmodule:: forest.benchmarking.robust_phase_estimation
+.. module:: forest.benchmarking.robust_phase_estimation
 
 Robust Phase Estimation
 =======================
@@ -7,6 +7,9 @@ Is a kind of `iterative phase estimation <https://arxiv.org/abs/0904.3426>`_ for
 `Kimmel, Low, Yoder Phys. Rev. A 92, 062315 (2015) <https://arxiv.org/abs/1502.02677>`_. It is
 ideal for measuring gate calibration errors.
 
+.. toctree::
+
+    examples/robust_phase_estimation
 
 API Reference
 -------------
@@ -15,6 +18,7 @@ API Reference
     :toctree: autogen
     :template: autosumm.rst
 
+    do_rpe
     bloch_rotation_to_eigenvectors
     get_change_of_basis_from_eigvecs
     change_of_basis_matrix_to_quil

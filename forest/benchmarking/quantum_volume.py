@@ -7,7 +7,7 @@ from copy import copy
 
 from pyquil.api import QuantumComputer
 from pyquil.numpy_simulator import NumpyWavefunctionSimulator
-from pyquil.quil import DefGate, Program
+from pyquil.quil import DefGate, Program, Pragma
 from rpcq.messages import TargetDevice
 from rpcq._utils import RPCErrorError
 
@@ -41,7 +41,7 @@ def _naive_program_generator(qc: QuantumComputer, qubits: Sequence[int],
     measure_qubits = qubits[:num_measure_qubits]
 
     # create a simple program that uses the compiler to directly generate 2q gates from the matrices
-    prog = Program()
+    prog = Program(Pragma('INITIAL_REWIRING', ['"PARTIAL"']))
     for layer_idx, (perm, layer) in enumerate(zip(permutations, gates)):
         for gate_idx, gate in enumerate(layer):
             # get the Quil definition for the new gate
@@ -137,7 +137,7 @@ def generate_abstract_qv_circuit(depth: int) -> Tuple[List[np.ndarray], np.ndarr
 
     :param depth: the depth, and also width, of the model circuit
     :return: the random depth-many permutations and depth by depth//2 many 2q-gates which comprise
-        the model quantum circuit of [QVol] for a given depth.
+        the model quantum circuit of [QVol]_ for a given depth.
     """
     # generate a simple list representation for each permutation of the depth many qubits
     permutations = [np.random.permutation(range(depth)) for _ in range(depth)]
@@ -239,40 +239,42 @@ def measure_quantum_volume(qc: QuantumComputer, qubits: Sequence[int] = None,
                            stop_when_fail: bool = True, show_progress_bar: bool = False) \
         -> Dict[int, Tuple[float, float]]:
     """
-    Measures the quantum volume of a quantum resource, as described in [QVol].
+    Measures the quantum volume of a quantum resource, as described in [QVol]_.
 
     By default this method scans increasing depths from 2 to len(qubits) and tests whether the qc
     can adequately implement random model circuits on depth-many qubits such that the given
     depth is 'achieved'. A model circuit depth is achieved if the sample distribution for a
     sample of num_circuits many randomly generated model circuits of the given depth sufficiently
-    matches the ideal distribution of that circuit (See Eq. 6  of [QVol]). The frequency of
+    matches the ideal distribution of that circuit (See Eq. 6  of [QVol]_). The frequency of
     sampling 'heavy-outputs' is used as a measure of closeness of the circuit distributions. This
     estimated frequency (across all sampled circuits) is reported for each depth along with a
     bool which indicates whether that depth was achieved. The logarithm of the quantum volume is by
     definition the largest achievable depth of the circuit; see
-    extract_quantum_volume_from_results for obtaining the quantum volume from the results
+    :func:`extract_quantum_volume_from_results` for obtaining the quantum volume from the results
     returned by this method.
 
-    [QVol] Validating quantum computers using randomized model circuits
-           Cross et al.,
-           arXiv:1811.12926v1  (2018)
+    .. [QVol] Validating quantum computers using randomized model circuits.
+           Cross et al.
+           arXiv:1811.12926v1  (2018).
            https://arxiv.org/abs/1811.12926
 
     :param qc: the quantum resource whose volume you wish to measure
     :param qubits: available qubits on which to act during measurement. Default all qubits in qc.
     :param program_generator: a method which
+
         1) takes in a quantum computer, the qubits on that
             computer available for use, a series of sequences representing the qubit permutations
             in a model circuit, an array of matrices representing the 2q gates in the model circuit
         2) outputs a native quil program that implements the circuit and measures the appropriate
             qubits in the order implicitly dictated by the model circuit representation created in
             sample_rand_circuits_for_heavy_out.
+
         The default option simply picks the smallest qubit labels and lets the compiler do the rest.
     :param num_circuits: number of unique random circuits that will be sampled.
     :param num_shots: number of shots for each circuit sampled.
     :param depths: the circuit depths to scan over. Defaults to all depths from 2 to len(qubits)
     :param achievable_threshold: threshold at which a depth is considered 'achieved'. Eq. 6 of
-        [QVol] defines this to be the default of 2/3. To be considered achievable, the estimated
+        [QVol]_ defines this to be the default of 2/3. To be considered achievable, the estimated
         probability of sampling a heavy output at the given depth must be large enough such that
         the one-sided confidence interval of this estimate is greater than the given threshold.
     :param stop_when_fail: if true, the measurement will stop after the first un-achievable depth
@@ -280,7 +282,7 @@ def measure_quantum_volume(qc: QuantumComputer, qubits: Sequence[int] = None,
     :return: dict with key depth: (prob_sample_heavy, ons_sided_conf_interval) gives both the
         estimated probability of sampling a heavy output at each depth and the 2-sigma lower
         bound on this estimate; a depth qualifies as being achievable only if this lower bound
-        exceeds the threshold, defined in [QVol] to be 2/3
+        exceeds the threshold, defined in [QVol]_ to be 2/3
     """
     if num_circuits < 100:
         warnings.warn("The number of random circuits ran ought to be greater than 100 for results "
@@ -379,7 +381,7 @@ def extract_quantum_volume_from_results(results: Dict[int, Tuple[float, float]])
     measure_quantum_volume above
 
     :param results: results of measure_quantum_volume with sequential depths and their achievability
-    :return: the quantum volume, eq. 7 of [QVol]
+    :return: the quantum volume, eq. 7 of [QVol]_
     """
     depths = sorted(results.keys())
 

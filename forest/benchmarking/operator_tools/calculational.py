@@ -3,15 +3,19 @@ from scipy.linalg import eigh
 
 
 def partial_trace(rho, keep, dims, optimize=False):
-    r"""Calculate the partial trace.
+    r"""
+    Calculate the partial trace.
 
-    Consider a joint state ρ on the Hilbert space H_a \otimes H_b. We wish to trace over H_b e.g.
+    Consider a joint state ρ on the Hilbert space :math:`H_a \otimes H_b`. We wish to trace out
+    :math:`H_b`
 
-    ρ_a = Tr_b(ρ).
+    .. math::
+
+        ρ_a = Tr_b(ρ)
 
     :param rho: 2D array, the matrix to trace.
     :param keep: An array of indices of the spaces to keep after being traced. For instance,
-                 if the space is A x B x C x D and we want to trace out B and D, keep = [0,2].
+                 if the space is A x B x C x D and we want to trace out B and D, keep = [0, 2].
     :param dims: An array of the dimensions of each space. For example, if the space is
                  A x B x C x D, dims = [dim_A, dim_B, dim_C, dim_D].
     :param optimize: optimize argument in einsum
@@ -32,10 +36,10 @@ def partial_trace(rho, keep, dims, optimize=False):
 
 
 def outer_product(bra1: np.ndarray, bra2: np.ndarray) -> np.ndarray:
-    r"""
-    Given two possibly complex row vectors `bra1` and `bra2` construct the outer product:
+    """
+    Given two possibly complex row vectors `bra1` and `bra2` construct the outer product::
 
-    outer_product = |bra1> <bra2|.
+        |bra1> <bra2|
 
     :param bra1: Is a dim by 1 np.ndarray.
     :param bra2: Is a dim by 1 np.ndarray.
@@ -49,10 +53,11 @@ def outer_product(bra1: np.ndarray, bra2: np.ndarray) -> np.ndarray:
 
 
 def inner_product(bra1: np.ndarray, bra2: np.ndarray) -> complex:
-    r"""
-    Given two possibly complex row vectors `bra1` and `bra2` construct the inner product:
+    """
+    Given two possibly complex row vectors `bra1` and `bra2` construct the inner
+    product::
 
-    inner_product = <bra1|bra2>,
+        <bra1|bra2>
 
     which can be complex,
 
