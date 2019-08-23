@@ -15,7 +15,7 @@ from forest.benchmarking.utils import bloch_vector_to_standard_basis, is_pos_pow
 from forest.benchmarking.observable_estimation import ExperimentSetting, plusZ, minusZ, \
     ObservablesExperiment, ExperimentResult, estimate_observables, plusX, _OneQState, \
     TensorProductState, group_settings, get_results_by_qubit_groups, \
-    calibrate_observable_estimates, exhaustive_symmetrization
+    calibrate_observable_estimates
 
 import matplotlib.pyplot as plt
 
@@ -296,7 +296,7 @@ def acquire_rpe_data(qc: QuantumComputer,
         if mitigate_readout_errors:
             res = list(
                 estimate_observables(qc, expt, num_shots=num_shots, active_reset=active_reset,
-                                     symmetrization_method=exhaustive_symmetrization))
+                                     symm_type=-1))
 
             results.append(list(calibrate_observable_estimates(qc, res, num_shots=num_shots)))
         else:

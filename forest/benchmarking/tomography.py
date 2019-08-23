@@ -634,8 +634,8 @@ def _grad_cost(A, n, estimate, eps=1e-6):
 
 def do_tomography(qc: QuantumComputer, program: Program, qubits: List[int], kind: str,
                   num_shots: int = 1_000, active_reset: bool = False,
-                  group_tpb_settings: bool = True, mitigate_readout_errors: bool = True,
-                  show_progress_bar: bool = False) \
+                  group_tpb_settings: bool = True, symm_type: int = 0,
+                  calibrate_observables: bool = True, show_progress_bar: bool = False) \
         -> Tuple[np.ndarray, ObservablesExperiment, List[ExperimentResult]]:
     """
     A wrapper around experiment generation, data acquisition, and estimation that runs a tomography
@@ -655,8 +655,18 @@ def do_tomography(qc: QuantumComputer, program: Program, qubits: List[int], kind
         be estimated concurrently from the same shot data. This will speed up the data
         acquisition time by reducing the total number of runs, but be aware that grouped settings
         will have non-zero covariance.
-    :param mitigate_readout_errors: Boolean flag indicating whether bias due to imperfect
-        readout should be corrected
+    :param symm_type: the type of symmetrization
+
+        * -1 -- exhaustive symmetrization uses every possible combination of flips
+        * 0 -- no symmetrization
+        * 1 -- symmetrization using an OA with strength 1
+        * 2 -- symmetrization using an OA with strength 2
+        * 3 -- symmetrization using an OA with strength 3
+
+    :param calibrate_observables: boolean flag indicating whether observable estimates are
+        calibrated using the same level of symmetrization as exhaustive_symmetrization.
+        Likely, for the best (although slowest) results, symmetrization type should accommodate the
+        maximum weight of any observable estimated.
     :param show_progress_bar: displays a progress bar via tqdm if true.
     :return: The estimated state prepared by or process represented by the input ``program``,
         as implemented on the provided ``qc``, along with the experiment and corresponding
@@ -673,7 +683,8 @@ def do_tomography(qc: QuantumComputer, program: Program, qubits: List[int], kind
         expt = group_settings(expt)
 
     results = list(acquire_dfe_data(qc, expt, num_shots, active_reset=active_reset,
-                                    mitigate_readout_errors=mitigate_readout_errors,
+                                    symm_type=symm_type,
+                                    calibrate_observables=calibrate_observables,
                                     show_progress_bar=show_progress_bar))
 
     if kind.lower() == 'state':

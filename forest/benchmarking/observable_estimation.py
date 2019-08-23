@@ -973,6 +973,9 @@ def calibrate_observable_estimates(qc: QuantumComputer, expt_results: List[Exper
         * 2 -- symmetrization using an OA with strength 2
         * 3 -- symmetrization using an OA with strength 3
 
+        Likely the symmetrization type should accommodate the maximum weight of any observable
+        estimated and also match the symmetrization type used to estimate the observables.
+
     :param noisy_program: an optional program from which to inherit a noise model; only relevant
         for running on a QVM
     :param active_reset: whether or not to begin the program by actively resetting. If true,
