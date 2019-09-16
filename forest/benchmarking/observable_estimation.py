@@ -4,6 +4,7 @@ import json
 import logging
 import re
 import sys
+import warnings
 from json import JSONEncoder
 from operator import mul
 from typing import List, Union, Iterable, Tuple, Dict, Callable, Sequence
@@ -973,7 +974,8 @@ def calibrate_observable_estimates(qc: QuantumComputer, expt_results: List[Exper
         * 2 -- symmetrization using an OA with strength 2
         * 3 -- symmetrization using an OA with strength 3
 
-        Likely the symmetrization type should accommodate the maximum weight of any observable
+        TODO: accomodate calibration for weight > symmetrization strength (symm_type)
+        Currently, the symmetrization type must be at least the maximum weight of any observable
         estimated and also match the symmetrization type used to estimate the observables.
 
     :param noisy_program: an optional program from which to inherit a noise model; only relevant
@@ -1001,6 +1003,12 @@ def calibrate_observable_estimates(qc: QuantumComputer, expt_results: List[Exper
         calibrations[obs.operations_as_set()] = (obs_mean, obs_var, len(results))
 
     for expt_result in expt_results:
+        # TODO: allow weight > symm_type
+        if -1 < symm_type < len(expt_result.setting.observable.get_qubits()):
+            warnings.warn(f'Calibration of observable {expt_result.setting.observable} '
+                          f'currently not supported since it acts on more qubits than the '
+                          f'symm_type {symm_type}.')
+
         # get the calibration data for this observable
         cal_data = calibrations[expt_result.setting.observable.operations_as_set()]
         obs_mean, obs_var, counts = cal_data

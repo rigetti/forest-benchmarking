@@ -634,7 +634,7 @@ def _grad_cost(A, n, estimate, eps=1e-6):
 
 def do_tomography(qc: QuantumComputer, program: Program, qubits: List[int], kind: str,
                   num_shots: int = 1_000, active_reset: bool = False,
-                  group_tpb_settings: bool = True, symm_type: int = 0,
+                  group_tpb_settings: bool = True, symm_type: int = -1,
                   calibrate_observables: bool = True, show_progress_bar: bool = False) \
         -> Tuple[np.ndarray, ObservablesExperiment, List[ExperimentResult]]:
     """

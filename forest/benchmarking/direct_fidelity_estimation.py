@@ -9,7 +9,7 @@ from pyquil import Program
 from pyquil.api import BenchmarkConnection, QuantumComputer
 from forest.benchmarking.observable_estimation import ExperimentResult, ExperimentSetting, \
     ObservablesExperiment, TensorProductState, estimate_observables, plusX, minusX, plusY, minusY,\
-    plusZ, minusZ, exhaustive_symmetrization, calibrate_observable_estimates, group_settings
+    plusZ, minusZ, calibrate_observable_estimates, group_settings
 from pyquil.paulis import PauliTerm, sI, sX, sY, sZ
 
 
@@ -245,7 +245,7 @@ def generate_monte_carlo_process_dfe_experiment(benchmarker: BenchmarkConnection
 
 
 def acquire_dfe_data(qc: QuantumComputer, expt: ObservablesExperiment, num_shots: int = 10_000,
-                     active_reset: bool = False, symm_type: int = 0,
+                     active_reset: bool = False, symm_type: int = -1,
                      calibrate_observables: bool = True,
                      show_progress_bar: bool = False) -> List[ExperimentResult]:
     """
@@ -254,8 +254,7 @@ def acquire_dfe_data(qc: QuantumComputer, expt: ObservablesExperiment, num_shots
     :param qc: A quantum computer object where the experiment will run.
     :param expt: An ObservablesExperiment object describing the experiments to be run.
     :param num_shots: The number of shots to be taken in each experiment. If
-        mitigate_readout_errors is set to True then this same number of shots will be used for
-        each round of symmetrized data collection and each calibration of an observable.
+        calibrate_observables is set to True then this number of shots may be increased.
     :param active_reset: Boolean flag indicating whether experiments should begin with an
         active reset instruction (this can make the collection of experiments run a lot faster).
     :param symm_type: the type of symmetrization
@@ -372,7 +371,7 @@ def estimate_dfe(results: List[ExperimentResult], kind: str) -> Tuple[float, flo
 def do_dfe(qc: QuantumComputer, benchmarker: BenchmarkConnection, program: Program,
            qubits: List[int], kind: str, mc_n_terms: int = None, num_shots: int = 1_000,
            active_reset: bool = False, group_tpb_settings: bool = False,
-           symm_type: int = 0, calibrate_observables: bool = True,
+           symm_type: int = -1, calibrate_observables: bool = True,
            show_progress_bar: bool =  False) \
         -> Tuple[Tuple[float, float], ObservablesExperiment, List[ExperimentResult]]:
     """
