@@ -125,8 +125,11 @@ class CircuitTemplate:
         if sequence is None:
             sequence = []
 
-        for generator in self.generators:
-            sequence.append(generator(graph=graph, qc=qc, width=width, sequence=sequence))
+        # run through the generators 'repetitions' many times; append each generated program to
+        # the sequence.
+        for _ in range(repetitions):
+            for generator in self.generators:
+                sequence.append(generator(graph=graph, qc=qc, width=width, sequence=sequence))
 
         for sequence_transform in self.sequence_transforms:
             sequence = sequence_transform(graph=graph, qc=qc, width=width, sequence=sequence)
