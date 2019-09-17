@@ -887,6 +887,9 @@ def estimate_observables(qc: QuantumComputer, obs_expt: ObservablesExperiment,
     :param active_reset: whether or not to begin the program by actively resetting. If true,
         execution of each of the returned programs in a loop on the QPU will generally be faster.
     :param show_progress_bar: displays a progress bar via tqdm if true.
+    :param use_basic_compile: instead of using the qc.compiler standard quil_to_native_quil
+        compilation step, which may optimize gates away, instead use only basic_compile which
+        makes as few manual gate substitutions as possible.   
     :return: all of the ExperimentResults which hold an estimate of each observable of obs_expt
     """
     if use_basic_compile:
