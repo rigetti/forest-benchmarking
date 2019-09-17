@@ -854,7 +854,8 @@ def shots_to_obs_moments(bitarray: np.ndarray, qubits: List[int], observable: Pa
 
 def estimate_observables(qc: QuantumComputer, obs_expt: ObservablesExperiment,
                          num_shots: int = 500, symm_type: int = 0,
-                         active_reset: bool = False, show_progress_bar: bool = False)\
+                         active_reset: bool = False, show_progress_bar: bool = False,
+                         use_basic_compile = True)\
         -> Iterable[ExperimentResult]:
     """
     Standard wrapper for estimating the observables in an ObservableExperiment.
@@ -888,6 +889,11 @@ def estimate_observables(qc: QuantumComputer, obs_expt: ObservablesExperiment,
     :param show_progress_bar: displays a progress bar via tqdm if true.
     :return: all of the ExperimentResults which hold an estimate of each observable of obs_expt
     """
+    if use_basic_compile:
+        old_method = qc.compiler.quil_to_native_quil
+        # temporarily replace compiler.quil_to_native_quil with basic_compile
+        qc.compiler.quil_to_native_quil = basic_compile
+
     programs, meas_qubits = generate_experiment_programs(obs_expt, active_reset)
     for prog, meas_qs, settings in zip(tqdm(programs, disable=not show_progress_bar), meas_qubits,
                                obs_expt):
@@ -905,6 +911,10 @@ def estimate_observables(qc: QuantumComputer, obs_expt: ObservablesExperiment,
                 std_err=np.sqrt(obs_var),
                 total_counts=len(results),
             )
+
+    if use_basic_compile:
+        # revert to original
+        qc.compiler.quil_to_native_quil = old_method
 
 
 def get_calibration_program(observable: PauliTerm, noisy_program: Program = None,
