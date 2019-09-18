@@ -17,8 +17,8 @@ def test_rabi_flop(qvm):
 
     fit = fit_rabi_results(angles, stats['expectation'], stats['std_err'])
 
-    freq = fit.params['angular_freq'].value
-    freq_err = fit.params['angular_freq'].stderr
+    freq = fit.params['frequency'].value
+    freq_err = fit.params['frequency'].stderr
 
     assert np.isclose(freq, 1, atol=2 * freq_err)
 

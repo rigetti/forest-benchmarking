@@ -28,19 +28,19 @@ def test_fit_decay_time_param_decay():
     assert np.isclose(fit.params['decay_time'], mock_t1['T1'])
 
 
-def test_decaying_cosine():
-    num_points_sampled = 1000
+def test_decaying_sinusoid():
+    num_points_sampled = 50
     true_t2 = 15  # us
     qubit_detuning = 2.5  # MHZ
 
     mock_t2 = {'T2': true_t2, 'qubit_detuning': qubit_detuning, 'num_points': num_points_sampled}
 
-    times = np.linspace(0, 3 * mock_t2['T2'], mock_t2['num_points'])
+    times = np.linspace(0, 2 * mock_t2['T2'], mock_t2['num_points'])
     data = np.asarray([0.5 * np.exp(-1 * t / mock_t2['T2']) *
-                       np.cos(mock_t2['qubit_detuning'] * t) + 0.5 for t in times])
+                       np.sin(mock_t2['qubit_detuning'] * t) + 0.5 for t in times])
 
     fit = fit_decaying_cosine(times, data)
 
     assert np.isclose(fit.params['decay_time'], mock_t2['T2'])
-    assert np.isclose(2 * np.pi * fit.params['frequency'], mock_t2['qubit_detuning'])
+    assert np.isclose(fit.params['frequency'], mock_t2['qubit_detuning'])
 

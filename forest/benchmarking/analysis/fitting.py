@@ -116,7 +116,7 @@ def fit_decaying_cosine(x: np.ndarray, y: np.ndarray, weights: np.ndarray = None
 
 
 def shifted_cosine(x: np.ndarray, amplitude: float, offset: float, baseline: float,
-                   angular_freq: float) -> np.ndarray:
+                   frequency: float) -> np.ndarray:
     """
     Model for a cosine shifted vertically by the amount baseline.
 
@@ -124,10 +124,10 @@ def shifted_cosine(x: np.ndarray, amplitude: float, offset: float, baseline: flo
     :param amplitude: The amplitude of the cosine.
     :param offset: The argument offset of the cosine, e.g. o for cos(x - o)
     :param baseline: The baseline of the cosine, e.g. b for cos(x) + b
-    :param angular_freq: The angular frequency of the sinusoid, e.g. f for cos(f x)
+    :param frequency: The angular frequency, e.g. f for cos(f x)
     :return: The sinusoidal response at the given phases(s).
     """
-    return amplitude * np.cos(angular_freq * x + offset) + baseline
+    return amplitude * np.cos(frequency * x + offset) + baseline
 
 
 def fit_shifted_cosine(x: np.ndarray, y: np.ndarray, weights: np.ndarray = None,
@@ -145,7 +145,7 @@ def fit_shifted_cosine(x: np.ndarray, y: np.ndarray, weights: np.ndarray = None,
     decay_model = Model(shifted_cosine)
     params = decay_model.make_params(amplitude=param_guesses[0], offset=param_guesses[1],
                                      baseline=param_guesses[2],
-                                     angular_freq=param_guesses[3])
+                                     frequency=param_guesses[3])
     return decay_model.fit(y, x=x, params=params, weights=weights)
 
 
