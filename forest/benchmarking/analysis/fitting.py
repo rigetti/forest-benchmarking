@@ -1,4 +1,5 @@
 import numpy as np
+from numpy import pi
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 from lmfit import Model
@@ -80,23 +81,25 @@ def fit_decay_time_param_decay(x: np.ndarray, y: np.ndarray, weights: np.ndarray
 def decaying_cosine(x: np.ndarray, amplitude: float, decay_time: float, offset: float,
                     baseline: float, frequency: float) -> np.ndarray:
     """
-    Calculate exponentially decaying sinusoid at a series of points.
+    Calculate exponentially decaying cosine at a series of points.
 
     :param x: The independent variable with respect to which decay is calculated.
-    :param amplitude: The amplitude of the decaying sinusoid.
+    :param amplitude: The amplitude of the decaying cosine.
     :param decay_time: The inverse decay rate - e.g. T2 - of the decay curve.
-    :param offset: The argument offset of the sinusoidal curve, o for sin(x - o)
-    :param baseline: The baseline of the sinusoid, e.g. b for sin(x) + b
-    :param frequency: The frequency of the sinusoid, e.g. f for sin(f x)
-    :return: The exponentially decaying sinusoid evaluated at the point(s) x
+    :param offset: The argument offset of the cosine, e.g. o for cos(x - o)
+    :param baseline: The baseline of the cosine, e.g. b for cos(x) + b
+    :param frequency: The frequency of the cosine, e.g. f for cos(2 pi f x). If decay_time is
+        indeed a time then the frequency has units of inverse time.
+    :return: The exponentially decaying cosine evaluated at the point(s) x
     """
-    return amplitude * np.exp(-1 * x / decay_time) * np.cos(frequency * (x - offset)) + baseline
+    return amplitude * np.exp(-1 * x / decay_time) * np.cos(2 * pi * frequency * x + offset) + \
+           baseline
 
 
 def fit_decaying_cosine(x: np.ndarray, y: np.ndarray, weights: np.ndarray = None,
                         param_guesses: tuple = (.5, 10, 0.0, 0.5, 5)) -> ModelResult:
     """
-    Fit experimental data x, y to an exponentially decaying sinusoid.
+    Fit experimental data x, y to an exponentially decaying cosine.
 
     :param x: The independent variable, e.g. depth or time
     :param y: The dependent variable, e.g. probability of measuring 1
@@ -119,9 +122,9 @@ def shifted_cosine(x: np.ndarray, amplitude: float, offset: float, baseline: flo
 
     :param x: The independent variable;
     :param amplitude: The amplitude of the cosine.
-    :param offset: The argument offset of the sinusoidal curve, o for sin(x - o)
-    :param baseline: The baseline of the sinusoid, e.g. b for sin(x) + b
-    :param frequency: The frequency of the sinusoid, e.g. f for sin(f x)
+    :param offset: The argument offset of the cosine, e.g. o for cos(x - o)
+    :param baseline: The baseline of the cosine, e.g. b for cos(x) + b
+    :param frequency: The angular frequency, e.g. f for cos(f x)
     :return: The sinusoidal response at the given phases(s).
     """
     return amplitude * np.cos(frequency * x + offset) + baseline

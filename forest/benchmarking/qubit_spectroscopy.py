@@ -200,7 +200,7 @@ def do_t1_or_t2(qc: QuantumComputer, qubits: Sequence[int], times: Sequence[floa
 #   T2 star and T2 echo functions
 # ==================================================================================================
 def generate_t2_star_experiments(qubits: Sequence[int], times: Sequence[float],
-                                 detuning: float = 5e6) -> List[ObservablesExperiment]:
+                                 detuning: float = 1e6) -> List[ObservablesExperiment]:
     """
     Return ObservablesExperiments containing programs which constitute a T2 star experiment to
     measure the T2 star coherence decay time for each qubit in qubits.
@@ -233,7 +233,7 @@ def generate_t2_star_experiments(qubits: Sequence[int], times: Sequence[float],
 
 
 def generate_t2_echo_experiments(qubits: Sequence[int], times: Sequence[float],
-                                 detuning: float = 5e6) -> List[ObservablesExperiment]:
+                                 detuning: float = 1e6) -> List[ObservablesExperiment]:
     """
     Return ObservablesExperiments containing programs which constitute a T2 echo experiment to
     measure the T2 echo coherence decay time.
@@ -260,6 +260,7 @@ def generate_t2_echo_experiments(qubits: Sequence[int], times: Sequence[float],
     expts = []
     for t in times:
         half_time = round(t/2, 7)  # enforce 100ns boundaries
+        t = round(t, 7)
         program = Program()
         settings = []
         for q in qubits:
@@ -276,7 +277,7 @@ def generate_t2_echo_experiments(qubits: Sequence[int], times: Sequence[float],
 
 
 def fit_t2_results(times: Sequence[float], y_expectations: Sequence[float],
-                   y_std_errs: Sequence[float] = None, detuning: float = 5e6,
+                   y_std_errs: Sequence[float] = None, detuning: float = 1e6,
                    param_guesses: tuple = None) -> ModelResult:
     """
     Wrapper for fitting the results of a ObservablesExperiment; simply extracts key parameters
