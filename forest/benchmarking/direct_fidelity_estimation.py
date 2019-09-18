@@ -9,7 +9,7 @@ from pyquil import Program
 from pyquil.api import BenchmarkConnection, QuantumComputer
 from forest.benchmarking.observable_estimation import ExperimentResult, ExperimentSetting, \
     ObservablesExperiment, TensorProductState, estimate_observables, plusX, minusX, plusY, minusY,\
-    plusZ, minusZ, exhaustive_symmetrization, calibrate_observable_estimates, group_settings
+    plusZ, minusZ, calibrate_observable_estimates, group_settings
 from pyquil.paulis import PauliTerm, sI, sX, sY, sZ
 
 
@@ -245,7 +245,8 @@ def generate_monte_carlo_process_dfe_experiment(benchmarker: BenchmarkConnection
 
 
 def acquire_dfe_data(qc: QuantumComputer, expt: ObservablesExperiment, num_shots: int = 10_000,
-                     active_reset: bool = False, mitigate_readout_errors: bool = True,
+                     active_reset: bool = False, symm_type: int = -1,
+                     calibrate_observables: bool = True,
                      show_progress_bar: bool = False) -> List[ExperimentResult]:
     """
     Acquire data necessary for direct fidelity estimate (DFE).
@@ -253,23 +254,31 @@ def acquire_dfe_data(qc: QuantumComputer, expt: ObservablesExperiment, num_shots
     :param qc: A quantum computer object where the experiment will run.
     :param expt: An ObservablesExperiment object describing the experiments to be run.
     :param num_shots: The number of shots to be taken in each experiment. If
-        mitigate_readout_errors is set to True then this same number of shots will be used for
-        each round of symmetrized data collection and each calibration of an observable.
+        calibrate_observables is set to True then this number of shots may be increased.
     :param active_reset: Boolean flag indicating whether experiments should begin with an
         active reset instruction (this can make the collection of experiments run a lot faster).
-    :param mitigate_readout_errors: Boolean flag indicating whether bias due to imperfect
-        readout should be corrected
+    :param symm_type: the type of symmetrization
+
+        * -1 -- exhaustive symmetrization uses every possible combination of flips
+        * 0 -- no symmetrization
+        * 1 -- symmetrization using an OA with strength 1
+        * 2 -- symmetrization using an OA with strength 2
+        * 3 -- symmetrization using an OA with strength 3
+
+    :param calibrate_observables: boolean flag indicating whether observable estimates are
+        calibrated using the same level of symmetrization as exhaustive_symmetrization.
+        Likely, for the best (although slowest) results, symmetrization type should accommodate the
+        maximum weight of any observable estimated.
     :param show_progress_bar: displays a progress bar via tqdm if true.
     :return: results from running the given DFE experiment. These can be passed to estimate_dfe
     """
-    if mitigate_readout_errors:
-        res = list(estimate_observables(qc, expt, num_shots=num_shots, active_reset=active_reset,
-                                        symmetrization_method=exhaustive_symmetrization,
-                                        show_progress_bar=show_progress_bar))
-        res = list(calibrate_observable_estimates(qc, res, num_shots=num_shots))
-    else:
-        res = list(estimate_observables(qc, expt, num_shots=num_shots, active_reset=active_reset,
-                                        show_progress_bar=show_progress_bar))
+    res = list(estimate_observables(qc, expt, num_shots=num_shots,
+                                    symm_type=symm_type,
+                                    active_reset=active_reset,
+                                    show_progress_bar=show_progress_bar))
+    if calibrate_observables:
+        res = list(calibrate_observable_estimates(qc, res, num_shots=num_shots,
+                                                  symm_type=symm_type, active_reset=active_reset))
 
     return res
 
@@ -362,7 +371,8 @@ def estimate_dfe(results: List[ExperimentResult], kind: str) -> Tuple[float, flo
 def do_dfe(qc: QuantumComputer, benchmarker: BenchmarkConnection, program: Program,
            qubits: List[int], kind: str, mc_n_terms: int = None, num_shots: int = 1_000,
            active_reset: bool = False, group_tpb_settings: bool = False,
-           mitigate_readout_errors: bool = True, show_progress_bar: bool = False) \
+           symm_type: int = -1, calibrate_observables: bool = True,
+           show_progress_bar: bool =  False) \
         -> Tuple[Tuple[float, float], ObservablesExperiment, List[ExperimentResult]]:
     """
     A wrapper around experiment generation, data acquisition, and estimation that runs a DFE 
@@ -388,8 +398,18 @@ def do_dfe(qc: QuantumComputer, benchmarker: BenchmarkConnection, program: Progr
         be estimated concurrently from the same shot data. This will speed up the data
         acquisition time by reducing the total number of runs, but be aware that grouped settings
         will have non-zero covariance. TODO: set default True after handling covariance.
-    :param mitigate_readout_errors: Boolean flag indicating whether bias due to imperfect
-        readout should be corrected
+    :param symm_type: the type of symmetrization
+
+        * -1 -- exhaustive symmetrization uses every possible combination of flips
+        * 0 -- no symmetrization
+        * 1 -- symmetrization using an OA with strength 1
+        * 2 -- symmetrization using an OA with strength 2
+        * 3 -- symmetrization using an OA with strength 3
+
+    :param calibrate_observables: boolean flag indicating whether observable estimates are
+        calibrated using the same level of symmetrization as exhaustive_symmetrization.
+        Likely, for the best (although slowest) results, symmetrization type should accommodate the
+        maximum weight of any observable estimated.
     :param show_progress_bar: displays a progress bar via tqdm if true.
     :return: The estimated fidelity of the state prepared by or process represented by the input
         ``program``, as implemented on the provided ``qc``, along with the standard error of the
@@ -414,8 +434,9 @@ def do_dfe(qc: QuantumComputer, benchmarker: BenchmarkConnection, program: Progr
         expt = group_settings(expt)
 
     results = list(acquire_dfe_data(qc, expt, num_shots, active_reset=active_reset,
-                                     mitigate_readout_errors=mitigate_readout_errors,
-                                     show_progress_bar=show_progress_bar))
+                                    symm_type=symm_type,
+                                    calibrate_observables=calibrate_observables,
+                                    show_progress_bar=show_progress_bar))
 
     fid, std_err = estimate_dfe(results, kind)
 

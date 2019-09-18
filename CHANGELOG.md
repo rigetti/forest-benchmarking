@@ -6,6 +6,7 @@ v0.7 (August 22, 2019)
 Breaking Changes:
 
 - Major module re-org of superoperator tools into `operator_tools` also moved `random_operators` to the operator tools module. Added type checking in random operators, added new module to check plain old operators are unitary etc (gh-150, 140, 164).
+- Remove symmetrization functionality from `observable_estimation` in favor of pyquil functionality (gh-194). 
 - Methods in `fitting` renamed to be less ambiguous `decay_constant_param_decay` -> `decay_time_param_decay` and
 `fit_decay_constant_param_decay` -> `fit_decay_time_param_decay`. Correspondingly, the fit parameter was renamed
 `decay_constant` -> `decay_time`(gh-175)
