@@ -5,6 +5,7 @@ v0.7 (June XX, 2019)
 --------------------
 Breaking Changes:
 
+- Remove symmetrization functionality from `observable_estimation` in favor of pyquil functionality (gh-194). 
 - Major module re-org of superoperator tools into `operator_tools` also moved `random_operators` to the operator tools module. Added type checking in random operators, added new module to check plain old operators are unitary etc (gh-150).
 
 Improvements and Changes:
