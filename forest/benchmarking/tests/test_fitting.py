@@ -35,7 +35,7 @@ def test_decaying_cosine():
 
     mock_t2 = {'T2': true_t2, 'qubit_detuning': qubit_detuning, 'num_points': num_points_sampled}
 
-    times = np.linspace(0, 2 * mock_t2['T2'], mock_t2['num_points'])
+    times = np.linspace(0, 3 * mock_t2['T2'], mock_t2['num_points'])
     data = np.asarray([0.5 * np.exp(-1 * t / mock_t2['T2']) *
                        np.cos(mock_t2['qubit_detuning'] * t) + 0.5 for t in times])
 
