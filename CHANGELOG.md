@@ -1,7 +1,7 @@
 Changelog
 =========
 
-v0.7 (August 22, 2019)
+v0.7 (September 20, 2019)
 ----------------------
 Breaking Changes:
 
