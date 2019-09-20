@@ -1,12 +1,22 @@
 Changelog
 =========
 
-v0.7 (June XX, 2019)
---------------------
+v0.7 (September 20, 2019)
+----------------------
 Breaking Changes:
 
+- Major module re-org of superoperator tools into `operator_tools` also moved `random_operators` to the operator tools module. Added type checking in random operators, added new module to check plain old operators are unitary etc (gh-150, 140, 164).
 - Remove symmetrization functionality from `observable_estimation` in favor of pyquil functionality (gh-194). 
-- Major module re-org of superoperator tools into `operator_tools` also moved `random_operators` to the operator tools module. Added type checking in random operators, added new module to check plain old operators are unitary etc (gh-150).
+- Methods in `fitting` renamed to be less ambiguous `decay_constant_param_decay` -> `decay_time_param_decay` and
+`fit_decay_constant_param_decay` -> `fit_decay_time_param_decay`. Correspondingly, the fit parameter was renamed
+`decay_constant` -> `decay_time`(gh-175)
+- `generate_cz_phase_ramsey_experiment` was made plural, consistent with rest of `qubit_spectroscopy` (gh-175)
+- `acquire_cz_phase_ramsey_data` removed in favor of `estimate_observables` and all other specific `acquire_*` methods
+in `qubit_spectroscopy.py` were removed in favor of `acquire_qubit_spectroscopy_data` (gh-175)
+- argument order standardized, which changed the api of `generate_exhaustive_process_dfe_experiment`,
+`generate_exhaustive_state_dfe_experiment`, `generate_monte_carlo_state_dfe_experiment`, 
+`generate_monte_carlo_process_dfe_experiment`, `robust_phase_estimate`, 
+and positional arg name of `acquire_dfe_data` (gh-182) 
 
 Improvements and Changes:
 
@@ -18,8 +28,24 @@ estimate corresponding to `|+0> = (1, 0, 1, 0)/sqrt(2)` rather than `|0+>` (gh-1
 - Improved the `superoperator_tools` notebook and the `random_operators` notebook (gh-98)
 - Improvements to Ripple carry adder notebook, added tests for non parametric bit string 
 prep program in utils (gh-98)
-- Added the ablity to project a Choi matrix to the closest unitary (gh-159)
-- Reduced local test run time from 11min to 5min (gh-160) 
+- Added the ability to project a Choi matrix to the closest unitary (gh-159, 157)
+- Reduced local test run time from 11min to 5min (gh-160)
+- Major changes and improvements to all notebooks (gh-148, 149, 153, 154, 155, 156, 165, 167, 172, 182(see 183))
+- Speedup the tests (gh-158, 161)
+- Complete overhaul/addition of documentation in docs folder (gh-170, 174)
+- Github PR and bug report templates added (gh-177, 182)
+- `merge_disjoint_experiments` and `get_results_by_qubit_groups` added to `observable_estimation.py` to facilitate
+running experiments 'in parallel' on a QPU and analyzing the results separately (gh-182)
+- various `do_*` methods added that wrap various experiments into a single method with sensible defaults (gh-182)
+- examples notebooks moved to docs/ directory to be rendered within documentation (gh-182)
+- tqdm progress bars added to most data acquisition methods (gh-182)
+
+Bugfixes:
+
+- Dagger is now implemented in pyquil as a gate-level modifier, but this doesn't play well with noise models on the QVM
+so a stop-gap was put into basic_compile to hand compile the dagger modifier (gh-169)
+- Compiler sometimes failed to find connected subgraphs of qubits (gh-188)
+- QPU cannot handle integer parameters (gh-188)
 
 v0.6 (June 11, 2019)
 --------------------
