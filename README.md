@@ -1,4 +1,4 @@
-Forest Benchmarking: QCVV using pyQuil
+Forest Benchmarking: QCVV using PyQuil
 ======================================
 
 [![pipeline status](https://gitlab.com/rigetti/forest-benchmarking/badges/master/pipeline.svg)](https://gitlab.com/rigetti/forest-benchmarking/commits/master)
