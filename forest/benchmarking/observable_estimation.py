@@ -741,19 +741,19 @@ def generate_experiment_programs(obs_expt: ObservablesExperiment, active_reset: 
     Grouping of settings to be run in parallel, e.g. by a call to group_settings, should be
     done before this method is called.
 
-    By default the program field of the input obs_expt is assumed to hold a program composed of
-    gates which are either native quil gates or else can be compiled to native quil by the method
-    basic_compile. If this is not the case, then use_basic_compile should be set to False and
-    each returned program must be compiled before being executed on a QPU; NOTE however that
-    compiling a program may change the qubit indices so meas_qubits might need to be re-ordered
-    as well if the MEASURE instructions were not compiled with the program. For this reason it is
-    recommended that obs_expt.program be compiled before this method is called. If one is careful
-    then it is still possible to add the measurement instructions first and subsequently compile
-    the programs before running, e.g. by setting use_compilation = True in the call to
-    _measure_bitstrings (but compiling in this way could interfere with symmetrization).
+    Note that this method does not compile anything into native gates by default. The flag
+    `use_basic_compile` can be set to run a basic compilation routine that replaces some gates
+    with native gates but otherwise performs no optimizations and no qubit re-indexing.
 
-    :param obs_expt: a single ObservablesExperiment to be translated to a series of programs that
-        when run serially can be used to estimate each of obs_expt's observables.
+    .. CAUTION::
+        One must be careful with compilation of the output programs before the appropriate MEASURE
+        instructions are added, because compilation may re-index the qubits so that
+        the output list of `measure_qubits` no longer accurately indexes the qubits that
+        should be measured. Manually replacing a QuantumComputer compiler's quil_to_native_quil
+        command with basic_compile may be an appropriate approach to circumvent this issue.
+
+    :param obs_expt: a single ObservablesExperiment to be translated to a series of programs that,
+        when run serially, can be used to estimate each of obs_expt's observables.
     :param active_reset: whether or not to begin the program by actively resetting. If true,
         execution of each of the returned programs in a loop on the QPU will generally be faster.
     :param use_basic_compile: whether or not to call basic_compile on the programs after they are
@@ -761,8 +761,8 @@ def generate_experiment_programs(obs_expt: ObservablesExperiment, active_reset: 
         the warning above about setting use_basic_compile to false.
     :return: a list of programs along with a corresponding list of the groups of qubits that are
         measured by that program. The returned programs may be run on a qc after measurement
-        instructions are added for the corresponding group of qubits in meas_qubits -- see
-        estimate_observables and _measure_bitstrings for possible usage.
+        instructions are added for the corresponding group of qubits in meas_qubits, or by a call
+        to `qc.run_symmetrized_readout` -- see :func:`estimate_observables` for possible usage.
     """
     # Outer loop over a collection of grouped settings for which we can simultaneously estimate.
     programs = []
@@ -858,19 +858,19 @@ def estimate_observables(qc: QuantumComputer, obs_expt: ObservablesExperiment,
                          use_basic_compile = True)\
         -> Iterable[ExperimentResult]:
     """
-    Standard wrapper for estimating the observables in an ObservableExperiment.
+    Standard wrapper for estimating the observables in an `ObservablesExperiment`.
 
-    Because of the use of default parameters for _measure_bitstrings, this method assumes the
-    program in obs_expt can be compiled to native_quil using only basic_compile; the qc
-    object's compiler is only used to translate native quil to an executable.
+    An expectation and standard error will be estimated for each observable in each setting of
+    the ObservablesExperiment. Settings which are grouped together will be run in parallel under
+    the same call to the QuantumComputer.
 
-    A symmetrization_method can be specified which will be used to generate the necessary
-    symmetrization results. This method should match the api of exhaustive_symmetrization; there,
-    a list of symmetrized programs, the qubits to be measured for each program, the qubits that
-    were flipped for each program, and the original pre-symmetrized program index are returned
-    so that the bitarray results of the symmetrized programs and be processed via
-    consolidate_symmetrization_outputs which returns 'symmetrized' results for the original
-    pre-symmetrized programs.
+    .. CAUTION::
+        Note that the call to `qc.run_symmetrized_readout` adds MEASURE instructions to the
+        programs output by :func:`generate_experiment_programs` and also uses the qc.compiler to
+        compile each program. The default compiler (e.g. for qc returned by `get_qc`) may make
+        optimizations that remove gates necessary for benchmarking. If this is not desired,
+        consider setting the use_basic_compile flag to True for a basic compilation pass that
+        simply replaces gates with non-native gates.
 
     :param qc: a quantum computer object on which to run the programs necessary to estimate each
         observable of obs_expt.
