@@ -24,17 +24,21 @@ from forest.benchmarking.randomized_benchmarking import get_rb_gateset
 from forest.benchmarking.distance_measures import total_variation_distance as tvd
 from forest.benchmarking.operator_tools.random_operators import haar_rand_unitary
 from forest.benchmarking.utils import bit_array_to_int
+from forest.benchmarking.compilation import basic_compile
 
 
 @dataclass
 class CircuitTemplate:
     """
-    We want to be able to specify various families of circuits and, once specified, randomly
-    sample from the family circuits of various width and depth. 'Width' is simply the number of
-    qubits. 'Depth' is not simply circuit depth, but rather the number of some repeated group of
-    gates that constitute some distinct unit. A depth d circuit could consist of d consecutive
-    rounds of random single qubit, then two qubit gates. It could also mean d consecutive
-    random Cliffords followed by the d conjugated Cliffords that invert the first d gates.
+    This dataclass enables us to specify various families of circuits and sample from a specified
+    family random circuits of various width and depth acting on different groups of qubits.
+
+    'Width' is simply the number of qubits measured at then end of the circuit. 'Depth' is not
+    simply circuit depth, but rather the number of repeated structured groups of gates,
+    each of which constitutes some distinct unit. A depth d circuit could  consist of d
+    consecutive rounds of random single qubit, then two qubit gates. It could also mean d
+    consecutive random Cliffords followed by the d conjugated Cliffords that invert the first d
+    gates.
 
     Because these families of circuits are quite diverse, specifying the family and drawing
     samples can potentially require a wide variety of parameters. The compiler may be required to
@@ -42,14 +46,20 @@ class CircuitTemplate:
     may be desired; the sequence of 'layers' generated so far may be necessary to compute an
     inverse.
 
-    The primary purpose of this class is to sample circuits, which we represent by a list of
-    pyquil Programs, or a 'sequence'; this core functionality is found in :func:`sample_sequence`.
-    In this function `generators` are applied in series in a loop `repetitions` number of times.
-    Each call to a generator will contribute an element to the output sequence,
-    and some combination of the generators will constitute a unit of depth. After a sequence is
-    generated from the output of the various `generators`, each `sequence_transform` is then
-    applied in series on the sequence to create a final output sequence. See
-    :func:`sample_sequence` for more information.
+    We represent each sampled circuit as a list of PyQuil Programs, which we call a 'sequence'
+    since each element of the list holds a distinctly structured group of gates that,
+    when applied altogether in series, constitute the circuit. This core functionality is found in
+    :func:`sample_sequence`. In this function `generators` are applied in series in a loop
+    `repetitions` number of times. Each call to a generator will contribute an element to the
+    output sequence (some combination of which will constitute a unit of depth). After a
+    sequence is generated from the output of the various `generators`, each `sequence_transform`
+    is then applied in series on the generated sequence to create a final output sequence. The
+    sequence transforms account for any features of the circuit that do increase with depth,
+    cannot neatly be fit into repeated units, or otherwise require performing a global
+    transformation on the sequence. See :func:`sample_sequence` for more information.
+
+    This functionality is intended to enable creation and use of any of a wide variety of
+    'volumetric benchmarks' described in the sources below.
 
     .. [Vol] A volumetric framework for quantum computer benchmarks.
         Blume-Kohout and Young.
@@ -68,9 +78,6 @@ class CircuitTemplate:
         """
         Mutates the CircuitTemplate object by appending new generators.
         TODO: The behavior of sequence_transforms may not conform with expectations.
-
-        :param other:
-        :return:
         """
         if isinstance(other, list):
             self.generators += other
@@ -83,10 +90,6 @@ class CircuitTemplate:
     def __add__(self, other):
         """
         Concatenate two circuits together, returning a new one.
-
-        :param Circuit other: Another circuit to add to this one.
-        :return: A newly concatenated circuit.
-        :rtype: Program
         """
         ckt = CircuitTemplate()
         ckt.append(self)
@@ -100,11 +103,12 @@ class CircuitTemplate:
         self.append(other)
         return self
 
-    def sample_sequence(self, graph, repetitions, qc=None, width=None, sequence=None):
+    def sample_sequence(self, graph: nx.Graph, repetitions: int, qc: QuantumComputer = None,
+                        width: int = None, sequence: List[Program] = None):
         """
         The sequence_transforms are distinct from generators in that they take in a sequence and
         output a new sequence. These are applied in series after the entire sequence has been
-        generated. A motivating family of interest is
+        generated. A family of interest that motivates this distinction is
 
             C_0 P_0 C_1 P_1 ... P_{N-1} C_N P_N C_N^t P_{N+1} ... C_1^t P_{2N-1} C_0^t
 
@@ -112,12 +116,17 @@ class CircuitTemplate:
         generator of random Cliffords, a conjugation sequence transform, and a Pauli frame
         randomization transform.
 
-        :param graph:
-        :param repetitions:
-        :param qc:
-        :param width:
-        :param sequence:
-        :return:
+        :param graph: the qubit topology on which the circuit should act. Unless width is
+            specified, the number of qubits in the graph should be considered circuit width.
+        :param repetitions: the number of times the loop of generators should be applied.
+        :param qc: a quantum computer, likely the one on which the circuit will be run, providing
+            access to the full chip topology and associated compiler.
+        :param width: the number of qubits that will be measured at the end of the circuit. If
+            the supplied graph contains more qubits, an induced subgraph of width-many qubits
+            will be selected uniformly at random from the graph.
+        :param sequence: an optional initialization of a sequence to build off of/append to.
+        :return: the list of programs whose sum constitutes a circuit sample from the family of
+            circuits specified by the generators and sequence_transforms.
         """
         if width is not None:
             graph = random.choice(generate_connected_subgraphs(graph, width))
@@ -140,145 +149,18 @@ class CircuitTemplate:
         return merge_programs(self.sample_sequence(graph, repetitions, qc, width, sequence))
 
 
-# ==================================================================================================
-# Generators
-# ==================================================================================================
-def random_single_qubit_gates(graph: nx.Graph, gates: Sequence[Gate]):
+def graph_restricted_compilation(qc: QuantumComputer, graph: nx.Graph,
+                                 program: Program) -> Program:
     """
-    Create a program comprised of single qubit gates randomly placed on the nodes of the
-    specified graph. The gates are chosen uniformly from the list provided.
+    A useful helper that temporarily modifies the supplied qc's qubit topology to match the
+    supplied graph so that the given program may be compiled onto the graph topology.
 
-    :param graph: The graph. Nodes are used as arguments to gates, so they should be qubit-like.
-    :param gates: A list of gates e.g. [I, X, Z] or [I, X].
-    :return: A program that randomly places single qubit gates on a graph.
+    :param qc: a qc object with a compiler where the given graph is a subraph of the qc's qubit
+        topology.
+    :param graph: The desired subraph of the qc's full topology on which we wish to run a program.
+    :param program: a program we wish to run on a particular graph on the qc.
+    :return: the program compiled into native quil gates respecting the graph topology.
     """
-    program = Program()
-    for q in graph.nodes:
-        gate = random.choice(gates)
-        program += gate(q)
-    return program
-
-
-def random_two_qubit_gates(graph: nx.Graph, gates:  Sequence[Gate]):
-    """
-    Write a program to randomly place two qubit gates on edges of the specified graph.
-
-    :param graph: The graph. Nodes are used as arguments to gates, so they should be qubit-like.
-    :param gates: A list of gates e.g. [I otimes I, CZ] or [CZ, SWAP, CNOT]
-    :return: A program that has two qubit gates randomly placed on the graph edges.
-    """
-    program = Program()
-    # TODO: two coloring with pragmas
-    for a, b in graph.edges:
-        gate = random.choice(gates)
-        program += gate(a, b)
-    return program
-
-
-def random_single_qubit_cliffords(bm: BenchmarkConnection, graph: nx.Graph):
-    """
-    Create a program comprised of single qubit Cliffords gates randomly placed on the nodes of
-    the specified graph. Each uniformly random choice of Clifford is implemented in the native
-    gateset.
-
-    :param bm: A benchmark connection that will do the grunt work of generating the Cliffords
-    :param graph: The graph. Nodes are used as arguments to gates, so they should be qubit-like.
-    :return: A program that randomly places single qubit Clifford gates on a graph.
-    """
-    num_qubits = len(graph.nodes)
-
-    q_placeholder = QubitPlaceholder()
-    gateset_1q = get_rb_gateset([q_placeholder])
-
-    # the +1 is because the depth includes the inverse
-    clif_n_inv = bm.generate_rb_sequence(depth=(num_qubits + 1), gateset=gateset_1q, seed=None)
-    rand_cliffords = clif_n_inv[0:num_qubits]
-
-    prog = Program()
-    for q, clif in zip(graph.nodes, rand_cliffords):
-        gate = address_qubits(clif, qubit_mapping={q_placeholder: q})
-        prog += gate
-    return prog
-
-
-def random_two_qubit_cliffords(bm: BenchmarkConnection, graph: nx.Graph):
-    """
-    Write a program to place random two qubit Cliffords gates on edges of the graph.
-
-    :param bm: A benchmark connection that will do the grunt work of generating the Cliffords
-    :param graph: The graph. Nodes are used as arguments to gates, so they should be qubit-like.
-    :return: A program that has two qubit gates randomly placed on the graph edges.
-    """
-    num_2q_gates = len(graph.edges)
-    q_placeholders = QubitPlaceholder.register(n=2)
-    gateset_2q = get_rb_gateset(q_placeholders)
-
-    # the +1 is because the depth includes the inverse
-    clif_n_inv = bm.generate_rb_sequence(depth=(num_2q_gates + 1), gateset=gateset_2q, seed=None)
-    rand_cliffords = clif_n_inv[0:num_2q_gates]
-
-    prog = Program()
-    # do the two coloring with pragmas?
-    # no point until fencing is over
-    for edges, clif in zip(graph.edges, rand_cliffords):
-        gate = address_qubits(clif, qubit_mapping={q_placeholders[0]: edges[0],
-                                                   q_placeholders[1]: edges[1]})
-        prog += gate
-    return prog
-
-
-def dagger_previous(sequence: List[Program], n: int = 1):
-    return merge_programs(sequence[-n:]).dagger()
-
-
-def _qubit_perm_to_bitstring_perm(qubit_permutation: List[int]):
-    bitstring_permutation = []
-    for bitstring in range(2**len(qubit_permutation)):
-        permuted_bitstring = 0
-        for idx, q in enumerate(qubit_permutation):
-            permuted_bitstring |= ((bitstring >> q) & 1) << idx
-        bitstring_permutation.append(permuted_bitstring)
-    return bitstring_permutation
-
-
-def random_qubit_permutation(graph: nx.Graph):
-    qubits = list(graph.nodes)
-    permutation = list(np.random.permutation(range(len(qubits))))
-
-    gate_definition = DefPermutationGate("Perm" + "".join([str(q) for q in permutation]),
-                                         _qubit_perm_to_bitstring_perm(permutation))
-    PERMUTE = gate_definition.get_constructor()
-    p = Program()
-    p += gate_definition
-    p += PERMUTE(*qubits)
-    return p
-
-
-def random_su4_pairs(graph: nx.Graph, idx_label, randomly_permute_qubits: bool = True):
-    qubits = list(graph.nodes)
-    if randomly_permute_qubits:
-        permutation = list(np.random.permutation(range(len(qubits))))
-        qubits = [qubits[idx] for idx in permutation]
-    prog = Program()
-    # ignore the edges in the graph
-    for q1, q2 in zip(qubits[::2], qubits[1::2]):
-        matrix = haar_rand_unitary(4)
-        gate_definition = DefGate(f"LYR{idx_label}_RSU4_{q1}_{q2}", matrix)
-        RSU4 = gate_definition.get_constructor()
-        prog += gate_definition
-        prog += RSU4(q1, q2)
-    return prog
-
-
-def maxcut_cost_unitary(graph: nx.Graph, layer_number):
-    prog = Program()
-    theta = prog.declare('theta_' + str(layer_number), memory_type='REAL')
-    for edge in graph.edges:
-        exponential_map(sZ(edge[0] * sZ(edge[1])))(theta)
-    return prog
-
-
-def graph_restricted_compilation(qc, graph, program):
     qubits = list(graph.nodes)
 
     # restrict compilation to chosen qubits
@@ -311,10 +193,173 @@ def graph_restricted_compilation(qc, graph, program):
 
     return native_quil
 
+
+# ==================================================================================================
+# Generators
+# ==================================================================================================
+def random_single_qubit_gates(graph: nx.Graph, gates: Sequence[Gate]) -> Program:
+    """
+    Create a program comprised of random single qubit gates acting on the qubits of the
+    specified graph; each gate is chosen uniformly at random from the list provided.
+
+    :param graph: The graph. Nodes are used as arguments to gates, so they should be qubit-like.
+    :param gates: A list of gates e.g. [I, X, Z] or [I, X].
+    :return: A program that randomly places single qubit gates on a graph.
+    """
+    program = Program()
+    for q in graph.nodes:
+        gate = random.choice(gates)
+        program += gate(q)
+    return program
+
+
+def random_two_qubit_gates(graph: nx.Graph, gates:  Sequence[Gate]) -> Program:
+    """
+    Create a program to randomly place two qubit gates on edges of the specified graph.
+
+    :param graph: The graph. Nodes are used as arguments to gates, so they should be qubit-like.
+    :param gates: A list of gates e.g. [I otimes I, CZ] or [CZ, SWAP, CNOT]
+    :return: A program that has two qubit gates randomly placed on the graph edges.
+    """
+    program = Program()
+    # TODO: two coloring with pragmas
+    for a, b in graph.edges:
+        gate = random.choice(gates)
+        program += gate(a, b)
+    return program
+
+
+def random_single_qubit_cliffords(bm: BenchmarkConnection, graph: nx.Graph) -> Program:
+    """
+    Create a program comprised of single qubit Clifford gates randomly placed on the nodes of
+    the specified graph. Each uniformly random choice of Clifford is implemented in the native
+    gateset.
+
+    :param bm: A benchmark connection that will do the grunt work of generating the Cliffords
+    :param graph: The graph. Nodes are used as arguments to gates, so they should be qubit-like.
+    :return: A program that randomly places single qubit Clifford gates on a graph.
+    """
+    num_qubits = len(graph.nodes)
+
+    q_placeholder = QubitPlaceholder()
+    gateset_1q = get_rb_gateset([q_placeholder])
+
+    # the +1 is because the depth includes the inverse
+    clif_n_inv = bm.generate_rb_sequence(depth=(num_qubits + 1), gateset=gateset_1q, seed=None)
+    rand_cliffords = clif_n_inv[0:num_qubits]
+
+    prog = Program()
+    for q, clif in zip(graph.nodes, rand_cliffords):
+        gate = address_qubits(clif, qubit_mapping={q_placeholder: q})
+        prog += gate
+    return prog
+
+
+def random_two_qubit_cliffords(bm: BenchmarkConnection, graph: nx.Graph) -> Program:
+    """
+    Write a program to place random two qubit Clifford gates on edges of the graph.
+
+    :param bm: A benchmark connection that will do the grunt work of generating the Cliffords
+    :param graph: The graph. Nodes are used as arguments to gates, so they should be qubit-like.
+    :return: A program that has two qubit gates randomly placed on the graph edges.
+    """
+    num_2q_gates = len(graph.edges)
+    q_placeholders = QubitPlaceholder.register(n=2)
+    gateset_2q = get_rb_gateset(q_placeholders)
+
+    # the +1 is because the depth includes the inverse
+    clif_n_inv = bm.generate_rb_sequence(depth=(num_2q_gates + 1), gateset=gateset_2q, seed=None)
+    rand_cliffords = clif_n_inv[0:num_2q_gates]
+
+    prog = Program()
+    # TODO: two coloring with PRAGMAS?
+    # TODO: longer term, fence to be 'simultaneous'?
+    for edges, clif in zip(graph.edges, rand_cliffords):
+        gate = address_qubits(clif, qubit_mapping={q_placeholders[0]: edges[0],
+                                                   q_placeholders[1]: edges[1]})
+        prog += gate
+    return prog
+
+
+def dagger_previous(sequence: List[Program], n: int = 1) -> Program:
+    """
+    Create a program which is the inverse (conjugate transpose; adjoint; dagger) of the last n
+    layers of the provided sequence.
+
+    :param sequence: a sequence of PyQuil programs whose elements are layers in a circuit
+    :param n: the number of layers at the end of the sequence that will be inverted
+    :return: a program that inverts the last n layers of the provided sequence.
+    """
+    return merge_programs(sequence[-n:]).dagger()
+
+
+def random_su4_pairs(graph: nx.Graph, idx_label: int) -> Program:
+    """
+    Create a program that enacts a Haar random 2 qubit gate on random pairs of qubits in the
+    graph, irrespective of graph topology.
+
+    If the graph contains an odd number of nodes, then one random qubit will not be acted upon by
+    any gate.
+
+    The output program will need to be compiled into native gates.
+
+    This generator is the repeated unit of the quantum volume circuits described in [QVol]_. Note
+    that the qubit permutation is done implicitly--the compiler will have to figure out how to
+    move potentially distant qubits onto a shared edge in order to enact the random two qubit gate.
+
+    :param graph: a graph containing qubits that will be randomly paired together. Note that
+        the graph topology (the edges) are ignored.
+    :param idx_label: a label that uniquely identifies the set of gate definitions used in the
+        output program. This prevents subsequent calls to this method from producing a program
+        with definitions that overwrite definitions in previously generated programs.
+    :return: a program with random two qubit gates between random pairs of qubits.
+    """
+    qubits = list(graph.nodes)
+    qubits = [qubits[idx] for idx in np.random.permutation(range(len(qubits)))]
+    prog = Program()
+    # ignore the edges in the graph
+    for q1, q2 in zip(qubits[::2], qubits[1::2]):
+        matrix = haar_rand_unitary(4)
+        gate_definition = DefGate(f"LYR{idx_label}_RSU4_{q1}_{q2}", matrix)
+        RSU4 = gate_definition.get_constructor()
+        prog += gate_definition
+        prog += RSU4(q1, q2)
+    return prog
+
+
+def maxcut_cost_unitary(graph: nx.Graph, idx_label: int) -> Program:
+    """
+    Creates a parameterized program used in QAOA that enacts commuting parameterized 2 qubit
+    gates on every edge of the graph.
+
+    :param graph:
+    :param idx_label: a label that uniquely identifies the set of gate definitions used in the
+        output program. This prevents subsequent calls to this method from producing a program
+        with definitions that overwrite definitions in previously generated programs.
+    :return:
+    """
+    prog = Program()
+    theta = prog.declare('theta_' + str(idx_label), memory_type='REAL')
+    for edge in graph.edges:
+        exponential_map(sZ(edge[0]) * sZ(edge[1]))(theta)
+    return prog
+
+
 ###
 # Sequence Transforms
 ###
-def hadamard_sandwich(sequence: List[Program], graph: nx.Graph, **kwargs):
+def hadamard_sandwich(sequence: List[Program], graph: nx.Graph, **kwargs) -> List[Program]:
+    """
+    Insert a Hadamard gate on each qubit at the beginning and end of the sequence.
+
+    This can be viewed as switching from the computational Z basis to the X basis.
+
+    :param sequence: the sequence to be sandwiched by Hadamards
+    :param graph: the graph containing the qubits to be acted on by Hadamards
+    :param kwargs: extraneous arguments
+    :return: a new sequence which is the input sequence with new starting and ending layers of
+        Hadamards.
+    """
     prog = Program()
     for node in graph.nodes:
         prog.inst(H(node))
@@ -322,10 +367,38 @@ def hadamard_sandwich(sequence: List[Program], graph: nx.Graph, **kwargs):
 
 
 def dagger_sequence(sequence: List[Program], **kwargs):
+    """
+    Returns the original sequence with its layer-by-layer inverse appended on the end.
+
+    The net result of the output sequence is the Identity.
+
+    .. CAUTION::
+          Merging this sequence and compiling the resulting program will result in a trivial
+          empty program. To avoid this, consider using a sequence transform to compile each
+          element of the sequence first, then combine the result. For example, see
+          :func:`compile_individual_sequence_elements`. Using :func:`compile_merged_sequence`
+          with `use_basic_compile` set to True will also avoid this issue, but will not compile
+          gate definitions and will not compile gates onto the chip topology.
+
+    :param sequence: the sequence of programs comprising a circuit that will be inverted and
+        appended to the sequence.
+    :param kwargs: extraneous arguments
+    :return: a new sequence the input sequence and its inverse
+    """
     return sequence + [prog.dagger() for prog in reversed(sequence)]
 
 
-def pauli_frame_randomize_sequence(sequence: List[Program], graph: nx.Graph, **kwargs):
+def pauli_frame_randomize_sequence(sequence: List[Program], graph: nx.Graph, **kwargs) \
+        -> List[Program]:
+    """
+    Inserts random single qubit Pauli gates on each qubit in between elements of the input sequence.
+
+    :param sequence:
+    :param graph: a graph containing qubits that will be randomly paired together. Note that
+        the graph topology (the edges) are ignored.
+    :param kwargs: extraneous arguments
+    :return:
+    """
     paulis = [I, X, Y, Z]
     random_paulis = [random_single_qubit_gates(graph, paulis) for _ in range(len(sequence) + 1)]
     new_sequence = [None for _ in range(2*len(sequence) + 1)]
@@ -334,7 +407,18 @@ def pauli_frame_randomize_sequence(sequence: List[Program], graph: nx.Graph, **k
     return new_sequence
 
 
-def compile_individual_sequence_elements(qc, sequence: List[Program], graph: nx.Graph, **kwargs):
+def compile_individual_sequence_elements(qc: QuantumComputer, sequence: List[Program],
+                                         graph: nx.Graph, **kwargs) -> List[Program]:
+    """
+    Returns the sequence where each element is individually compiled into native quil in a way
+    that respects the given graph topology.
+
+    :param qc:
+    :param sequence:
+    :param graph:
+    :param kwargs: extraneous arguments
+    :return:
+    """
     compiled_sequence = []
     for prog in sequence:
         native_quil = graph_restricted_compilation(qc, graph, prog)
@@ -343,72 +427,109 @@ def compile_individual_sequence_elements(qc, sequence: List[Program], graph: nx.
     return compiled_sequence
 
 
-def compile_merged_sequence(qc, sequence: List[Program], graph: nx.Graph, **kwargs):
-    # compile all of the sequence at once.
-    native_quil = graph_restricted_compilation(qc, graph,  merge_programs(sequence))
-    return [Program([instr for instr in native_quil.instructions][:-1])]
+def compile_merged_sequence(qc: QuantumComputer, sequence: List[Program], graph: nx.Graph,
+                            use_basic_compile: bool = False, **kwargs) -> List[Program]:
+    """
+    Merges the sequence into a Program and returns a 'sequence' comprised of the corresponding
+    compiled native quil program that respects the given graph topology.
+
+    .. CAUTION::
+        The option to only use basic_compile will only result in native quil if the merged
+        sequence contains no gate definitions and if all multi-qubit gates already respect
+        the graph topology. If this is not the case, the output program may not be able to be
+        converted properly to an executable that can be run on the qc.
+
+    :param qc:
+    :param sequence:
+    :param graph:
+    :param use_basic_compile:
+    :param kwargs: extraneous arguments
+    :return:
+    """
+    merged = merge_programs(sequence)
+    if use_basic_compile:
+        return [basic_compile(merged)]
+    else:
+        native_quil = graph_restricted_compilation(qc, graph, merged)
+        # remove gate definitions and terminous HALT
+        return [Program([instr for instr in native_quil.instructions][:-1])]
 ###
 # Templates
 ###
 def get_rand_1q_template(gates: Sequence[Gate]):
+    """
+    Creates a CircuitTemplate representing the family of circuits generated by repeated layers of
+    random single qubit gates pulled from the input set of gates.
+
+    :param gates:
+    :return:
+    """
     def func(graph, **kwargs):
         return random_single_qubit_gates(graph, gates=gates)
     return CircuitTemplate([func])
 
 
 def get_rand_2q_template(gates: Sequence[Gate]):
+    """
+    Creates a CircuitTemplate representing the family of circuits generated by repeated layers of
+    random two qubit gates pulled from the input set of gates.
+
+    :param gates:
+    :return:
+    """
     def func(graph, **kwargs):
         return random_two_qubit_gates(graph, gates=gates)
     return CircuitTemplate([func])
 
 
 def get_rand_1q_cliff_template(bm: BenchmarkConnection):
+    """
+    Creates a CircuitTemplate representing the family of circuits generated by repeated layers of
+    random single qubit Clifford gates.
+    """
     def func(graph, **kwargs):
         return random_single_qubit_cliffords(bm, graph)
     return CircuitTemplate([func])
 
 
 def get_rand_2q_cliff_template(bm: BenchmarkConnection):
+    """
+    Creates a CircuitTemplate representing the family of circuits generated by repeated layers of
+    random two qubit Clifford gates.
+    """
     def func(graph, **kwargs):
         return random_two_qubit_cliffords(bm, graph)
     return CircuitTemplate([func])
 
 
-def get_dagger_all_template():
-    def func(sequence, **kwargs):
-        return dagger_previous(sequence, len(sequence))
-    return CircuitTemplate([func])
-
-
 def get_dagger_previous(n: int = 1):
+    """
+    Creates a CircuitTemplate that can be appended to another template to generate families of
+    circuits with repeated (layer, inverse-layer) units.
+    """
     def func(sequence, **kwargs):
         return dagger_previous(sequence, n)
     return CircuitTemplate([func])
 
 
-def get_rand_qubit_perm_template():
-    def func(graph, **kwargs):
-        return random_qubit_permutation(graph)
-    return CircuitTemplate([func])
-
-
-def get_rand_su4_template(randomly_permute_qubits: bool = True):
+def get_rand_su4_template():
+    """
+    Creates a CircuitTemplate representing the family of circuits generated by repeated layers of
+    Haar-random two qubit gates acting on random pairs of qubits. This is the generator used in
+    quantum volume [QVol]_ .
+    """
     def func(graph, sequence, **kwargs):
-        return random_su4_pairs(graph, len(sequence), randomly_permute_qubits)
+        return random_su4_pairs(graph, len(sequence))
     return CircuitTemplate([func])
 
 
-def get_switch_basis_x_z_template():
-    def func(graph, **kwargs):
-        prog = Program()
-        for node in graph.nodes:
-            prog.inst(H(node))
-        return prog
-    return CircuitTemplate([func])
-
-
-def get_all_H_template():
-    return get_switch_basis_x_z_template()
+def get_quantum_volume_template():
+    """
+    Creates a quantum volume CircuitTemplate. See [QVol]_ .
+    """
+    template = get_rand_su4_template()
+    template.sequence_transforms.append(compile_merged_sequence)
+    return template
 
 
 def get_param_local_RX_template():
@@ -448,6 +569,15 @@ def get_param_maxcut_graph_cost_template(graph_family: Callable[[int], nx.Graph]
 # Data acquisition
 # ==================================================================================================
 def sample_random_connected_graphs(graph: nx.Graph, widths: List[int], num_ckts_per_width):
+    """
+    Helper to uniformly randomly sample `num_ckts_per_width` many connected induced subgraphs of
+    `graph` for each width in `widths`
+
+    :param graph:
+    :param widths:
+    :param num_ckts_per_width:
+    :return:
+    """
     samples = {w: [] for w in widths}
     for w in widths:
         connected_subgraphs = generate_connected_subgraphs(graph, w)
@@ -459,6 +589,18 @@ def sample_random_connected_graphs(graph: nx.Graph, widths: List[int], num_ckts_
 def generate_volumetric_program_array(qc: QuantumComputer, ckt: CircuitTemplate, widths: List[int],
                                       depths: List[int], num_circuit_samples: int,
                                       graphs: Dict[int, List[nx.Graph]] = None):
+    """
+    Creates a dictionary containing random circuits sampled from the input `ckt` family for each
+    width and depth.
+
+    :param qc:
+    :param ckt:
+    :param widths:
+    :param depths:
+    :param num_circuit_samples:
+    :param graphs:
+    :return:
+    """
     if graphs is None:
         graphs = sample_random_connected_graphs(qc.qubit_topology(), widths,
                                                 len(depths)*num_circuit_samples)
@@ -477,10 +619,23 @@ def generate_volumetric_program_array(qc: QuantumComputer, ckt: CircuitTemplate,
     return programs
 
 
-def acquire_volumetric_data(qc: QuantumComputer, program_array, num_shots: int = 500,
+def acquire_volumetric_data(qc: QuantumComputer, program_array:Dict[int, Dict[int, List[Program]]],
+                            num_shots: int =  500,
                             measure_qubits: Dict[int,  Dict[int, List[int]]] = None,
-                            use_active_reset:  bool = False,
-                            use_compiler: bool = False):
+                            use_active_reset:  bool = False, use_compiler: bool = False)\
+        -> Dict[int, Dict[int, List[np.ndarray]]]:
+    """
+    Runs each program in `program_array` on the qc and stores the results, organized again by
+    width and depth.
+
+    :param qc:
+    :param program_array:
+    :param num_shots:
+    :param measure_qubits:
+    :param use_active_reset:
+    :param use_compiler:
+    :return:
+    """
     reset_prog = Program()
     if use_active_reset:
         reset_prog += RESET()
@@ -561,30 +716,23 @@ def collect_heavy_outputs(wfn_sim: NumpyWavefunctionSimulator, program_array,
     return heavy_output_array
 
 
-# TODO:
-# def do_volumetric_measurements(qc: QuantumComputer, ckt: CircuitTemplate, widths: List[int],
-#                                   depths: List[int],
-#                                   num_circuit_samples: int, graph: nx.Graph = None,
-#                                   num_shots: int = 500,
-#                                   use_active_reset:  bool = False,
-#                                   compile_circuits: bool = False):
-#
-#
-#     prog_array = generate_volumetric_program_array(qc, ckt, widths, depths, num_circuit_samples,
-#                                                    graph)
-#
-#     return []
-
 # ==================================================================================================
 # Analysis
 # ==================================================================================================
-def get_error_hamming_weight_distributions(noisy_results, ideal_results):
+def get_error_hamming_weight_distributions(noisy_results: Dict[int, Dict[int, List[np.ndarray]]],
+                                           ideal_results: Dict[int, Dict[int, List[np.ndarray]]]):
+    """
+    Calculate the hamming distance to the ideal for each noisy shot of each circuit sampled for
+    each width and depth.
 
-    # allow for ideal result to depend only on width (pass in a dict {w: result})
-    # if not isinstance(ideal_results.values()[0], dict):
-    #     ideal_results = {width: {depth: ideal_results[width] for depth in depth_array.keys()}
-    #           for width, depth_array in noisy_results.items()}
+    Note that this method is only appropriate when the ideal result for each circuit is a single
+    deterministic (circuit-dependent) output; therefore, ideal_results should only contain one
+    shot per circuit.
 
+    :param noisy_results:
+    :param ideal_results:
+    :return:
+    """
     distrs = {width: {depth: [] for depth in depth_array.keys()}
               for width, depth_array in noisy_results.items()}
 
@@ -594,6 +742,7 @@ def get_error_hamming_weight_distributions(noisy_results, ideal_results):
             noisy_ckt_sample_results = noisy_results[width][depth]
             ideal_ckt_sample_results = ideal_results[width][depth]
 
+            # iterate over circuits
             for noisy_shots, ideal_result in zip(noisy_ckt_sample_results,
                                                  ideal_ckt_sample_results):
                 if len(ideal_result) > 1:
@@ -613,6 +762,20 @@ def get_error_hamming_weight_distributions(noisy_results, ideal_results):
 
 def get_single_target_success_probabilities(noisy_results, ideal_results,
                               allowed_errors: Union[int, Callable[[int], int]] = 0):
+    """
+    For circuit results of various width and depth, calculate the fraction of noisy results
+    that match the single ideal result for each circuit.
+
+    Note that this method is only appropriate when the ideal result for each circuit is a single
+    deterministic (circuit-dependent) output.
+
+    :param noisy_results: noisy shots from each circuit sampled for each width and depth
+    :param ideal_results: a single ideal result for each circuit
+    :param allowed_errors: either a number indicating the maximum hamming distance from the ideal
+        result is still considered a success, or a function which returns the max hamming
+        distance allowed for a given width.
+    :return:
+    """
     if isinstance(allowed_errors, int):
         error_func = lambda num_bits: allowed_errors
     else:
@@ -621,10 +784,24 @@ def get_single_target_success_probabilities(noisy_results, ideal_results,
     hamming_distrs = get_error_hamming_weight_distributions(noisy_results, ideal_results)
 
     return {w: {d: [sum(distr[0:error_func(w)+1]) for distr in distrs]
-                for d, distrs in d_distrs.items()} for w, d_distrs in hamming_distrs.items()}
+                 for d, distrs in d_distrs.items()}
+            for w, d_distrs in hamming_distrs.items()}
 
 
 def get_success_probabilities(noisy_results, ideal_results):
+    """
+    For circuit results of various width and depth, calculate the fraction of noisy results
+    that are also found in the collection of ideal results for each circuit.
+
+    Quantum volume employs this method to calculate success_probabilities where the ideal_results
+    are the heavy hitters of each circuit.
+
+    :param noisy_results: noisy shots from each circuit sampled for each width and depth
+    :param ideal_results: a collection of ideal results for each circuit; membership of a noisy
+        shot from a particular circuit in the corresponding set of ideal_results constitutes a
+        success.
+    :return: the estimated success probability for each circuit.
+    """
     prob_success = {width: {depth: [] for depth in depth_array.keys()}
                     for width, depth_array in noisy_results.items()}
 
@@ -634,6 +811,7 @@ def get_success_probabilities(noisy_results, ideal_results):
             noisy_ckt_sample_results = noisy_results[width][depth]
             ideal_ckt_sample_results = ideal_results[width][depth]
 
+            # iterate over circuits
             for noisy_shots, ideal_results in zip(noisy_ckt_sample_results,
                                                  ideal_ckt_sample_results):
                 targets = ideal_results
@@ -678,19 +856,34 @@ def calculate_success_prob_est_and_err(num_success: int, num_circuits: int, num_
 
 
 def determine_prob_success_lower_bounds(ckt_success_probs, num_shots_per_ckt):
-    return {w:
-                {d:
-                     calculate_success_prob_est_and_err(
+    """
+    Wrapper around `calculate_success_prob_est_and_err` to determine success lower bounds for a
+    collection of circuits at various depths and widths.
+
+    :param ckt_success_probs:
+    :param num_shots_per_ckt:
+    :return:
+    """
+    return {w: {d: calculate_success_prob_est_and_err(
                          sum(np.asarray(succ_probs) * num_shots_per_ckt),
                          len(succ_probs),
-                         num_shots_per_ckt
-                     )[1] for d, succ_probs in d_ckt_succ_probs.items()
-                }  for w, d_ckt_succ_probs in ckt_success_probs.items()
-            }
+                         num_shots_per_ckt)[1]
+                for d, succ_probs in d_ckt_succ_probs.items()}
+            for w, d_ckt_succ_probs in ckt_success_probs.items()}
 
 
-def determine_successes(ckt_success_probs, num_shots_per_ckt,
+def determine_successes(ckt_success_probs: Dict[int, Dict[int, List[float]]], num_shots_per_ckt,
                                      success_threshold: float = 2 / 3):
+    """
+    Indicate whether the collection of circuit success probabilities for given width and depth
+    recorded in `ckt_success_probs` is considered a success with respect to the specified
+    `success_threshold` and given the number of shots used to estimate each success probability.
+
+    :param ckt_success_probs:
+    :param num_shots_per_ckt:
+    :param success_threshold:
+    :return:
+    """
     lower_bounds = determine_prob_success_lower_bounds(ckt_success_probs, num_shots_per_ckt)
     return {w: {d: lb > success_threshold for d, lb in d_lower_bounds.items()}
             for w, d_lower_bounds in lower_bounds.items()}
@@ -700,11 +893,13 @@ def average_distributions(distrs):
     """
     E.g. take in output of :func:`get_error_hamming_weight_distributions` or
     :func:`get_single_target_success_probabilities`
+
     :param distrs:
     :return:
     """
     return {w: {d: sum([np.asarray(distr) for distr in distr_list]) / len(distr_list)
-                for d, distr_list in d_arr.items()} for w, d_arr in distrs.items()}
+                for d, distr_list in d_arr.items()}
+            for w, d_arr in distrs.items()}
 
 
 def get_total_variation_dist(distr1, distr2):
