@@ -1,5 +1,5 @@
 from math import pi
-from typing import Iterable, List, Sequence, Tuple, Dict
+from typing import Iterable, List, Sequence, Tuple, Dict, Optional
 
 import numpy as np
 from lmfit.model import ModelResult
@@ -87,7 +87,7 @@ def get_rb_gateset(qubits: Sequence[int]) -> List[Gate]:
     if len(qubits) == 2:
         return list(twoq_rb_gateset(*qubits))
 
-    raise ValueError(f"No RB gateset for more than two qubits.")
+    raise ValueError("No RB gateset for more than two qubits.")
 
 
 def merge_sequences(sequences: List[List[Program]]) -> List[Program]:
@@ -103,7 +103,8 @@ def merge_sequences(sequences: List[List[Program]]) -> List[Program]:
 
 
 def generate_rb_sequence(benchmarker: BenchmarkConnection, qubits: Sequence[int], depth: int,
-                         interleaved_gate: Program = None, random_seed: int = None) \
+                         interleaved_gate: Optional[Program] = None,
+                         random_seed: Optional[int] = None) \
         -> List[Program]:
     """
     Generate a complete randomized benchmarking sequence.
@@ -126,9 +127,10 @@ def generate_rb_sequence(benchmarker: BenchmarkConnection, qubits: Sequence[int]
 
 
 def generate_rb_experiment_sequences(benchmarker: BenchmarkConnection, qubits: Sequence[int],
-                                     depths: Sequence[int], interleaved_gate: Program = None,
-                                     random_seed: int = None, use_self_inv_seqs=True) \
-        -> List[List[Program]]:
+                                     depths: Sequence[int],
+                                     interleaved_gate: Optional[Program] = None,
+                                     random_seed: Optional[int] = None,
+                                     use_self_inv_seqs: bool = True) -> List[List[Program]]:
     """
     Generate the sequences of Clifford gates necessary to run a randomized benchmarking
     experiment for a single (group of) qubit(s).
@@ -161,7 +163,8 @@ def generate_rb_experiment_sequences(benchmarker: BenchmarkConnection, qubits: S
             # a sequence is a list of Cliffords, with last Clifford inverting the sequence
             sequence = generate_rb_sequence(benchmarker, qubits, depth, interleaved_gate,
                                             random_seed)
-        else: # this might be desired for unitarity experiments
+        else:
+            # this might be desired for unitarity experiments
             # First we provide larger depth, then strip inverse from end of the sequence
             sequence = generate_rb_sequence(benchmarker, qubits, depth + 1,
                                             random_seed=random_seed)[:-1]
@@ -214,15 +217,15 @@ def group_sequences_into_parallel_experiments(parallel_expts_seqs: Sequence[List
         else:
             # measure observables of products of I and Z on qubits in the group, excluding all I
             settings = [ExperimentSetting(zeros_state(group), op)
-                    for group in qubit_groups for op in all_traceless_pauli_z_terms(group)]
+                        for group in qubit_groups for op in all_traceless_pauli_z_terms(group)]
             expt = ObservablesExperiment([settings], program)
         expts.append(expt)
     return expts
 
 
 def generate_rb_experiments(benchmarker: BenchmarkConnection, qubit_groups: Sequence[Sequence[int]],
-                            depths: Sequence[int], interleaved_gate: Program = None,
-                            random_seed: int = None) -> List[ObservablesExperiment]:
+                            depths: Sequence[int], interleaved_gate: Optional[Program] = None,
+                            random_seed: Optional[int] = None) -> List[ObservablesExperiment]:
     """
     Creates list of ObservablesExperiments which, when run in series, constitute a
     simultaneous randomized benchmarking experiment on the disjoint qubit_groups.
@@ -283,7 +286,7 @@ def generate_rb_experiments(benchmarker: BenchmarkConnection, qubit_groups: Sequ
 
 def acquire_rb_data(qc: QuantumComputer, experiments: Iterable[ObservablesExperiment],
                     num_shots: int = 500, active_reset: bool = False,
-                    show_progress_bar: bool =  False) \
+                    show_progress_bar: bool = False) \
         -> List[List[ExperimentResult]]:
     """
     Runs each ObservablesExperiment and returns each group of resulting ExperimentResults
@@ -343,7 +346,8 @@ def covariances_of_all_iz_obs(expectations: Sequence[float], num_shots: int):
 
 
 def z_obs_stats_to_survival_statistics(expectations: Sequence[float], std_errs: Sequence[float],
-                                       num_shots = None, obs_are_independent = False):
+                                       num_shots: Optional[int] = None,
+                                       obs_are_independent: bool = False) -> Tuple[float, float]:
     """
     Convert expectations of the dim - 1 observables which are the nontrivial combinations of tensor
     products of I and Z into survival mean and variance, where survival is the all zeros outcome.
@@ -380,8 +384,8 @@ def z_obs_stats_to_survival_statistics(expectations: Sequence[float], std_errs: 
 
 
 def fit_rb_results(depths: Sequence[int], z_expectations: Sequence[Sequence[float]],
-                   z_std_errs: Sequence[Sequence[float]], num_shots: int = None,
-                   param_guesses: tuple = None) -> ModelResult:
+                   z_std_errs: Sequence[Sequence[float]], num_shots: Optional[int] = None,
+                   param_guesses: Optional[tuple] = None) -> ModelResult:
     """
     Fits the results of a standard RB or IRB experiment by converting expectations into survival
     probabilities (probability of measuring zero) and passing these on to the standard fit.
@@ -436,8 +440,8 @@ def fit_rb_results(depths: Sequence[int], z_expectations: Sequence[Sequence[floa
 
 def generate_unitarity_experiments(benchmarker: BenchmarkConnection,
                                    qubit_groups: Sequence[Sequence[int]], depths: Sequence[int],
-                                   random_seed: int = None, use_self_inv_seqs=False) \
-        -> List[ObservablesExperiment]:
+                                   random_seed: Optional[int] = None,
+                                   use_self_inv_seqs: bool = False) -> List[ObservablesExperiment]:
     """
     Creates list of ObservablesExperiments which, when run in series, constitute a
     simultaneous unitarity experiment on the disjoint qubit_groups.
@@ -480,7 +484,7 @@ def generate_unitarity_experiments(benchmarker: BenchmarkConnection,
                                              use_self_inv_seqs=use_self_inv_seqs))
 
     return group_sequences_into_parallel_experiments(parallel_sequences, qubit_groups,
-                                                     is_unitarity_expt = True)
+                                                     is_unitarity_expt=True)
 
 
 def estimate_purity(dim: int, op_expect: np.ndarray, renorm: bool=True):
@@ -511,12 +515,14 @@ def estimate_purity_err(dim: int, op_expect: np.ndarray, op_expect_var: np.ndarr
     :param renorm: flag that provides error for the renormalized purity
     :return: purity given the operator expectations
     """
-    # TODO: incorporate covariance of observables estimated simultaneously; see covariances_of_all_iz_obs
+    # TODO: incorporate covariance of observables estimated simultaneously;
+    #  see covariances_of_all_iz_obs
 
-    #TODO: check validitiy of approximation |op_expect| >> 0, and functional form below (squared?)
+    # TODO: check validitiy of approximation |op_expect| >> 0, and functional form below (squared?)
     var_of_square_op_expect = (2 * np.abs(op_expect)) ** 2 * op_expect_var
-    #TODO: check if this adequately handles |op_expect| >\> 0
-    need_second_order = np.isclose([0.]*len(var_of_square_op_expect), var_of_square_op_expect, atol=1e-6)
+    # TODO: check if this adequately handles |op_expect| >\> 0
+    need_second_order = np.isclose([0.] * len(var_of_square_op_expect), var_of_square_op_expect,
+                                   atol=1e-6)
     var_of_square_op_expect[need_second_order] = op_expect_var[need_second_order]**2
 
     purity_var = (1 / dim) ** 2 * (np.sum(var_of_square_op_expect))
@@ -528,8 +534,8 @@ def estimate_purity_err(dim: int, op_expect: np.ndarray, op_expect_var: np.ndarr
 
 
 def fit_unitarity_results(depths: Sequence[int], expectations: Sequence[Sequence[float]],
-                          std_errs: Sequence[Sequence[float]], param_guesses: tuple = None) \
-        -> ModelResult:
+                          std_errs: Sequence[Sequence[float]],
+                          param_guesses: Optional[tuple] = None) -> ModelResult:
     """
     Fits the results of a unitarity experiment by first calculating shifted purities and
     subsequently passing these on to the standard decay fit.
@@ -609,13 +615,13 @@ def unitarity_to_rb_decay(unitarity, dimension) -> float:
     :return: The upper bound on RB decay, saturated if no unitary errors are present, Proposition
         8 of [ECN]_
     """
-    r = (np.sqrt(unitarity) - 1)*(1-dimension)/dimension
+    r = (np.sqrt(unitarity) - 1) * (1 - dimension) / dimension
     return average_gate_error_to_rb_decay(r, dimension)
 
 
 def do_rb(qc: QuantumComputer, benchmarker: BenchmarkConnection,
           qubit_groups: Sequence[Sequence[int]], depths: Sequence[int],
-          interleaved_gate: Program = None, is_unitarity_expt: bool = False,
+          interleaved_gate: Optional[Program] = None, is_unitarity_expt: bool = False,
           num_shots: int = 1_000, active_reset: bool = False, show_progress_bar: bool = False) \
         -> Tuple[Dict[Tuple[int, ...], float],
                  List[ObservablesExperiment],
@@ -659,7 +665,7 @@ def do_rb(qc: QuantumComputer, benchmarker: BenchmarkConnection,
         else:
             fit = fit_rb_results(depths, stats['expectation'], stats['std_err'], num_shots)
 
-        decays[group] =  fit.params['decay'].value
+        decays[group] = fit.params['decay'].value
 
     return decays, expts, results
 
@@ -669,7 +675,7 @@ def do_rb(qc: QuantumComputer, benchmarker: BenchmarkConnection,
 ########
 
 
-def coherence_angle(rb_decay, unitarity):
+def coherence_angle(rb_decay: float, unitarity: float):
     """
     Equation 29 of [U+IRB]_
 
@@ -680,21 +686,26 @@ def coherence_angle(rb_decay, unitarity):
     return np.arccos(rb_decay / np.sqrt(unitarity))
 
 
-def gamma(irb_decay, unitarity):
+def gamma(irb_decay: float, unitarity: float):
     """
     Corollary 5 of [U+IRB]_, second line
 
-    :param irb_decay: Observed decay parameter in irb experiment with desired gate interleaved between Cliffords
+    :param irb_decay: Observed decay parameter in irb experiment with desired gate interleaved
+        between Cliffords
     :param unitarity: Observed decay parameter in unitarity experiment
     :return: gamma
     """
-    return irb_decay/np.sqrt(unitarity)
+    return irb_decay / np.sqrt(unitarity)
 
 
-def interleaved_gate_fidelity_bounds(irb_decay, rb_decay, dim, unitarity = None):
+def interleaved_gate_fidelity_bounds(irb_decay: float, rb_decay: float, dim: int,
+                                     unitarity: Optional[float] = None):
     """
-    Use observed rb_decay to place a bound on fidelity of a particular gate with given interleaved rb decay.
-    Optionally, use unitarity measurement result to provide improved bounds on the interleaved gate's fidelity.
+    Use observed rb_decay to place a bound on fidelity of a particular gate with given interleaved
+    rb decay.
+
+    Optionally, use unitarity measurement result to provide improved bounds on the interleaved
+    gate's fidelity.
 
     Bounds are due to [IRB]_. Improved bounds using unitarity are due to [U+IRB]_
 
@@ -703,7 +714,8 @@ def interleaved_gate_fidelity_bounds(irb_decay, rb_decay, dim, unitarity = None)
              arXiv:1610.05296 (2016).
              https://arxiv.org/abs/1610.05296
 
-    :param irb_decay: Observed decay parameter in irb experiment with desired gate interleaved between Cliffords
+    :param irb_decay: Observed decay parameter in irb experiment with desired gate interleaved
+        between Cliffords
     :param rb_decay: Observed decay parameter in standard rb experiment
     :param dim: Dimension of the Hilbert space, 2**num_qubits
     :param unitarity: Observed decay parameter in unitarity experiment; improves bounds if provided.
@@ -715,44 +727,49 @@ def interleaved_gate_fidelity_bounds(irb_decay, rb_decay, dim, unitarity = None)
 
         pm = [-1, 1]
         theta = coherence_angle(rb_decay, unitarity)
-        g =  gamma(irb_decay, unitarity)
+        g = gamma(irb_decay, unitarity)
         # calculate bounds on the equivalent gate-only decay parameter
-        decay_bounds = [sign * (sign * g * np.cos(theta) + np.sin(theta) * np.sqrt(1-g**2) ) for sign in pm]
+        decay_bounds = [sign * (sign * g * np.cos(theta) + np.sin(theta) * np.sqrt(1 - g**2))
+                        for sign in pm]
         # convert decay bounds to bounds on fidelity of the gate
         fidelity_bounds = [1 - rb_decay_to_gate_error(decay, dim) for decay in decay_bounds]
 
     else:
         # Equation 5 of [IRB]
 
-        E1 = (abs(rb_decay - irb_decay/rb_decay) + (1-rb_decay)) * (dim-1)/dim
-        E2 = 2*(dim**2 - 1)*(1-rb_decay)/(rb_decay*dim**2) + 4*np.sqrt(1-rb_decay)*np.sqrt(dim**2-1)/rb_decay
+        E1 = (abs(rb_decay - irb_decay / rb_decay) + (1 - rb_decay)) * (dim - 1) / dim
+        E2 = 2 * (dim**2 - 1) * (1 - rb_decay) / (rb_decay * dim**2) + \
+             4 * np.sqrt(1 - rb_decay) * np.sqrt(dim**2 - 1) / rb_decay
 
-        E = min(E1,E2)
+        E = min(E1, E2)
         error = irb_decay_to_gate_error(irb_decay, rb_decay, dim)
 
-        fidelity_bounds = [1-error-E, 1-error+E]
+        fidelity_bounds = [1 - error - E, 1 - error + E]
 
     return fidelity_bounds
 
 
-def gate_error_to_irb_decay(irb_error, rb_decay, dim):
+def gate_error_to_irb_decay(irb_error: float, rb_decay: float, dim: int):
     """
-    For convenience, inversion of Eq. 4 of [IRB]_. See irb_decay_to_error
+    For convenience, inversion of Eq. 4 of [IRB]_.
+
+    See :func:`irb_decay_to_error`.
 
     :param irb_error: error of the interleaved gate.
     :param rb_decay: Observed decay parameter in standard rb experiment.
     :param dim: Dimension of the Hilbert space, 2**num_qubits
     :return: Decay parameter in irb experiment with relevant gate interleaved between Cliffords
     """
-    return (1 - irb_error * (dim/(dim-1)) ) * rb_decay
+    return (1 - irb_error * (dim / (dim - 1))) * rb_decay
 
 
-def irb_decay_to_gate_error(irb_decay, rb_decay, dim):
+def irb_decay_to_gate_error(irb_decay: float, rb_decay: float, dim: int):
     """
     Eq. 4 of [IRB]_, which provides an estimate of the error of the interleaved gate,
     given both the observed interleaved and standard decay parameters.
 
-    :param irb_decay: Observed decay parameter in irb experiment with desired gate interleaved between Cliffords
+    :param irb_decay: Observed decay parameter in irb experiment with desired gate interleaved
+    between Cliffords
     :param rb_decay: Observed decay parameter in standard rb experiment.
     :param dim: Dimension of the Hilbert space, 2**num_qubits
     :return: Estimated gate error of the interleaved gate.
@@ -760,7 +777,7 @@ def irb_decay_to_gate_error(irb_decay, rb_decay, dim):
     return ((dim - 1) / dim) * (1 - irb_decay / rb_decay)
 
 
-def average_gate_error_to_rb_decay(gate_error, dimension):
+def average_gate_error_to_rb_decay(gate_error: float, dimension: int):
     """
     Inversion of eq. 5 of [RB]_ arxiv paper.
 
@@ -768,10 +785,10 @@ def average_gate_error_to_rb_decay(gate_error, dimension):
     :param dimension: Dimension of the Hilbert space, 2^num_qubits
     :return: The RB decay corresponding to the gate_error
     """
-    return (gate_error - 1 + 1/dimension)/(1/dimension -1)
+    return (gate_error - 1 + 1 / dimension) / (1 / dimension - 1)
 
 
-def rb_decay_to_gate_error(rb_decay, dimension):
+def rb_decay_to_gate_error(rb_decay: float, dimension: int):
     """
     Eq. 5 of [RB]_ arxiv paper. Note that 'gate' here typically means an element of the Clifford
     group, which comprise standard rb sequences.
@@ -780,4 +797,4 @@ def rb_decay_to_gate_error(rb_decay, dimension):
     :param dimension: Dimension of the Hilbert space, 2**num_qubits
     :return: The gate error corresponding to the input decay.
     """
-    return 1 - rb_decay - (1 - rb_decay)/dimension
+    return 1 - rb_decay - (1 - rb_decay) / dimension

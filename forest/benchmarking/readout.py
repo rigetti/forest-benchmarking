@@ -101,9 +101,9 @@ def estimate_joint_confusion_in_set(qc: QuantumComputer, qubits: Sequence[int] =
         all qubits in qc.
     :param num_shots: number of shots in measurement of each bit string on each joint group of
         qubits.
-    :param joint_group_size: the size of each group; a joint confusion matrix with 
-        2^joint_group_size number of rows/columns will be estimated for each group of qubits of 
-        the given size within the qubit set. 
+    :param joint_group_size: the size of each group; a joint confusion matrix with
+        2^joint_group_size number of rows/columns will be estimated for each group of qubits of
+        the given size within the qubit set.
     :param use_param_program: dictates whether to use a parameterized program to measure out
         each bitstring. If set to default of True, this routine should execute faster on a
         QPU. Note that the parameterized option does not execute a no-op when measuring 0.

@@ -259,7 +259,7 @@ def generate_t2_echo_experiments(qubits: Sequence[int], times: Sequence[float],
     """
     expts = []
     for t in times:
-        half_time = round(t/2, 7)  # enforce 100ns boundaries
+        half_time = round(t / 2, 7)  # enforce 100ns boundaries
         t = round(t, 7)
         program = Program()
         settings = []
@@ -309,7 +309,7 @@ def fit_t2_results(times: Sequence[float], y_expectations: Sequence[float],
         if len(non_zero) == 0:
             weights = None
         else:
-            # TODO: does this handle 0 var appropriately? 
+            # TODO: does this handle 0 var appropriately?
             # Other possibility is to use unbiased prior in std_err estimate.
             min_non_zero = min(non_zero)
             non_zero_err = np.asarray([v if v > 0 else min_non_zero for v in err])
@@ -405,7 +405,7 @@ def fit_rabi_results(angles: Sequence[float], z_expectations: Sequence[float],
         if len(non_zero) == 0:
             weights = None
         else:
-            # TODO: does this handle 0 var appropriately? 
+            # TODO: does this handle 0 var appropriately?
             # Other possibility is to use unbiased prior in std_err estimate.
             min_non_zero = min(non_zero)
             non_zero_err = np.asarray([v if v > 0 else min_non_zero for v in err])
@@ -499,7 +499,7 @@ def fit_cz_phase_ramsey_results(angles: Sequence[float], y_expectations: Sequenc
         if len(non_zero) == 0:
             weights = None
         else:
-            # TODO: does this handle 0 var appropriately? 
+            # TODO: does this handle 0 var appropriately?
             # Other possibility is to use unbiased prior in std_err estimate.
             min_non_zero = min(non_zero)
             non_zero_err = np.asarray([v if v > 0 else min_non_zero for v in err])

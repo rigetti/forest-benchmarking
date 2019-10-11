@@ -202,18 +202,18 @@ def basic_compile(program: Program):
             # dagger this gate if odd number of daggers. Ignore controlled for now.
             needs_dagger = inst.modifiers.count('DAGGER') % 2 == 1
             angle_param = None
-            if len(inst.params) > 0 :
+            if len(inst.params) > 0:
                 angle_param = inst.params[0]
                 if needs_dagger:
                     angle_param = -angle_param
 
             if 'CONTROLLED' in inst.modifiers:
-                raise ValueError(f"Controlled gates are not currently supported.")
+                raise ValueError("Controlled gates are not currently supported.")
 
             if inst.name == 'CZ':
-                new_prog += CZ(*inst.qubits) # remove dag modifiers
+                new_prog += CZ(*inst.qubits)  # remove dag modifiers
             elif inst.name == 'I':
-                new_prog += I(inst.qubits[0]) # remove dag modifiers
+                new_prog += I(inst.qubits[0])  # remove dag modifiers
             elif inst.name == 'RZ':
                 # in case dagger
                 new_prog += RZ(angle_param, inst.qubits[0])

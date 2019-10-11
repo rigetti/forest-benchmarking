@@ -376,7 +376,7 @@ def _operator_object_hook(obj):
     if 'type' in obj and obj['type'] == 'ObservablesExperiment':
         return ObservablesExperiment([[ExperimentSetting.from_str(s) for s in settings]
                                      for settings in obj['settings']],
-                                    program=Program(obj['program']))
+                                     program=Program(obj['program']))
     return obj
 
 
@@ -821,7 +821,7 @@ def shots_to_obs_moments(bitarray: np.ndarray, qubits: List[int], observable: Pa
     # Identify classical register indices to select
     idxs = [idx for idx, q in enumerate(qubits) if q in obs_qubits]
 
-    if len(idxs) == 0: # identity term
+    if len(idxs) == 0:  # identity term
         return coeff, 0
 
     assert bitarray.shape[1] == len(qubits), 'qubits should label each column of the bitarray'
@@ -838,7 +838,7 @@ def shots_to_obs_moments(bitarray: np.ndarray, qubits: List[int], observable: Pa
         # using the mean and variance of the beta distribution beta(N+1, M+1) where the +1 is used
         # to incorporate an unbiased Bayes prior.
         plus_array = obs_vals == 1
-        n_minus, n_plus = np.bincount(plus_array,  minlength=2)
+        n_minus, n_plus = np.bincount(plus_array, minlength=2)
         bernoulli_mean = beta.mean(n_plus + 1, n_minus + 1)
         bernoulli_var = beta.var(n_plus + 1, n_minus + 1)
         obs_mean, obs_var = transform_bit_moments_to_pauli(bernoulli_mean, bernoulli_var)
@@ -855,7 +855,7 @@ def shots_to_obs_moments(bitarray: np.ndarray, qubits: List[int], observable: Pa
 def estimate_observables(qc: QuantumComputer, obs_expt: ObservablesExperiment,
                          num_shots: int = 500, symm_type: int = 0,
                          active_reset: bool = False, show_progress_bar: bool = False,
-                         use_basic_compile = True)\
+                         use_basic_compile: bool = True)\
         -> Iterable[ExperimentResult]:
     """
     Standard wrapper for estimating the observables in an `ObservablesExperiment`.
@@ -889,7 +889,7 @@ def estimate_observables(qc: QuantumComputer, obs_expt: ObservablesExperiment,
     :param show_progress_bar: displays a progress bar via tqdm if true.
     :param use_basic_compile: instead of using the qc.compiler standard quil_to_native_quil
         compilation step, which may optimize gates away, instead use only basic_compile which
-        makes as few manual gate substitutions as possible.   
+        makes as few manual gate substitutions as possible.
     :return: all of the ExperimentResults which hold an estimate of each observable of obs_expt
     """
     if use_basic_compile:
@@ -899,7 +899,7 @@ def estimate_observables(qc: QuantumComputer, obs_expt: ObservablesExperiment,
 
     programs, meas_qubits = generate_experiment_programs(obs_expt, active_reset)
     for prog, meas_qs, settings in zip(tqdm(programs, disable=not show_progress_bar), meas_qubits,
-                               obs_expt):
+                                       obs_expt):
         results = qc.run_symmetrized_readout(prog, num_shots, symm_type, meas_qs)
 
         for setting in settings:
@@ -1008,7 +1008,7 @@ def calibrate_observable_estimates(qc: QuantumComputer, expt_results: List[Exper
 
     calibrations = {}
     for prog, meas_qs, obs in zip(tqdm(programs, disable=not show_progress_bar), meas_qubits,
-                               observables):
+                                  observables):
         results = qc.run_symmetrized_readout(prog, num_shots, symm_type, meas_qs)
 
         # Obtain statistics from result of experiment
@@ -1074,9 +1074,9 @@ def ratio_variance(a: Union[float, np.ndarray],
 
     See the following for more details:
 
-      - https://doi.org/10.1002/(SICI)1097-0320(20000401)39:4<300::AID-CYTO8>3.0.CO;2-O
-      - http://www.stat.cmu.edu/~hseltman/files/ratio.pdf
-      - https://en.wikipedia.org/wiki/Taylor_expansions_for_the_moments_of_functions_of_random_variables
+      - doi.org/10.1002/(SICI)1097-0320(20000401)39:4<300::AID-CYTO8>3.0.CO;2-O
+      - www.stat.cmu.edu/~hseltman/files/ratio.pdf
+      - en.wikipedia.org/wiki/Taylor_expansions_for_the_moments_of_functions_of_random_variables
 
     :param a: Mean of 'A', to be used as the numerator in a ratio.
     :param var_a: Variance in 'A'
@@ -1121,7 +1121,7 @@ def merge_disjoint_experiments(experiments: List[ObservablesExperiment],
     for expt in experiments:
         if expt.program.get_qubits().intersection(used_qubits):
             raise ValueError("Experiment programs act on some shared set of qubits and cannot be "
-                          "merged unambiguously.")
+                             "merged unambiguously.")
         used_qubits = used_qubits.union(expt.program.get_qubits())
 
     # get a flat list of all settings, to be regrouped later

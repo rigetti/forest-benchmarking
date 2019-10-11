@@ -79,7 +79,7 @@ def standard_basis_to_bloch_vector(qubit_state: Sequence[complex]) -> Tuple[floa
         # take out the global phase so that alpha is real
         phi -= np.angle(alpha)
         alpha = abs(alpha)
-    theta = np.arccos(alpha)*2
+    theta = np.arccos(alpha) * 2
     return theta, phi
 
 
@@ -189,7 +189,8 @@ def local_pauli_eig_prep(op, qubit):
     Generate gate sequence to prepare a the +1 eigenstate of a Pauli operator, assuming
     we are starting from the ground state ( the +1 eigenstate of :math:`Z^{\otimes n}`)
 
-    :param str op: A string representation of the Pauli operator whose eigenstate we'd like to prepare.
+    :param str op: A string representation of the Pauli operator whose eigenstate we would like to
+        prepare.
     :param int qubit: The index of the qubit that the preparation is acting on
     :return: The preparation Program.
     """
@@ -210,7 +211,8 @@ def local_pauli_eigs_prep(op, qubit):
     Generate all gate sequences to prepare all eigenstates of a (local) Pauli operator, assuming
     we are starting from the ground state.
 
-    :param str op: A string representation of the Pauli operator whose eigenstate we'd like to prepare.
+    :param str op: A string representation of the Pauli operator whose eigenstate we would like to
+        prepare.
     :param int qubit: The index of the qubit that the preparation is acting on
     :rtype list: A list of programs
     """
@@ -289,10 +291,12 @@ def local_pauli_eig_meas(op, qubit):
 
 
 def prepare_prod_pauli_eigenstate(pauli_term: PauliTerm):
-    """Returns a circuit to prepare a +1 eigenstate of the Pauli operator described in PauliTerm.
+    """
+    Returns a circuit to prepare a +1 eigenstate of the Pauli operator described in PauliTerm.
 
     :param pauli_term: The PauliTerm whose eigenstate we will prepare.
-    :return: A program corresponding to the correct rotation into the eigenbasis for pauli_term."""
+    :return: A program corresponding to the correct rotation into the eigenbasis for pauli_term.
+    """
     opset = pauli_term.operations_as_set()
     prog = Program()
     for (qubit, op) in opset:

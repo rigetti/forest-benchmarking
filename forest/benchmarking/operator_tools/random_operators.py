@@ -73,7 +73,7 @@ def haar_rand_unitary(dim: int, rs=None) -> np.ndarray:
 
 
 def haar_rand_state(dim: int) -> np.ndarray:
-    """   
+    """
     Given a Hilbert space dimension dim this function returns a vector
     representing a random pure state operator drawn from the Haar measure.
 
@@ -140,7 +140,7 @@ def rand_map_with_BCSZ_dist(dim: int, kraus_rank: int) -> np.ndarray:
           Physics Letters A 373, 320 (2009).
           https://doi.org/10.1016/j.physleta.2008.11.043
           https://arxiv.org/abs/0804.2361
-    
+
     :param dim: Hilbert space dimension.
     :param kraus_rank: The number of Kraus operators in the operator sum description of the channel.
     :return: dim^2 by dim^2 Choi matrix, drawn from the BCSZ distribution with Kraus rank K.
@@ -163,10 +163,10 @@ def permute_tensor_factors(dims: Union[int, List[int]], perm: List[int]) -> np.n
 
     Given a Hilbert space dimension dim and an list representing the permutation perm of the
     tensor product Hilbert spaces, returns a dim**len(perm) by dim**len(perm) permutation matrix.
-    
+
         1) Suppose dims=2 and perm=[0, 1]
             Returns the identity operator on two qubits
-            
+
         2) Suppose dims=2 and perm=[1, 0]
             Returns the SWAP operator on two qubits which maps
             :math:`A_1 \otimes A_2 \rightarrow A_2 \otimes A_1`

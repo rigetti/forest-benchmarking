@@ -14,6 +14,7 @@
 #
 import os
 import sys
+import forest.benchmarking as fb
 sys.path.insert(0, os.path.abspath('.'))
 sys.path.insert(0, os.path.abspath('../'))
 sys.path.insert(0, os.path.abspath('../forest/benchmarking/'))
@@ -25,7 +26,6 @@ project = 'Forest-Benchmarking'
 copyright = '2019, Rigetti Computing'
 author = 'Rigetti Computing'
 
-import forest.benchmarking as fb
 VERSION = fb.__version__
 
 # The short X.Y version
@@ -54,7 +54,8 @@ extensions = [
     'nbsphinx',
 ]
 
-mathjax_path = "https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML"
+mathjax_path = \
+    "https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML"
 
 autosummary_generate = True
 
@@ -186,8 +187,6 @@ texinfo_documents = [
      author, 'Forest-Benchmarking', 'One line description of project.',
      'Miscellaneous'),
 ]
-
-
 
 # -- Extension configuration -------------------------------------------------
 

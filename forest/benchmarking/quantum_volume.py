@@ -51,7 +51,7 @@ def _naive_program_generator(qc: QuantumComputer, qubits: Sequence[int],
             # add definition to program
             prog += g_definition
             # add gate to program, acting on properly permuted qubits
-            prog += G(int(measure_qubits[perm[gate_idx]]), int(measure_qubits[perm[gate_idx+1]]))
+            prog += G(int(measure_qubits[perm[gate_idx]]), int(measure_qubits[perm[gate_idx + 1]]))
 
     ro = prog.declare("ro", "BIT", num_measure_qubits)
     for idx, qubit in enumerate(measure_qubits):
@@ -109,7 +109,7 @@ def collect_heavy_outputs(wfn_sim: NumpyWavefunctionSimulator, permutations: np.
 
     for layer_idx, (perm, layer) in enumerate(zip(permutations, gates)):
         for gate_idx, gate in enumerate(layer):
-            wfn_sim.do_gate_matrix(gate, (perm[gate_idx], perm[gate_idx+1]))
+            wfn_sim.do_gate_matrix(gate, (perm[gate_idx], perm[gate_idx + 1]))
 
     # Note that probabilities are ordered lexicographically with qubit 0 leftmost.
     probabilities = np.abs(wfn_sim.wf.reshape(-1)) ** 2
@@ -235,7 +235,7 @@ def measure_quantum_volume(qc: QuantumComputer, qubits: Sequence[int] = None,
                                                         Sequence[np.ndarray], np.ndarray],
                                                        Program] = _naive_program_generator,
                            num_circuits: int = 100, num_shots: int = 1000,
-                           depths: np.ndarray = None, achievable_threshold: float = 2/3,
+                           depths: np.ndarray = None, achievable_threshold: float = 2 / 3,
                            stop_when_fail: bool = True, show_progress_bar: bool = False) \
         -> Dict[int, Tuple[float, float]]:
     """
@@ -388,7 +388,7 @@ def extract_quantum_volume_from_results(results: Dict[int, Tuple[float, float]])
     max_depth = 1
     for depth in depths:
         (_, lower_bound) = results[depth]
-        if lower_bound <= 2/3:
+        if lower_bound <= 2 / 3:
             break
         max_depth = depth
 

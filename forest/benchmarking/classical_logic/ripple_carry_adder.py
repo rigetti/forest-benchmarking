@@ -16,7 +16,7 @@ e.g.
         https://doi.org/10.1103/PhysRevA.54.147
         https://arxiv.org/abs/quant-ph/9511018
 """
-from typing import Sequence, Tuple
+from typing import Sequence, Tuple, Optional
 import networkx as nx
 import numpy as np
 from scipy.spatial.distance import hamming
@@ -89,7 +89,7 @@ def assign_registers_to_line_or_cycle(start: int, graph: nx.Graph, num_length: i
 
 
 def get_qubit_registers_for_adder(qc: QuantumComputer, num_length: int,
-                                  qubits: Sequence[int] = None) \
+                                  qubits: Optional[Sequence[int]] = None)\
         -> Tuple[Sequence[int], Sequence[int], int, int]:
     """
     Searches for a layout among the given qubits for the two n-bit registers and two additional
@@ -247,8 +247,9 @@ def adder(num_a: Sequence[int], num_b: Sequence[int], register_a: Sequence[int],
 
 
 def get_n_bit_adder_results(qc: QuantumComputer, n_bits: int,
-                            registers: Tuple[Sequence[int], Sequence[int], int, int] = None,
-                            qubits: Sequence[int] = None, in_x_basis: bool = False,
+                            registers: Optional[Tuple[Sequence[int], Sequence[int], int,
+                                                      int]] = None,
+                            qubits: Optional[Sequence[int]] = None, in_x_basis: bool = False,
                             num_shots: int = 100, use_param_program: bool = False,
                             use_active_reset: bool = True, show_progress_bar: bool = False) \
         -> Sequence[Sequence[Sequence[int]]]:
@@ -258,7 +259,7 @@ def get_n_bit_adder_results(qc: QuantumComputer, n_bits: int,
 
     :param qc: the quantum resource on which to run each addition
     :param n_bits: the number of bits of one of the summands (each summand is the same length)
-    :param registers: optional explicit qubit layout of each of the registers passed to :func:`adder`
+    :param registers: optional explicit qubit layout of each register passed to :func:`adder`
     :param qubits: available subset of qubits of the qc on which to run the circuits.
     :param in_x_basis: if true, prepare the bitstring-representation of the numbers in the x basis
         and subsequently performs all addition logic in the x basis.
