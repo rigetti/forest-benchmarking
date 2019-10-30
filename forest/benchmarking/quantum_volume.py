@@ -1,4 +1,4 @@
-from typing import List, Sequence, Tuple, Callable, Dict, Iterator
+from typing import List, Sequence, Tuple, Callable, Dict, Iterator, Optional
 import warnings
 from tqdm import tqdm
 import numpy as np
@@ -8,6 +8,7 @@ from copy import copy
 from pyquil.api import QuantumComputer
 from pyquil.numpy_simulator import NumpyWavefunctionSimulator
 from pyquil.quil import DefGate, Program, Pragma
+from pyquil.gates import RESET
 from rpcq.messages import TargetDevice
 from rpcq._utils import RPCErrorError
 
@@ -122,7 +123,8 @@ def collect_heavy_outputs(wfn_sim: NumpyWavefunctionSimulator, permutations: np.
     return heavy_outputs
 
 
-def generate_abstract_qv_circuit(depth: int) -> Tuple[List[np.ndarray], np.ndarray]:
+def generate_abstract_qv_circuit(depth: int, width: Optional[int] = None) \
+        -> Tuple[List[np.ndarray], np.ndarray]:
     """
     Produces an abstract description of the square model circuit of given depth=width used in a
     quantum volume measurement.
@@ -135,15 +137,19 @@ def generate_abstract_qv_circuit(depth: int) -> Tuple[List[np.ndarray], np.ndarr
     moved to position x. The 4 by 4 matrix at gates[i, j] is the gate acting on the qubits at
     positions 2j, 2j+1 after the i^th permutation has occurred.
 
-    :param depth: the depth, and also width, of the model circuit
+    :param depth: the depth of the model circuit. If width is None, this is also the width.
+    :param width: the width of the circuit.
     :return: the random depth-many permutations and depth by depth//2 many 2q-gates which comprise
         the model quantum circuit of [QVol]_ for a given depth.
     """
+    if width is None:
+        width = depth
+
     # generate a simple list representation for each permutation of the depth many qubits
     permutations = [np.random.permutation(range(depth)) for _ in range(depth)]
 
     # generate a matrix representation of each 2q gate in the circuit
-    num_gates_per_layer = depth // 2  # if odd number of qubits, don't do anything to last qubit
+    num_gates_per_layer = width // 2  # if odd number of qubits, don't do anything to last qubit
     gates = np.asarray([[haar_rand_unitary(4) for _ in range(num_gates_per_layer)]
                         for _ in range(depth)])
 
@@ -230,12 +236,12 @@ def calculate_prob_est_and_err(num_heavy: int, num_circuits: int, num_shots: int
     return prob_sample_heavy, one_sided_confidence_interval
 
 
-def measure_quantum_volume(qc: QuantumComputer, qubits: Sequence[int] = None,
+def measure_quantum_volume(qc: QuantumComputer, qubits: Optional[Sequence[int]] = None,
                            program_generator: Callable[[QuantumComputer, Sequence[int],
                                                         Sequence[np.ndarray], np.ndarray],
                                                        Program] = _naive_program_generator,
                            num_circuits: int = 100, num_shots: int = 1000,
-                           depths: np.ndarray = None, achievable_threshold: float = 2/3,
+                           depths: Optional[np.ndarray] = None, achievable_threshold: float = 2/3,
                            stop_when_fail: bool = True, show_progress_bar: bool = False) \
         -> Dict[int, Tuple[float, float]]:
     """
@@ -394,3 +400,80 @@ def extract_quantum_volume_from_results(results: Dict[int, Tuple[float, float]])
 
     quantum_volume = 2**max_depth
     return quantum_volume
+
+
+def generate_circuits(depths: Sequence[int], widths: Optional[Sequence[int]] = None):
+    """
+    Generate an abstract circuit for each depth.
+
+     By default the circuit width is equal to depth, but a list of widths specifying a width for
+     each depth can also be provided.
+
+    :param depths: depth of each circuit
+    :param widths: width of each circuit. When default None, the width is equal to the depth.
+    """
+    if widths is None:
+        widths = depths
+    for width, depth in zip(depths, widths):
+        yield generate_abstract_qv_circuit(depth, width)
+
+
+def convert_ckts_to_programs(qc: QuantumComputer,
+                             circuits: Iterator[Tuple[List[np.ndarray], np.ndarray]],
+                             qubits: Optional[Sequence[List[int]]] = None):
+    """
+    Convert each abstract circuit into a Program using _naive_program_generator.
+
+    :param qc: a QuantumComputer with `compiler` and `qubit_topology` used in generating Programs.
+    :param circuits: abstract circuits to convert to pyquil Programs
+    :param qubits: by default all qubits in the qc are available, but a list of available qubits
+        can also be specified for each abstract circuit.
+    """
+    for idx, ckt in enumerate(circuits):
+        if qubits is None:
+            ckt_qubits = qc.qubits()  # by default the program can act on any qubit in the computer
+        else:
+            ckt_qubits = qubits[idx]
+
+        yield _naive_program_generator(qc, ckt_qubits, *ckt)
+
+
+def acquire_quantum_volume_data(qc: QuantumComputer, programs: Iterator[Program],
+                                num_shots: int = 1000, use_active_reset: bool = False):
+    """
+    Run each program on the qc to get num_shots results for each.
+
+    :param qc: a QuantumComputer on which to run each program
+    :param programs: pyquil Programs to run on the quantum computer, one for each circuit
+    :param num_shots: number of shots for each program
+    :param use_active_reset: if true, each program will begin with an active reset.
+    """
+    for program in programs:
+        prog_copy = program.copy()
+        if use_active_reset:
+            reset_measure_program = Program(RESET())
+            prog_copy = reset_measure_program + prog_copy
+
+        # run the program num_shots many times
+        prog_copy.wrap_in_numshots_loop(num_shots)
+        executable = qc.compiler.native_quil_to_executable(prog_copy)
+
+        results = qc.run(executable)
+
+        yield results
+
+
+def acquire_heavy_hitters(abstract_circuits: Iterator[Tuple[List[np.ndarray], np.ndarray]]):
+    """
+    Generate the list of heavy outputs for each abstract circuit.
+
+    :param abstract_circuits: abstract circuits, for example output from :func:`generate_circuits`.
+    """
+    for ckt in abstract_circuits:
+        perms, gates = ckt
+        depth = len(perms)
+        wfn_sim = NumpyWavefunctionSimulator(depth)
+
+        heavy_outputs = collect_heavy_outputs(wfn_sim, perms, gates)
+
+        yield heavy_outputs
