@@ -568,26 +568,23 @@ def get_param_maxcut_graph_cost_template(graph_family: Callable[[int], nx.Graph]
 # ==================================================================================================
 # Data acquisition
 # ==================================================================================================
-def sample_random_connected_graphs(graph: nx.Graph, widths: List[int], num_ckts_per_width):
+def sample_random_connected_graphs(graph: nx.Graph, width: int, num_ckts: int):
     """
-    Helper to uniformly randomly sample `num_ckts_per_width` many connected induced subgraphs of
-    `graph` for each width in `widths`
+    Helper to uniformly randomly sample `num_ckts` many connected induced subgraphs of
+    `graph` of `width` many qubits.
 
     :param graph:
-    :param widths:
-    :param num_ckts_per_width:
+    :param width:
+    :param num_ckts:
     :return:
     """
-    samples = {w: [] for w in widths}
-    for w in widths:
-        connected_subgraphs = generate_connected_subgraphs(graph, w)
-        random_indices = np.random.choice(range(len(connected_subgraphs)), size=num_ckts_per_width)
-        samples[w] = [connected_subgraphs[idx] for idx in random_indices]
-    return samples
+    connected_subgraphs = generate_connected_subgraphs(graph, width)
+    random_indices = np.random.choice(range(len(connected_subgraphs)), size=num_ckts)
+    return [connected_subgraphs[idx] for idx in random_indices]
 
 
-def generate_volumetric_program_array(qc: QuantumComputer, ckt: CircuitTemplate, widths: List[int],
-                                      depths: List[int], num_circuit_samples: int,
+def generate_volumetric_program_array(qc: QuantumComputer, ckt: CircuitTemplate,
+                                      dimensions: Dict[int, List[int]], num_circuit_samples: int,
                                       graphs: Dict[int, List[nx.Graph]] = None):
     """
     Creates a dictionary containing random circuits sampled from the input `ckt` family for each
@@ -595,17 +592,17 @@ def generate_volumetric_program_array(qc: QuantumComputer, ckt: CircuitTemplate,
 
     :param qc:
     :param ckt:
-    :param widths:
-    :param depths:
+    :param dimensions
     :param num_circuit_samples:
     :param graphs:
     :return:
     """
     if graphs is None:
-        graphs = sample_random_connected_graphs(qc.qubit_topology(), widths,
-                                                len(depths)*num_circuit_samples)
+        graphs = {w: sample_random_connected_graphs(qc.qubit_topology(), w,
+                                                    len(depths)*num_circuit_samples)
+                  for w, depths in dimensions.items()}
 
-    programs = {width: {depth: [] for depth in depths} for width in widths}
+    programs = {width: {depth: [] for depth in depths} for width, depths in dimensions.items()}
 
     for width, depth_array in programs.items():
         circuit_number = 0
@@ -698,7 +695,7 @@ def collect_heavy_outputs(wfn_sim: NumpyWavefunctionSimulator, program_array,
                 # Note that probabilities are ordered lexicographically with qubit 0 leftmost.
                 # we need to restrict attention to the subset `qubits`
                 probs = abs(wfn_sim.wf)**2
-                probs = probs.reshape([2]*wfn_sim.n_qubits)
+                probs = probs.reshape([2] * wfn_sim.n_qubits)
                 marginal = probs
                 for q in reversed(range(wfn_sim.n_qubits)):
                     if q in qubits:
@@ -805,18 +802,19 @@ def get_success_probabilities(noisy_results, ideal_results):
     prob_success = {width: {depth: [] for depth in depth_array.keys()}
                     for width, depth_array in noisy_results.items()}
 
+    assert set(noisy_results.keys()) == set(ideal_results.keys())
+
     for width, depth_array in prob_success.items():
-        for depth, samples in depth_array.items():
+        for depth in depth_array.keys():
 
             noisy_ckt_sample_results = noisy_results[width][depth]
             ideal_ckt_sample_results = ideal_results[width][depth]
 
             # iterate over circuits
-            for noisy_shots, ideal_results in zip(noisy_ckt_sample_results,
+            for noisy_shots, targets in zip(noisy_ckt_sample_results,
                                                  ideal_ckt_sample_results):
-                targets = ideal_results
-                if not isinstance(ideal_results[0], int):
-                    targets = [bit_array_to_int(res) for res in ideal_results]
+                if not isinstance(targets[0], int):
+                    targets = [bit_array_to_int(res) for res in targets]
 
                 pr_success = 0
                 # determine if each result bitstring is a success, i.e. matches an ideal_result
