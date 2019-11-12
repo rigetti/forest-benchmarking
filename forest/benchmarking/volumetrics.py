@@ -326,6 +326,24 @@ def random_su4_pairs(graph: nx.Graph, idx_label: int) -> Program:
     return prog
 
 
+def maxcut_cost_unitary(graph: nx.Graph, idx_label: int) -> Program:
+    """
+    Creates a parameterized program used in QAOA that enacts commuting parameterized 2 qubit
+    gates on every edge of the graph.
+
+    :param graph:
+    :param idx_label: a label that uniquely identifies the set of gate definitions used in the
+        output program. This prevents subsequent calls to this method from producing a program
+        with definitions that overwrite definitions in previously generated programs.
+    :return:
+    """
+    prog = Program()
+    theta = prog.declare('theta_' + str(idx_label), memory_type='REAL')
+    for edge in graph.edges:
+        exponential_map(sZ(edge[0]) * sZ(edge[1]))(theta)
+    return prog
+
+
 ###
 # Sequence Transforms
 ###
@@ -514,6 +532,39 @@ def get_quantum_volume_template():
     template.sequence_transforms.append(compile_merged_sequence)
     return template
 
+
+def get_param_local_RX_template():
+    # remember that RX(theta) = e^(i theta X/2)
+    def func(graph, sequence, **kwargs):
+        prog = Program()
+        theta = prog.declare('theta_' + str(len(sequence)), memory_type='REAL')
+        for node in graph.nodes:
+            prog += H(node)
+            prog += RZ(theta, node)
+            prog += H(node)
+        return prog
+    return CircuitTemplate([func])
+
+
+def get_param_maxcut_graph_cost_template(graph_family: Callable[[int], nx.Graph] = None):
+    if graph_family is None:
+        def default_func(graph, qc, sequence, **kwargs):
+            prog = maxcut_cost_unitary(graph, len(sequence))
+            native_quil = qc.compiler.quil_to_native_quil(prog)
+            # remove gate definition and HALT
+            return Program([instr for instr in native_quil.instructions][:-1])
+        return CircuitTemplate([default_func])
+    else:
+        def func(graph, qc, sequence, **kwargs):
+            maxcut_graph = graph_family(len(graph.nodes))
+            if len(maxcut_graph.nodes) > len(graph.nodes):
+                raise ValueError("The maxcut graph must have fewer nodes than the number of "
+                                 "qubits.")
+            prog = maxcut_cost_unitary(maxcut_graph, len(sequence))
+            native_quil = graph_restricted_compilation(qc, graph, prog)
+            # remove gate definitions and HALT
+            return Program([instr for instr in native_quil.instructions][:-1])
+        return CircuitTemplate([func])
 
 # ==================================================================================================
 # Data acquisition
