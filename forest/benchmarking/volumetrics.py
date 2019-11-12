@@ -1,4 +1,4 @@
-from typing import Tuple, Sequence, Callable, Dict, List, Union
+from typing import Tuple, Sequence, Callable, Dict, List, Union, Optional
 from copy import copy
 import networkx as nx
 import numpy as np
@@ -15,7 +15,6 @@ from pyquil.quilatom import QubitPlaceholder
 from pyquil.quil import Program, address_qubits, merge_programs
 from pyquil.api import QuantumComputer, BenchmarkConnection
 from pyquil.gates import *
-from pyquil.paulis import exponential_map, sX, sZ
 from pyquil.numpy_simulator import NumpyWavefunctionSimulator
 from rpcq.messages import TargetDevice
 from rpcq._utils import RPCErrorError
@@ -435,6 +434,8 @@ def compile_merged_sequence(qc: QuantumComputer, sequence: List[Program], graph:
         native_quil = graph_restricted_compilation(qc, graph, merged)
         # remove gate definitions and terminous HALT
         return [Program([instr for instr in native_quil.instructions][:-1])]
+
+
 ###
 # Templates
 ###
@@ -534,7 +535,8 @@ def sample_random_connected_graphs(graph: nx.Graph, width: int, num_ckts: int):
 
 def generate_volumetric_program_array(qc: QuantumComputer, ckt: CircuitTemplate,
                                       dimensions: Dict[int, List[int]], num_circuit_samples: int,
-                                      graphs: Dict[int, List[nx.Graph]] = None):
+                                      graphs: Dict[int, List[nx.Graph]] = None) \
+        -> Dict[int, Dict[int, List[Program]]]:
     """
     Creates a dictionary containing random circuits sampled from the input `ckt` family for each
     width and depth.
@@ -565,10 +567,10 @@ def generate_volumetric_program_array(qc: QuantumComputer, ckt: CircuitTemplate,
     return programs
 
 
-def acquire_volumetric_data(qc: QuantumComputer, program_array:Dict[int, Dict[int, List[Program]]],
-                            num_shots: int =  500,
+def acquire_volumetric_data(qc: QuantumComputer, program_array: Dict[int, Dict[int, List[Program]]],
+                            num_shots: int = 500,
                             measure_qubits: Dict[int,  Dict[int, List[int]]] = None,
-                            use_active_reset:  bool = False, use_compiler: bool = False)\
+                            use_active_reset:  bool = False, use_compiler: bool = False) \
         -> Dict[int, Dict[int, List[np.ndarray]]]:
     """
     Runs each program in `program_array` on the qc and stores the results, organized again by
@@ -615,8 +617,10 @@ def acquire_volumetric_data(qc: QuantumComputer, program_array:Dict[int, Dict[in
     return results
 
 
-def collect_heavy_outputs(wfn_sim: NumpyWavefunctionSimulator, program_array,
-                          measure_qubits: Dict[int,  Dict[int, List[int]]] = None):
+def collect_heavy_outputs(wfn_sim: NumpyWavefunctionSimulator,
+                          program_array: Dict[int, Dict[int, List[Program]]],
+                          measure_qubits: Optional[Dict[int,  Dict[int, List[int]]]] = None) \
+        -> Dict[int, Dict[int, List[List[int]]]]:
     """
     Collects and returns those 'heavy' bitstrings which are output with greater than median
     probability among all possible bitstrings on the given qubits.
@@ -625,6 +629,10 @@ def collect_heavy_outputs(wfn_sim: NumpyWavefunctionSimulator, program_array,
     from the output of the circuit comprised of the given permutations and gates.
 
     :param wfn_sim: a NumpyWavefunctionSimulator that can simulate the provided program
+    :param program_array: a collection of PyQuil Programs sampled from the circuit family for
+        each (width, depth) pair.
+    :param measure_qubits: optional list of qubits to measure for each Program in
+        `program_array`. By default all qubits in the Program are measured
     :return: a list of the heavy outputs of the circuit, represented as ints
     """
     heavy_output_array = {w: {d: [] for d in d_arr.keys()} for w, d_arr in program_array.items()}
