@@ -15,6 +15,7 @@ from pyquil.quilatom import QubitPlaceholder
 from pyquil.quil import Program, address_qubits, merge_programs
 from pyquil.api import QuantumComputer, BenchmarkConnection
 from pyquil.gates import *
+from pyquil.paulis import exponential_map, sX, sZ
 from pyquil.numpy_simulator import NumpyWavefunctionSimulator
 from rpcq.messages import TargetDevice
 from rpcq._utils import RPCErrorError
