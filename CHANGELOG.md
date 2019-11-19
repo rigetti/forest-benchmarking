@@ -1,6 +1,17 @@
 Changelog
 =========
 
+v0.7.1 (November 25, 2019)
+--------------------------
+
+Improvements and Changes:
+
+- Add PyPI version and Slack badges (gh-196).
+- Add Zenodo badge and BibTeX file for citation (gh-197).
+- Accommodate XY gate in `basic_compile` (gh-202). 
+- Increase PyQuil version requirement to accommodate XY gate (gh-203).
+
+
 v0.7 (September 20, 2019)
 ----------------------
 Breaking Changes:
