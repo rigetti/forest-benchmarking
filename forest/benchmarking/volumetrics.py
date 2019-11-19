@@ -339,9 +339,9 @@ def maxcut_cost_unitary(graph: nx.Graph, idx_label: int) -> Program:
     :return:
     """
     prog = Program()
-    theta = prog.declare('theta_' + str(idx_label), memory_type='REAL')
+    gamma = prog.declare('gamma_' + str(idx_label), memory_type='REAL')
     for edge in graph.edges:
-        exponential_map(sZ(edge[0]) * sZ(edge[1]))(theta)
+        prog += exponential_map(sZ(edge[0]) * sZ(edge[1]))(gamma)
     return prog
 
 
@@ -538,7 +538,7 @@ def get_param_local_RX_template():
     # remember that RX(theta) = e^(i theta X/2)
     def func(graph, sequence, **kwargs):
         prog = Program()
-        theta = prog.declare('theta_' + str(len(sequence)), memory_type='REAL')
+        theta = prog.declare('beta_' + str(len(sequence)), memory_type='REAL')
         for node in graph.nodes:
             prog += H(node)
             prog += RZ(theta, node)
@@ -550,10 +550,7 @@ def get_param_local_RX_template():
 def get_param_maxcut_graph_cost_template(graph_family: Callable[[int], nx.Graph] = None):
     if graph_family is None:
         def default_func(graph, qc, sequence, **kwargs):
-            prog = maxcut_cost_unitary(graph, len(sequence))
-            native_quil = qc.compiler.quil_to_native_quil(prog)
-            # remove gate definition and HALT
-            return Program([instr for instr in native_quil.instructions][:-1])
+            return maxcut_cost_unitary(graph, len(sequence))
         return CircuitTemplate([default_func])
     else:
         def func(graph, qc, sequence, **kwargs):
@@ -561,11 +558,28 @@ def get_param_maxcut_graph_cost_template(graph_family: Callable[[int], nx.Graph]
             if len(maxcut_graph.nodes) > len(graph.nodes):
                 raise ValueError("The maxcut graph must have fewer nodes than the number of "
                                  "qubits.")
-            prog = maxcut_cost_unitary(maxcut_graph, len(sequence))
-            native_quil = graph_restricted_compilation(qc, graph, prog)
-            # remove gate definitions and HALT
-            return Program([instr for instr in native_quil.instructions][:-1])
+            return maxcut_cost_unitary(maxcut_graph, len(sequence))
         return CircuitTemplate([func])
+
+
+def get_maxcut_qaoa_template(graph_family: Callable[[int], nx.Graph] = None):
+    cost_layer = get_param_maxcut_graph_cost_template(graph_family)
+    rotation_layer = get_param_local_RX_template()
+    qaoa_template = cost_layer + rotation_layer
+
+    def initialize(sequence: List[Program], graph: nx.Graph, **kwargs) -> List[Program]:
+        """
+        Insert a Hadamard gate on each qubit at the beginning of the sequence.
+        """
+        prog = Program()
+        for node in graph.nodes:
+            prog.inst(H(node))
+        return [prog] + sequence
+
+    qaoa_template.sequence_transforms.append(initialize)
+    qaoa_template.sequence_transforms.append(compile_merged_sequence)
+    return qaoa_template
+
 
 # ==================================================================================================
 # Data acquisition
