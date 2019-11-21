@@ -9,8 +9,9 @@ from pyquil import Program
 from pyquil.api import BenchmarkConnection, QuantumComputer
 from forest.benchmarking.observable_estimation import ExperimentResult, ExperimentSetting, \
     ObservablesExperiment, TensorProductState, estimate_observables, plusX, minusX, plusY, minusY,\
-    plusZ, minusZ, calibrate_observable_estimates, group_settings
+    plusZ, minusZ, calibrate_observable_estimates, group_settings, _OneQState
 from pyquil.paulis import PauliTerm, sI, sX, sY, sZ
+from forest.benchmarking.utils import str_to_pauli_term
 
 
 def _state_to_pauli(state: TensorProductState) -> PauliTerm:
@@ -112,10 +113,22 @@ def generate_exhaustive_process_dfe_experiment(benchmarker: BenchmarkConnection,
         Note that we assume qubits are initialized to the ``|0>`` state.
     :return: an ObservablesExperiment that constitutes a process DFE experiment.
     """
-    expt = ObservablesExperiment(
-        list(_exhaustive_dfe(benchmarker=benchmarker, program=program, qubits=qubits,
-                             in_states=[None, plusX, minusX, plusY, minusY, plusZ, minusZ])),
-        program=program)
+    settings = []
+    for pauli_labels in [''.join(x) for x in itertools.product('IXYZ', repeat=len(qubits))][1:]:
+        observable = benchmarker.apply_clifford_to_pauli(program,
+                                                         str_to_pauli_term(pauli_labels, qubits))
+        non_identity_idx = [0 if label == 'I' else 1 for label in pauli_labels]
+        state_labels = ['Z' if label == 'I' else label for label in pauli_labels]
+        for eigenstate in itertools.product([0, 1], repeat=len(qubits)):
+            in_state = functools.reduce(mul,
+                                        (TensorProductState((_OneQState(state_labels[q], sign, q),))
+                                         for q, sign in zip(qubits, eigenstate)),
+                                        TensorProductState())
+            # make the observable negative if the in_state is a negative eigenstate
+            sign_contribution = (-1)**np.dot(eigenstate, non_identity_idx)
+            settings.append(ExperimentSetting(in_state=in_state,
+                                              observable=observable * sign_contribution))
+    expt = ObservablesExperiment(settings, program=program)
     return expt
 
 
