@@ -122,8 +122,9 @@ def generate_exhaustive_process_dfe_experiment(benchmarker: BenchmarkConnection,
         for eigenstate in itertools.product([0, 1], repeat=len(qubits)):
             in_state = functools.reduce(mul,
                                         (TensorProductState((_OneQState(state_labels[idx], sign,
-                                                                        idx),))
-                                         for idx, sign in enumerate(eigenstate)),
+                                                                        qubit),))
+                                         for idx, (qubit, sign) in enumerate(zip(qubits,
+                                                                                 eigenstate))),
                                         TensorProductState())
             # make the observable negative if the in_state is a negative eigenstate
             sign_contribution = (-1)**np.dot(eigenstate, non_identity_idx)
