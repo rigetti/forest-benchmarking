@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 
 from pyquil.quil import Program, address_qubits, merge_programs
 from pyquil.api import QuantumComputer
+from pyquil.gates import MEASURE, RESET
 
 from forest.benchmarking.distance_measures import total_variation_distance as tvd
 
