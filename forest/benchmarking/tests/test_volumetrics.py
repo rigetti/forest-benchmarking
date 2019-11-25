@@ -2,6 +2,9 @@ import numpy as np
 from pyquil.numpy_simulator import NumpyWavefunctionSimulator
 
 from forest.benchmarking.volumetrics import *
+from forest.benchmarking.volumetrics.quantum_volume import (collect_heavy_outputs,
+                                                            get_success_probabilities,
+                                                            calculate_success_prob_est_and_err)
 
 np.random.seed(1)
 
