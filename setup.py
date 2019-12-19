@@ -51,7 +51,7 @@ setup(
     long_description=open('README.md').read(),
     install_requires=[
         'pyquil>=2.14.0',
-        'pytest-cov<5'
+        'coverage<5'
         'numpy',
         'networkx',
         'pandas',
