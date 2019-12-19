@@ -13,36 +13,6 @@ from pyquil.paulis import PauliTerm, sI, sX, sY, sZ
 from forest.benchmarking.utils import str_to_pauli_term, all_traceless_pauli_z_terms
 
 
-def _state_to_pauli(state: TensorProductState) -> PauliTerm:
-    """
-    Converts a TensorProductState that is the eigenstate of some Pauli operator into its
-    associated PauliTerm.
-
-    The overall sign of the returned Pauli is the sign of the eigenvalue for the state.
-
-    .. note:: exactly the qubits explicitly referenced in the `state` will be considered,
-        so be careful distinguishing between an explicit ``|0>`` (+Z) state and an implicit ``|0>``
-        state which is ignored.
-
-    :param state: the state to convert
-    :return: the associated Pauli represented as a :class:`pyquil.paulis.PauliTerm`.
-    """
-    term = sI()
-    for oneq_st in state.states:
-        if oneq_st.label == 'X':
-            term *= sX(oneq_st.qubit)
-        elif oneq_st.label == 'Y':
-            term *= sY(oneq_st.qubit)
-        elif oneq_st.label == 'Z':
-            term *= sZ(oneq_st.qubit)
-        else:
-            raise ValueError(f"Can't convert state {state} to a PauliTerm")
-
-        if oneq_st.index == 1:
-            term *= -1
-    return term
-
-
 def generate_exhaustive_process_dfe_experiment(benchmarker: BenchmarkConnection, program: Program,
                                                qubits: list) -> ObservablesExperiment:
     """
