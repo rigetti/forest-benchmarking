@@ -9,7 +9,6 @@ from pyquil.api import BenchmarkConnection, QuantumComputer
 from forest.benchmarking.observable_estimation import ExperimentResult, ExperimentSetting, \
     ObservablesExperiment, TensorProductState, estimate_observables, \
     calibrate_observable_estimates, group_settings, _OneQState, zeros_state
-from pyquil.paulis import PauliTerm, sI, sX, sY, sZ
 from forest.benchmarking.utils import str_to_pauli_term, all_traceless_pauli_z_terms
 
 
