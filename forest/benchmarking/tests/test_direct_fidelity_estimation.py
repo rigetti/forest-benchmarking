@@ -78,7 +78,7 @@ def test_exhaustive_process_dfe_analytical(benchmarker: BenchmarkConnection, qvm
     fid_est, fid_std_err = estimate_dfe(expt_data, 'process')
     analytical_fidelity = (4 + 10 + 6 * np.cos(np.pi)) / 20
 
-    assert_allclose(fid_est, analytical_fidelity, atol=2 * fid_std_err)
+    assert_allclose(fid_est, analytical_fidelity, atol=3 * fid_std_err)
 
 
 def test_monte_carlo_process_dfe(benchmarker: BenchmarkConnection):
