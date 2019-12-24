@@ -51,6 +51,7 @@ setup(
     long_description=open('README.md').read(),
     install_requires=[
         'pyquil>=2.14.0',
+        'coverage<5'
         'numpy',
         'networkx',
         'pandas',
