@@ -225,6 +225,8 @@ def basic_compile(program: Program):
                     new_prog += _RX(angle_param, inst.qubits[0])
             elif inst.name == 'RY':
                 new_prog += _RY(angle_param, inst.qubits[0])
+            elif inst.name == 'Y':
+                new_prog += _RY(pi, inst.qubits[0])
             elif inst.name == 'CNOT':
                 new_prog += _CNOT(*inst.qubits)
             elif inst.name == 'CCNOT':
