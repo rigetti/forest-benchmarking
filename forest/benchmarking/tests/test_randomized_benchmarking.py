@@ -1,19 +1,26 @@
 import numpy as np
 from pyquil.noise import pauli_kraus_map
-from forest.benchmarking.observable_estimation import ExperimentSetting, ExperimentResult, zeros_state
+from pyquil import Program
+from forest.benchmarking.observable_estimation import (ExperimentSetting, ExperimentResult,
+                                                       zeros_state)
 from forest.benchmarking.randomized_benchmarking import *
 from forest.benchmarking.utils import all_traceless_pauli_z_terms
 
 
-def add_noise_to_sequences(sequences, qubits, kraus_ops):
+def add_noise_to_sequences(sequences, qubits):
     """
     Append the given noise to each clifford gate (sequence)
     """
     for seq in sequences:
         for program in seq:
-            program.defgate("noise", np.eye(2 ** len(qubits)))
-            program.define_noisy_gate("noise", qubits, kraus_ops)
             program.inst(("noise", *qubits))
+
+
+def add_noise_definition(expt, qubits, kraus_ops):
+    p = Program()
+    p.defgate("noise", np.eye(2 ** len(qubits)))
+    p.define_noisy_gate("noise", qubits, kraus_ops)
+    expt.program = p + expt.program
 
 
 def test_1q_general_pauli_noise(qvm, benchmarker):
@@ -29,9 +36,12 @@ def test_1q_general_pauli_noise(qvm, benchmarker):
     qubits = (0, )
 
     sequences = generate_rb_experiment_sequences(benchmarker, qubits, depths)
-    add_noise_to_sequences(sequences, qubits, kraus_ops)
+    add_noise_to_sequences(sequences, qubits)
 
     expts = group_sequences_into_parallel_experiments([sequences], [qubits])
+
+    for expt in expts:
+        add_noise_definition(expt, qubits, kraus_ops)
 
     results = acquire_rb_data(qvm, expts, num_shots)
     stats = get_stats_by_qubit_group([qubits], results)[qubits]
@@ -57,9 +67,12 @@ def test_2q_general_pauli_noise(qvm, benchmarker):
     qubits = (0, 1)
 
     sequences = generate_rb_experiment_sequences(benchmarker, qubits, depths)
-    add_noise_to_sequences(sequences, qubits, kraus_ops)
+    add_noise_to_sequences(sequences, qubits)
 
     expts = group_sequences_into_parallel_experiments([sequences], [qubits])
+
+    for expt in expts:
+        add_noise_definition(expt, qubits, kraus_ops)
 
     results = acquire_rb_data(qvm, expts, num_shots)
     stats = get_stats_by_qubit_group([qubits], results)[qubits]
@@ -178,9 +191,12 @@ def test_unitarity(qvm, benchmarker):
 
     sequences = generate_rb_experiment_sequences(benchmarker, qubits, depths,
                                                  use_self_inv_seqs=False)
-    add_noise_to_sequences(sequences, qubits, kraus_ops)
+    add_noise_to_sequences(sequences, qubits)
 
     expts = group_sequences_into_parallel_experiments([sequences], [qubits], is_unitarity_expt=True)
+
+    for expt in expts:
+        add_noise_definition(expt, qubits, kraus_ops)
 
     results = acquire_rb_data(qvm, expts, num_shots)
     stats = get_stats_by_qubit_group([qubits], results)[qubits]
