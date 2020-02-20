@@ -20,6 +20,7 @@ pytest-cov
 referenceqvm
 requests
 scikit-learn
+coverage<5
 
 # doc dependencies
 sphinx
