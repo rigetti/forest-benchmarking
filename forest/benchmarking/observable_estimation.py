@@ -1000,7 +1000,7 @@ def calibrate_observable_estimates(qc: QuantumComputer, expt_results: List[Exper
     """
     observables = [copy(res.setting.observable) for res in expt_results]
     for obs in observables:
-        obs.coefficient = 1.
+        obs.coefficient = complex(1.)
     observables = list(set(observables))  # get unique observables that will need to be calibrated
 
     programs = [get_calibration_program(obs, noisy_program, active_reset) for obs in observables]
