@@ -487,7 +487,7 @@ def generate_unitarity_experiments(benchmarker: BenchmarkConnection,
                                                      is_unitarity_expt=True)
 
 
-def estimate_purity(dim: int, op_expect: np.ndarray, renorm: bool=True):
+def estimate_purity(dim: int, op_expect: np.ndarray, renorm: bool = True):
     """
     The renormalized, or 'shifted', purity is given in equation (10) of [ECN]_
     where d is the dimension of the Hilbert space, 2**num_qubits

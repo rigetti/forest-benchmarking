@@ -74,7 +74,7 @@ def inner_product(bra1: np.ndarray, bra2: np.ndarray) -> complex:
 
 # code from https://github.com/scipy/scipy/pull/4775/files
 # Algorithm 9.1.1. in Gene H. Golub, Charles F. van Loan, Matrix Computations 4th ed.
-def sqrtm_psd(matrix: np.ndarray, check_finite: bool =True) -> np.ndarray:
+def sqrtm_psd(matrix: np.ndarray, check_finite: bool = True) -> np.ndarray:
     """
     Calculates the square root of a matrix that is positive semidefinite.
 

@@ -442,7 +442,7 @@ def watrous_bounds(choi: np.ndarray) -> Tuple[float, float]:
     Return the Watrous bounds for the diamond norm of a superoperator in
     the Choi representation.
 
-    If this is applied to the difference of two Choi epresentations it yields bounds on the
+    If this is applied to the difference of two Choi representations it yields bounds on the
     diamond norm distance.
 
     The bound can be found in `this <https://cstheory.stackexchange.com/a/4920>`_
