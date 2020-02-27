@@ -80,7 +80,7 @@ def proj_choi_to_trace_preserving(choi: np.ndarray) -> np.ndarray:
     # isolate the part the violates the condition we want, namely pt = Id
     diff = pt - np.eye(dim)
     # we want to subtract off the violation from the larger operator, so 'invert' the partial_trace
-    subtract = np.kron(diff/dim, np.eye(dim))
+    subtract = np.kron(diff / dim, np.eye(dim))
     return choi - subtract
 
 

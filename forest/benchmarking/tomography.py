@@ -18,7 +18,7 @@ from forest.benchmarking.operator_tools.project_state_matrix import project_stat
 from forest.benchmarking.observable_estimation import ExperimentSetting, ObservablesExperiment, \
     ExperimentResult, SIC0, SIC1, SIC2, SIC3, plusX, minusX, plusY, minusY, plusZ, minusZ, \
     TensorProductState, zeros_state, group_settings
-from forest.benchmarking.direct_fidelity_estimation import acquire_dfe_data # TODO: replace
+from forest.benchmarking.direct_fidelity_estimation import acquire_dfe_data
 
 MAXITER = "maxiter"
 OPTIMAL = "optimal"
@@ -157,12 +157,12 @@ def linear_inv_state_estimate(results: List[ExperimentResult],
     # the qubits before passing to state2matrix and pauli2matrix
     qs = qubits[::-1]
     measurement_matrix = np.vstack([
-        vec(pauli2matrix(result.setting.observable, qubits=qs)).T.conj() for result in results ])
+        vec(pauli2matrix(result.setting.observable, qubits=qs)).T.conj() for result in results])
     expectations = np.array([result.expectation for result in results])
     rho = pinv(measurement_matrix) @ expectations
     # add in the traceful identity term
     dim = 2**len(qubits)
-    return unvec(rho) + np.eye(dim)/dim
+    return unvec(rho) + np.eye(dim) / dim
 
 
 def iterative_mle_state_estimate(results: List[ExperimentResult], qubits: List[int], epsilon=.1,
@@ -171,7 +171,7 @@ def iterative_mle_state_estimate(results: List[ExperimentResult], qubits: List[i
     """
     Given tomography data, use one of three iterative algorithms to return an estimate of the
     state.
-    
+
         "... [The iterative] algorithm is characterized by a very high convergence rate and
         features a simple adaptive procedure that ensures likelihood increase in every iteration
         and convergence to the maximum-likelihood state." [DIMLE1]_
@@ -181,10 +181,10 @@ def iterative_mle_state_estimate(results: List[ExperimentResult], qubits: List[i
         - MLE only:                 ``entropy_penalty=0.0``         and ``beta=0.0``
         - MLE + maximum entropy:    ``entropy_penalty=`` (non-zero)  and ``beta=0.0``
         - MLE + hedging:            ``entropy_penalty=0.0``         and ``beta=`` (non-zero).
-    
+
     The basic algorithm is due to [DIMLE1]_, with improvements from [DIMLE2]_, [HMLE]_,
     and [IHMLE]_.
-    
+
     .. [DIMLE1] Diluted maximum-likelihood algorithm for quantum tomography.
              Řeháček et al.
              PRA 75, 042108 (2007).
@@ -196,7 +196,7 @@ def iterative_mle_state_estimate(results: List[ExperimentResult], qubits: List[i
              PRL 107, 020404 (2011).
              https://doi.org/10.1103/PhysRevLett.107.020404
              https://arxiv.org/abs/1102.2662
-                
+
     .. [HMLE]   Hedged Maximum Likelihood Quantum State Estimation.
              Blume-Kohout.
              PRL, 105, 200504 (2010).
@@ -234,7 +234,7 @@ def iterative_mle_state_estimate(results: List[ExperimentResult], qubits: List[i
 
     # Identity prop to the size of Hilbert space
     dim = 2**len(qubits)
-    IdH = np.eye(dim, dim) # Identity prop to the size of Hilbert space
+    IdH = np.eye(dim, dim)  # Identity prop to the size of Hilbert space
     num_meas = sum([res.total_counts for res in results])
 
     rho = IdH / dim
@@ -259,7 +259,7 @@ def iterative_mle_state_estimate(results: List[ExperimentResult], qubits: List[i
             Tk *= num_meas / 2
             Tk += beta * (pinv(rho) - dim * IdH) / 2
 
-        # compute iterative estimate of rho     
+        # compute iterative estimate of rho
         update_map = (IdH + epsilon * Tk)
         rho = update_map @ rho @ update_map
         rho /= np.trace(rho)  # Eq 5 of [DIMLE2].
@@ -308,8 +308,8 @@ def _R(state, results, qubits):
     We use these :math:`f_k` and :math:`Pi_k` to arrive at the code below.
 
     Finally, since our Pauli's are not normalized, i.e. :math:`Pi_k^+ + Pi_k^- = Id`, in order to
-    enforce the condition  :math:`\sum_j Pi_j = Id` stated above we need to divide our final answer by
-    the number of Paulis.
+    enforce the condition  :math:`\sum_j Pi_j = Id` stated above we need to divide our final answer
+    by the number of Paulis.
 
     :param state: The state (given as a density matrix) that we think we have.
     :param results: Measured results from a state tomography experiment. (assumes Pauli basis)
@@ -564,7 +564,9 @@ def pgdb_process_estimate(results: List[ExperimentResult], qubits: List[int],
     est = np.eye(dim ** 2, dim ** 2, dtype=complex) / dim  # initial estimate
     old_cost = _cost(A, n, est)  # initial cost, which we want to decrease
     mu = 3 / (2 * dim ** 2)  # inverse learning rate
-    gamma = .3  # tolerance of letting the constrained update deviate from true gradient; larger is more demanding
+    gamma = .3  # tolerance of letting the constrained update deviate from true gradient;
+    # larger is more demanding
+
     while True:
         gradient = _grad_cost(A, n, est)
         update = proj_choi_to_physical(est - gradient / mu, trace_preserving) - est
@@ -588,7 +590,6 @@ def pgdb_process_estimate(results: List[ExperimentResult], qubits: List[int],
             break
         # store current cost
         old_cost = new_cost
-
 
     return est
 

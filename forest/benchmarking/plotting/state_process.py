@@ -119,8 +119,8 @@ def plot_pauli_transfer_matrix(ptransfermatrix: np.ndarray, ax, labels=None, tit
     ax.set_xlabel("Input Pauli Operator", fontsize=fontsizes)
     ax.set_yticks(range(dim_squared))
     ax.set_ylabel("Output Pauli Operator", fontsize=fontsizes)
-    ax.set_title(title, fontsize= int(np.floor(1.2*fontsizes)), pad=15)
-    ax.set_xticklabels(labels, rotation=45, fontsize=int(np.floor(0.7*fontsizes)))
-    ax.set_yticklabels(labels, fontsize=int(np.floor(0.7*fontsizes)))
+    ax.set_title(title, fontsize=int(np.floor(1.2 * fontsizes)), pad=15)
+    ax.set_xticklabels(labels, rotation=45, fontsize=int(np.floor(0.7 * fontsizes)))
+    ax.set_yticklabels(labels, fontsize=int(np.floor(0.7 * fontsizes)))
     ax.grid(False)
     return ax

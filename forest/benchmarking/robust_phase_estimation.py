@@ -1,4 +1,4 @@
-from typing import Tuple, List, Sequence, Union, Dict
+from typing import Tuple, List, Sequence, Union, Dict, Optional
 import warnings
 
 import numpy as np
@@ -54,7 +54,7 @@ def get_change_of_basis_from_eigvecs(eigenvectors: Sequence[np.ndarray]) -> np.n
         then the rotation happens about e1 in the counter-clockwise direction for a clock facing
         the e1 direction.
     :return: a matrix for the change of basis transformation which maps computational basis
-        states to the given eigenvectors. Necessary for generate_rpe_experiments called on a 
+        states to the given eigenvectors. Necessary for generate_rpe_experiments called on a
         rotation with the given eigenvectors.
     """
     assert len(eigenvectors) > 1 and is_pos_pow_two(len(eigenvectors)), \
@@ -67,7 +67,7 @@ def get_change_of_basis_from_eigvecs(eigenvectors: Sequence[np.ndarray]) -> np.n
         shape = eig.shape
         if len(shape) == 1:
             eig = eig[np.newaxis]
-        eigs.append(eig.reshape(max(shape),1))
+        eigs.append(eig.reshape(max(shape), 1))
 
     dim = eigs[0].shape[0]
     id_dim = np.eye(dim)
@@ -127,7 +127,7 @@ def all_eigenvector_prep_meas_settings(qubits: Sequence[int], change_of_basis: P
 
 
 def pick_two_eigenvecs_prep_meas_settings(fix_qubit: Tuple[int, int], rotate_qubit: int,
-                                          change_of_basis: Program = None):
+                                          change_of_basis: Optional[Program] = None):
     prep_prog = Program()
     if change_of_basis is not None:
         prep_prog += change_of_basis
@@ -142,7 +142,7 @@ def pick_two_eigenvecs_prep_meas_settings(fix_qubit: Tuple[int, int], rotate_qub
     fixed_q_ops = [PauliTerm('I', fix_qubit[0]), PauliTerm('Z', fix_qubit[0])]
     rot_q_ops = [PauliTerm('X', rotate_qubit), PauliTerm('Y', rotate_qubit)]
 
-    settings = [ExperimentSetting(init_state, term1*term2) for term1 in fixed_q_ops for term2 in
+    settings = [ExperimentSetting(init_state, term1 * term2) for term1 in fixed_q_ops for term2 in
                 rot_q_ops]
 
     # prepare superposition, return to z basis, then do the measurement settings.
@@ -232,7 +232,8 @@ def get_additive_error_factor(M_j: float, max_additive_error: float) -> float:
 
 
 def num_trials(depth, max_depth, multiplicative_factor: float = 1.0,
-               additive_error: float = None, alpha: float = 5/2, beta: float = 1/2) -> int:
+               additive_error: Optional[float] = None, alpha: float = 5 / 2, beta: float = 1 / 2) \
+        -> int:
     """
     Calculate the optimal number of shots per program with a given depth.
 
@@ -258,8 +259,8 @@ def num_trials(depth, max_depth, multiplicative_factor: float = 1.0,
 
 def acquire_rpe_data(qc: QuantumComputer,
                      experiments: Sequence[ObservablesExperiment],
-                     multiplicative_factor: float = 1.0, additive_error: float = None,
-                     min_shots: int = 500,  active_reset: bool = False,
+                     multiplicative_factor: float = 1.0, additive_error: Optional[float] = None,
+                     min_shots: int = 500, active_reset: bool = False,
                      mitigate_readout_errors: bool = False, show_progress_bar: bool = False) \
         -> List[List[ExperimentResult]]:
     """
@@ -334,7 +335,7 @@ def _xci(h: int) -> float:
 
 
 def get_variance_upper_bound(num_depths: int, multiplicative_factor: float = 1.0,
-                             additive_error: float = None) -> float:
+                             additive_error: Optional[float] = None) -> float:
     """
     Equation V.9 in [RPE]_
 
@@ -358,7 +359,7 @@ def get_variance_upper_bound(num_depths: int, multiplicative_factor: float = 1.0
 
 
 def estimate_phase_from_moments(xs: List, ys: List, x_stds: List, y_stds: List,
-                                bloch_data: List = None) -> float:
+                                bloch_data: Optional[List] = None) -> float:
     """
     Estimate the phase in an iterative fashion as described in section V. of [RPE]_
 
@@ -383,7 +384,7 @@ def estimate_phase_from_moments(xs: List, ys: List, x_stds: List, y_stds: List,
             # cannot reliably place the vector an any quadrant of the circle, so terminate
             warnings.warn("Decoherence limited estimate of phase {0:.3f} to depth {1:d}. You may "
                           "want to increase the additive_error and/or multiplicative_factor and "
-                          "try again.".format(theta_est % (2 * pi), k//2))
+                          "try again.".format(theta_est % (2 * pi), k // 2))
             break
 
         # get back an estimate between -pi and pi
@@ -514,7 +515,7 @@ def robust_phase_estimate(results: List[List[ExperimentResult]], qubits: Sequenc
 
         x_exps, y_exps = expectations
         x_std_errs, y_std_errs = std_errs
-        for x_exp, y_exp, x_err, y_err in zip(x_exps, y_exps, x_std_errs,  y_std_errs):
+        for x_exp, y_exp, x_err, y_err in zip(x_exps, y_exps, x_std_errs, y_std_errs):
             relative_phases.append(estimate_phase_from_moments(x_exp, y_exp, x_err, y_err))
 
     return relative_phases
@@ -525,7 +526,8 @@ def robust_phase_estimate(results: List[List[ExperimentResult]], qubits: Sequenc
 #########
 
 # TODO: provide more convenient entry for 2q experiments (xs,ys etc. are easy to get for 1q)
-def plot_rpe_iterations(xs, ys, x_stds, y_stds, expected_positions: List = None) -> plt.Axes:
+def plot_rpe_iterations(xs, ys, x_stds, y_stds, expected_positions: Optional[List] = None) \
+        -> plt.Axes:
     """
     Creates a polar plot of the estimated location of the state in the plane perpendicular to the
     axis of rotation for each iteration of RPE.
@@ -570,8 +572,8 @@ def plot_rpe_iterations(xs, ys, x_stds, y_stds, expected_positions: List = None)
 
 
 def do_rpe(qc: QuantumComputer, rotation: Program, changes_of_basis: List[Program],
-           qubit_groups: Sequence[Sequence[int]],  num_depths: int = 6,
-           multiplicative_factor: float = 1.0, additive_error: float = None,
+           qubit_groups: Sequence[Sequence[int]], num_depths: int = 6,
+           multiplicative_factor: float = 1.0, additive_error: Optional[float] = None,
            active_reset: bool = False,
            mitigate_readout_errors: bool = False,
            show_progress_bar: bool = False) \
