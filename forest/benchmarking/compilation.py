@@ -3,7 +3,7 @@ from math import pi
 import numpy as np
 from typing import Tuple
 
-from pyquil.gates import RX, RZ, CZ, I
+from pyquil.gates import RX, RZ, CZ, I, XY
 from pyquil.quil import Program
 from pyquil.quilbase import Gate
 
@@ -212,6 +212,8 @@ def basic_compile(program: Program):
 
             if inst.name == 'CZ':
                 new_prog += CZ(*inst.qubits)  # remove dag modifiers
+            elif inst.name == 'XY':
+                new_prog += XY(angle_param, *inst.qubits)
             elif inst.name == 'I':
                 new_prog += I(inst.qubits[0])  # remove dag modifiers
             elif inst.name == 'RZ':

@@ -1,4 +1,4 @@
-pyquil>=2.7.0
+pyquil>=2.14
 numpy
 networkx
 pandas
@@ -20,6 +20,7 @@ pytest-cov
 referenceqvm
 requests
 scikit-learn
+coverage<5
 
 # doc dependencies
 sphinx

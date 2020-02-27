@@ -50,7 +50,8 @@ setup(
     long_description_content_type="text/markdown",
     long_description=open('README.md').read(),
     install_requires=[
-        'pyquil>=2.7.0',
+        'pyquil>=2.14.0',
+        'coverage<5'
         'numpy',
         'networkx',
         'pandas',
