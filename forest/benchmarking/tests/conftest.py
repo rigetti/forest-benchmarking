@@ -53,7 +53,7 @@ def test_qc():
 def qvm():
     try:
         qc = get_qc('9q-square-qvm')
-        qc.compiler.client.timeout = 1
+        qc.compiler.client.timeout = 10
         qc.run_and_measure(Program(I(0)), trials=1)
         return qc
     except (RequestException, TimeoutError) as e:
@@ -89,7 +89,7 @@ def cxn():
 @pytest.fixture(scope='session')
 def benchmarker():
     try:
-        benchmarker = get_benchmarker(timeout=1)
+        benchmarker = get_benchmarker(timeout=10)
         benchmarker.apply_clifford_to_pauli(Program(I(0)), sX(0))
         return benchmarker
     except (RequestException, TimeoutError) as e:

@@ -1,6 +1,16 @@
 Changelog
 =========
 
+[v0.7.2](https://github.com/rigetti/forest-benchmarking/compare/v0.7.1...master) (in development)
+------------------------------------------------------------------------------------
+
+### Bugfixes
+
+- Fix compiler timeout during test (@jlapeyre) (gh-208)
+- Fix type error in pauli coefficient in observable calibration for recent pyquil versions (@kylegulshen) (gh-207)
+- Add noise definition only once to quil program (@kylegulshen) (gh-206)
+
+
 v0.7.1 (November 25, 2019)
 --------------------------
 
