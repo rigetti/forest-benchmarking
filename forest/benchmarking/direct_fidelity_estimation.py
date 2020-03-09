@@ -34,12 +34,12 @@ def generate_exhaustive_process_dfe_experiment(benchmarker: BenchmarkConnection,
             https://doi.org/10.1103/PhysRevLett.106.230501
             https://arxiv.org/abs/1104.4695
 
-    :param benchmarker: object returned from pyquil.api.get_benchmarker() used to conjugate each 
+    :param benchmarker: object returned from pyquil.api.get_benchmarker() used to conjugate each
         Pauli by the Clifford program
     :param program: A program comprised of Clifford group gates that defines the process for
         which we estimate the fidelity.
     :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
-        used in ``program``, in which case it is assumed the identity acts on these qubits. 
+        used in ``program``, in which case it is assumed the identity acts on these qubits.
         Note that we assume qubits are initialized to the ``|0>`` state.
     :return: an ObservablesExperiment that constitutes a process DFE experiment.
     """
@@ -76,12 +76,12 @@ def generate_exhaustive_state_dfe_experiment(benchmarker: BenchmarkConnection, p
 
     The algorithm is due to [DFE1]_ and [DFE2]_.
 
-    :param benchmarker: object returned from pyquil.api.get_benchmarker() used to conjugate each 
+    :param benchmarker: object returned from pyquil.api.get_benchmarker() used to conjugate each
         Pauli by the Clifford program
     :param program: A program comprised of Clifford group gates that constructs a state
         for which we estimate the fidelity.
     :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
-        used in ``program``, in which case it is assumed the identity acts on these qubits. 
+        used in ``program``, in which case it is assumed the identity acts on these qubits.
         Note that we assume qubits are initialized to the ``|0>`` state.
     :return: an ObservablesExperiment that constitutes a state DFE experiment.
     """
@@ -107,11 +107,11 @@ def generate_monte_carlo_state_dfe_experiment(benchmarker: BenchmarkConnection, 
     :param program: A program comprised of clifford gates that constructs a state
         for which we estimate the fidelity.
     :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
-        used in ``program``, in which case it is assumed the identity acts on these qubits. 
+        used in ``program``, in which case it is assumed the identity acts on these qubits.
         Note that we assume qubits are initialized to the ``|0>`` state.
     :param benchmarker: The `BenchmarkConnection` object used to design experiments
-    :param n_terms: Number of randomly chosen observables to measure. This number should be 
-        a constant less than ``2**len(qubits)``, otherwise ``exhaustive_state_dfe`` is more efficient.
+    :param n_terms: Number of randomly chosen observables to measure. This number should be a
+        constant less than ``2**len(qubits)``, otherwise ``exhaustive_state_dfe`` is more efficient.
     :return: an ObservablesExperiment that constitutes a state DFE experiment.
     """
     # pick n_terms different random combinations of I and Z on the qubits
@@ -142,11 +142,12 @@ def generate_monte_carlo_process_dfe_experiment(benchmarker: BenchmarkConnection
     :param program: A program comprised of Clifford group gates that constructs a state
         for which we estimate the fidelity.
     :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
-        used in ``program``, in which case it is assumed the identity acts on these qubits. 
+        used in ``program``, in which case it is assumed the identity acts on these qubits.
         Note that we assume qubits are initialized to the ``|0>`` state.
     :param benchmarker: The `BenchmarkConnection` object used to design experiments
-    :param n_terms: Number of randomly chosen observables to measure. This number should be 
-        a constant less than ``2**len(qubits)``, otherwise ``exhaustive_process_dfe`` is more efficient.
+    :param n_terms: Number of randomly chosen observables to measure. This number should be a
+        constant less than ``2**len(qubits)``, otherwise ``exhaustive_process_dfe`` is more
+        efficient.
     :return: an ObservablesExperiment that constitutes a process DFE experiment.
     """
     single_q_paulis = ['I', 'X', 'Y', 'Z']
@@ -270,22 +271,22 @@ def estimate_dfe(results: List[ExperimentResult], kind: str) -> Tuple[float, flo
 
     d = 2 ** len(qubits)
 
-    # The subtlety in estimating the fidelity from a set of expectations of Pauli operators is that it is essential
-    # to include the expectation of the identity in the calculation -- without it the fidelity estimate will be biased
-    # downwards.
+    # The subtlety in estimating the fidelity from a set of expectations of Pauli operators is that
+    # it is essential to include the expectation of the identity in the calculation -- without it
+    # the fidelity estimate will be biased downwards.
 
-    # However, there is no need to estimate the expectation of the identity: it is an experiment that always
-    # yields 1 as a result, so its expectation is 1. This quantity must be included in the calculation with the proper
-    # weight, however. For state fidelity estimation, we should choose the identity to be measured one out of every
-    # d times. For process fidelity estimation, we should choose to prepare and measure the identity one out of every
-    # d**2 times.
+    # However, there is no need to estimate the expectation of the identity: it is an experiment
+    # that always yields 1 as a result, so its expectation is 1. This quantity must be included
+    # in the calculation with the proper weight, however. For state fidelity estimation,
+    # we should choose the identity to be measured one out of every d times. For process fidelity
+    # estimation, we should choose to prepare and measure the identity one out of every d**2 times.
 
-    # The mean expected value for the (non-trivial) Pauli operators that are measured must be scaled
-    # as well -- each non-trivial Pauli should be selected 1 in every d or d**2 times (depending on whether we do
-    # states or processes), but if we choose Pauli ops uniformly from the d-1 or d**2-1 non-trivial Paulis, we
-    # again introduce a bias. So the mean expected value of non-trivial Paulis that are sampled must be weighted
-    # by (d-1)/d (for states) or (d**2-1)/d**2 (for processes). Similarly, variance estimates must
-    # be scaled appropriately.
+    # The mean expected value for the (non-trivial) Pauli operators that are measured must be
+    # scaled as well -- each non-trivial Pauli should be selected 1 in every d or d**2 times
+    # (depending on whether we do states or processes), but if we choose Pauli ops uniformly from
+    # the d-1 or d**2-1 non-trivial Paulis, we again introduce a bias. So the mean expected value
+    # of non-trivial Paulis that are sampled must be weighted by (d-1)/d (for states) or (
+    # d**2-1)/d**2 (for processes). Similarly, variance estimates must be scaled appropriately.
 
     expectations = [res.expectation for res in results]
     std_errs = np.asarray([res.std_err for res in results])
@@ -313,7 +314,7 @@ def do_dfe(qc: QuantumComputer, benchmarker: BenchmarkConnection, program: Progr
            show_progress_bar: bool = False) \
         -> Tuple[Tuple[float, float], ObservablesExperiment, List[ExperimentResult]]:
     """
-    A wrapper around experiment generation, data acquisition, and estimation that runs a DFE 
+    A wrapper around experiment generation, data acquisition, and estimation that runs a DFE
     experiment and returns the (fidelity, std_err) pair along with the experiment and results.
 
     :param qc: A quantum computer object on which the experiment will run.
@@ -323,7 +324,7 @@ def do_dfe(qc: QuantumComputer, benchmarker: BenchmarkConnection, program: Progr
         state or defines the process for which we estimate the fidelity, depending on whether
         ``kind`` is 'state' or 'process' respectively.
     :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
-        used in ``program``, in which case it is assumed the identity acts on these qubits. 
+        used in ``program``, in which case it is assumed the identity acts on these qubits.
         Note that we assume qubits are initialized to the ``|0>`` state.
     :param kind: A string describing the kind of DFE to do ('state' or 'process')
     :param mc_n_terms: Number of randomly chosen observables to measure for Monte Carlo DFE.

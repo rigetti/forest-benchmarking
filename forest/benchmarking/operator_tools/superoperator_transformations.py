@@ -25,7 +25,7 @@ Further references include:
        https://arxiv.org/abs/quant-ph/0401119
 
 """
-from typing import Sequence, Tuple, List
+from typing import Sequence, Tuple, List, Optional
 import numpy as np
 from forest.benchmarking.utils import n_qubit_pauli_basis
 
@@ -51,7 +51,7 @@ def vec(matrix: np.ndarray) -> np.ndarray:
     return np.asarray(matrix).T.reshape((-1, 1))
 
 
-def unvec(vector: np.ndarray, shape: Tuple[int, int] = None) -> np.ndarray:
+def unvec(vector: np.ndarray, shape: Optional[Tuple[int, int]] = None) -> np.ndarray:
     """
     Take a column vector and turn it into a matrix.
 
@@ -194,8 +194,9 @@ def chi2pauli_liouville(chi_matrix: np.ndarray) -> np.ndarray:
 
 def chi2kraus(chi_matrix: np.ndarray) -> List[np.ndarray]:
     """
-    Converts a chi matrix into a list of Kraus operators. (operators with small norm may be
-    excluded)
+    Converts a chi matrix into a list of Kraus operators.
+
+    Operators with small norm may be excluded.
 
     :param chi_matrix:  a dim**2 by dim**2 process matrix
     :return: list of Kraus operators
@@ -227,7 +228,9 @@ def chi2choi(chi_matrix: np.ndarray) -> np.ndarray:
 
 def superop2kraus(superop: np.ndarray) -> List[np.ndarray]:
     """
-    Converts a superoperator into a list of Kraus operators. (operators with small norm may be excluded)
+    Converts a superoperator into a list of Kraus operators.
+
+    Operators with small norm may be excluded.
 
     :param superop: a dim**2 by dim**2 superoperator
     :return: list of Kraus operators
@@ -237,7 +240,9 @@ def superop2kraus(superop: np.ndarray) -> List[np.ndarray]:
 
 def superop2chi(superop: np.ndarray) -> np.ndarray:
     """
-    Converts a superoperator into a list of Kraus operators. (operators with small norm may be excluded)
+    Converts a superoperator into a list of Kraus operators.
+
+    Operators with small norm may be excluded.
 
     :param superop: a dim**2 by dim**2 superoperator
     :return: a dim**2 by dim**2 process matrix
@@ -247,7 +252,9 @@ def superop2chi(superop: np.ndarray) -> np.ndarray:
 
 def superop2pauli_liouville(superop: np.ndarray) -> np.ndarray:
     """
-    Converts a superoperator into a pauli_liouville matrix. This is achieved by a linear change of basis.
+    Converts a superoperator into a pauli_liouville matrix.
+
+    This is achieved by a linear change of basis.
 
     :param superop: a dim**2 by dim**2 superoperator
     :return: dim**2 by dim**2 Pauli-Liouville matrix
@@ -259,7 +266,9 @@ def superop2pauli_liouville(superop: np.ndarray) -> np.ndarray:
 
 def superop2choi(superop: np.ndarray) -> np.ndarray:
     """
-    Convert a superoperator into a choi matrix. The operation acts equivalently to choi2superop, as it is a bijection.
+    Convert a superoperator into a choi matrix.
+
+    The operation acts equivalently to choi2superop, as it is a bijection.
 
     :param superop: a dim**2 by dim**2 superoperator
     :return: dim**2 by dim**2 choi matrix
@@ -270,7 +279,8 @@ def superop2choi(superop: np.ndarray) -> np.ndarray:
 
 def pauli_liouville2kraus(pl_matrix: np.ndarray) -> List[np.ndarray]:
     """
-    Converts a pauli_liouville matrix into a list of Kraus operators. (operators with small norm may be excluded)
+    Converts a pauli_liouville matrix into a list of Kraus operators; operators with small norm
+    may be excluded.
 
     :param pl_matrix: a dim**2 by dim**2 pauli_liouville matrix
     :return: list of Kraus operators
@@ -280,7 +290,7 @@ def pauli_liouville2kraus(pl_matrix: np.ndarray) -> List[np.ndarray]:
 
 def pauli_liouville2chi(pl_matrix: np.ndarray) -> np.ndarray:
     """
-    Converts a pauli_liouville matrix into a chi matrix. (operators with small norm may be excluded)
+    Converts a pauli_liouville matrix into a chi matrix; operators with small norm may be excluded.
 
     :param pl_matrix: a dim**2 by dim**2 pauli_liouville matrix
     :return: a dim**2 by dim**2 process matrix
@@ -290,7 +300,9 @@ def pauli_liouville2chi(pl_matrix: np.ndarray) -> np.ndarray:
 
 def pauli_liouville2superop(pl_matrix: np.ndarray) -> np.ndarray:
     """
-    Converts a pauli_liouville matrix into a superoperator. This is achieved by a linear change of basis.
+    Converts a pauli_liouville matrix into a superoperator.
+
+    This is achieved by a linear change of basis.
 
     :param pl_matrix: a dim**2 by dim**2 Pauli-Liouville matrix
     :return: dim**2 by dim**2 superoperator
@@ -312,8 +324,8 @@ def pauli_liouville2choi(pl_matrix: np.ndarray) -> np.ndarray:
 
 def choi2kraus(choi: np.ndarray, tol: float = 1e-9) -> List[np.ndarray]:
     """
-    Converts a Choi matrix into a list of Kraus operators. (operators with small norm may be
-    excluded)
+    Converts a Choi matrix into a list of Kraus operators. ; operators with small norm may be
+    excluded.
 
     :param choi: a dim**2 by dim**2 choi matrix
     :param tol: optional threshold parameter for eigenvalues/kraus ops to be discarded
@@ -326,7 +338,10 @@ def choi2kraus(choi: np.ndarray, tol: float = 1e-9) -> List[np.ndarray]:
 
 def choi2chi(choi: np.ndarray) -> np.ndarray:
     """
-    Converts a Choi matrix into a chi matrix. (operators with small norm may be excluded)
+    Converts a Choi matrix into a chi matrix.
+
+    Operators with small norm may be excluded.
+
     :param choi: a dim**2 by dim**2 choi matrix
     :return: a dim**2 by dim**2 process matrix
     """
@@ -335,7 +350,9 @@ def choi2chi(choi: np.ndarray) -> np.ndarray:
 
 def choi2superop(choi: np.ndarray) -> np.ndarray:
     """
-    Convert a choi matrix into a superoperator. The operation acts equivalently to superop2choi, as it is a bijection.
+    Convert a choi matrix into a superoperator.
+
+    The operation acts equivalently to superop2choi, as it is a bijection.
 
     :param choi: a dim**2 by dim**2 choi matrix
     :return: dim**2 by dim**2 superoperator
@@ -357,7 +374,7 @@ def choi2pauli_liouville(choi: np.ndarray) -> np.ndarray:
 def pauli2computational_basis_matrix(dim) -> np.ndarray:
     r"""
     Produces a basis transform matrix that converts from the unnormalized pauli basis to the
-    computational basis
+    computational basis.
 
     .. math::
 
