@@ -10,6 +10,7 @@ from pyquil.numpy_simulator import NumpyWavefunctionSimulator
 from forest.benchmarking.observable_estimation import _one_q_state_prep
 
 from numpy.testing import assert_almost_equal, assert_allclose
+import numpy as np
 
 
 def test_exhaustive_state_dfe(benchmarker: BenchmarkConnection):
@@ -62,6 +63,22 @@ def test_exhaustive_state_dfe_run(benchmarker: BenchmarkConnection):
 
         expectation = wfnsim.reset().do_program(prog).expectation(setting.observable)
         assert expectation == 1.
+
+
+def test_exhaustive_process_dfe_analytical(benchmarker: BenchmarkConnection, qvm):
+    qubits = [0, 1]
+    ideal_process = Program(I(qubits[0]), I(qubits[1]))
+
+    # generate process DFE experiment to estimate fidelity to I
+    expt = generate_exhaustive_process_dfe_experiment(benchmarker, ideal_process, qubits)
+
+    # modify the experiment object to do the noisy program instead
+    expt.program = CZ(*qubits)
+    expt_data = acquire_dfe_data(qvm, expt, num_shots=100, calibrate_observables=False)
+    fid_est, fid_std_err = estimate_dfe(expt_data, 'process')
+    analytical_fidelity = (4 + 10 + 6 * np.cos(np.pi)) / 20
+
+    assert_allclose(fid_est, analytical_fidelity, atol=3 * fid_std_err)
 
 
 def test_monte_carlo_process_dfe(benchmarker: BenchmarkConnection):

@@ -1,84 +1,15 @@
 import functools
 import itertools
-from operator import mul
-from typing import List, Sequence, Iterable, Tuple
+from typing import List, Tuple
 
 import numpy as np
 
 from pyquil import Program
 from pyquil.api import BenchmarkConnection, QuantumComputer
 from forest.benchmarking.observable_estimation import ExperimentResult, ExperimentSetting, \
-    ObservablesExperiment, TensorProductState, estimate_observables, plusX, minusX, plusY, minusY,\
-    plusZ, minusZ, calibrate_observable_estimates, group_settings
-from pyquil.paulis import PauliTerm, sI, sX, sY, sZ
-
-
-def _state_to_pauli(state: TensorProductState) -> PauliTerm:
-    """
-    Converts a TensorProductState that is the eigenstate of some Pauli operator into its
-    associated PauliTerm.
-
-    The overall sign of the returned Pauli is the sign of the eigenvalue for the state.
-
-    .. note:: exactly the qubits explicitly referenced in the `state` will be considered,
-        so be careful distinguishing between an explicit ``|0>`` (+Z) state and an implicit ``|0>``
-        state which is ignored.
-
-    :param state: the state to convert
-    :return: the associated Pauli represented as a :class:`pyquil.paulis.PauliTerm`.
-    """
-    term = sI()
-    for oneq_st in state.states:
-        if oneq_st.label == 'X':
-            term *= sX(oneq_st.qubit)
-        elif oneq_st.label == 'Y':
-            term *= sY(oneq_st.qubit)
-        elif oneq_st.label == 'Z':
-            term *= sZ(oneq_st.qubit)
-        else:
-            raise ValueError(f"Can't convert state {state} to a PauliTerm")
-
-        if oneq_st.index == 1:
-            term *= -1
-    return term
-
-
-def _exhaustive_dfe(benchmarker: BenchmarkConnection, program: Program, qubits: Sequence[int],
-                    in_states) -> Iterable[ExperimentSetting]:
-    """
-    Yield experiments over itertools.product(in_states).
-
-    Used as a helper function for generate_exhaustive_xxx_dfe_experiment routines.
-
-    :param benchmarker: object returned from pyquil.api.get_benchmarker() used to conjugate each
-        Pauli by the Clifford program
-    :param program: A program comprised of Clifford gates
-    :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
-        used in ``program``, in which case it is assumed the identity acts on these qubits.
-        Note that we assume qubits are initialized to the ``|0>`` state.
-    :param in_states: Use these single-qubit Pauli operators in every itertools.product()
-        to generate an exhaustive list of DFE experiments.
-    :return: experiment setting iterator for exhaustive dfe settings
-    """
-    n_qubits = len(qubits)
-    for i_states in itertools.product(in_states, repeat=n_qubits):
-        # distinguish between a Z eigenstate and None
-        i_st = functools.reduce(mul, (op(q) for op, q in zip(i_states, qubits) if op is not None),
-                                TensorProductState())
-
-        # explicitly initialize the in_state with None set to zero, i.e. plus Z eigenstate.
-        in_state_with_zeros = functools.reduce(mul,
-                                               (plusZ(q) if op is None else op(q)
-                                                for op, q in zip(i_states, qubits)),
-                                               TensorProductState())
-
-        if len(i_st) == 0:
-            continue
-
-        yield ExperimentSetting(
-            in_state=in_state_with_zeros,
-            observable=benchmarker.apply_clifford_to_pauli(program, _state_to_pauli(i_st)),
-        )
+    ObservablesExperiment, TensorProductState, estimate_observables, \
+    calibrate_observable_estimates, group_settings, _OneQState, zeros_state
+from forest.benchmarking.utils import str_to_pauli_term, all_traceless_pauli_z_terms
 
 
 def generate_exhaustive_process_dfe_experiment(benchmarker: BenchmarkConnection, program: Program,
@@ -112,11 +43,27 @@ def generate_exhaustive_process_dfe_experiment(benchmarker: BenchmarkConnection,
         Note that we assume qubits are initialized to the ``|0>`` state.
     :return: an ObservablesExperiment that constitutes a process DFE experiment.
     """
-    expt = ObservablesExperiment(
-        list(_exhaustive_dfe(benchmarker=benchmarker, program=program, qubits=qubits,
-                             in_states=[None, plusX, minusX, plusY, minusY, plusZ, minusZ])),
-        program=program)
-    return expt
+    settings = []
+    # generate all n-qubit pauli strings but skip the first all identity term
+    for pauli_labels in [''.join(x) for x in itertools.product('IXYZ', repeat=len(qubits))][1:]:
+        # calculate the appropriate output pauli from applying the ideal program to the Pauli
+        observable = benchmarker.apply_clifford_to_pauli(program,
+                                                         str_to_pauli_term(pauli_labels, qubits))
+        # keep track of non-identity terms that may have a sign contribution
+        non_identity_idx = [0 if label == 'I' else 1 for label in pauli_labels]
+        # now replace the identities with Z terms, so they can be decomposed into Z eigenstates
+        state_labels = ['Z' if label == 'I' else label for label in pauli_labels]
+
+        # loop over the ±1 eigenstates of each Pauli
+        for eigenstate in itertools.product([0, 1], repeat=len(qubits)):
+            in_state = TensorProductState(_OneQState(l, s, q) for l, s, q in zip(state_labels,
+                                                                                 eigenstate,
+                                                                                 qubits))
+            # make the observable negative if the in_state is a negative eigenstate
+            sign_contribution = (-1) ** np.dot(eigenstate, non_identity_idx)
+            settings.append(ExperimentSetting(in_state=in_state,
+                                              observable=observable * sign_contribution))
+    return ObservablesExperiment(settings, program=program)
 
 
 def generate_exhaustive_state_dfe_experiment(benchmarker: BenchmarkConnection, program: Program,
@@ -138,55 +85,13 @@ def generate_exhaustive_state_dfe_experiment(benchmarker: BenchmarkConnection, p
         Note that we assume qubits are initialized to the ``|0>`` state.
     :return: an ObservablesExperiment that constitutes a state DFE experiment.
     """
-    expt = ObservablesExperiment(
-        list(_exhaustive_dfe(benchmarker=benchmarker, program=program, qubits=qubits,
-                             in_states=[None, plusZ])),
-        program=program)
-    return expt
-
-
-def _monte_carlo_dfe(benchmarker: BenchmarkConnection, program: Program, qubits: Sequence[int],
-                     in_states: list, n_terms: int) -> Iterable[ExperimentSetting]:
-    """
-    Yield experiments over itertools.product(in_paulis).
-
-    Used as a helper function for generate_monte_carlo_xxx_dfe_experiment routines.
-
-    :param benchmarker: object returned from pyquil.api.get_benchmarker() used to conjugate each
-        Pauli by the Clifford program
-    :param program: A program comprised of clifford gates
-    :param qubits: The qubits to perform DFE on. This can be a superset of the qubits
-        used in ``program``, in which case it is assumed the identity acts on these qubits.
-        Note that we assume qubits are initialized to the ``|0>`` state.
-    :param in_states: Use these single-qubit Pauli operators in every itertools.product()
-        to generate an exhaustive list of DFE experiments.
-    :param n_terms: Number of preparation and measurement settings to be chosen at random
-    :return: experiment setting iterator
-    """
-    all_st_inds = np.random.randint(len(in_states), size=(n_terms, len(qubits)))
-    for st_inds in all_st_inds:
-        # begin loop in case the state ends up being trivial (all chosen states are None)
-        while True:
-            i_st = functools.reduce(mul, (in_states[si](qubits[i])
-                                          for i, si in enumerate(st_inds)
-                                          if in_states[si] is not None), TensorProductState())
-            if len(i_st) > 0:
-                # this choice is not trivial so continue
-                break
-
-            # pick new state indices and try again
-            st_inds = np.random.randint(len(in_states), size=len(qubits))
-
-        # explicitly initialize the in_state with None set to zero, i.e. plus Z eigenstate.
-        in_state_with_zeros = functools.reduce(mul, (plusZ(qubits[i]) if in_states[si] is None
-                                                     else in_states[si](qubits[i])
-                                                     for i, si in enumerate(st_inds)),
-                                               TensorProductState())
-
-        yield ExperimentSetting(
-            in_state=in_state_with_zeros,
-            observable=benchmarker.apply_clifford_to_pauli(program, _state_to_pauli(i_st)),
-        )
+    # measure all of the traceless combinations of I and Z on the qubits conjugated by the ideal
+    # Clifford state preparation program. The in_state is all the all zero state since this is
+    # the assumed initialization of the state preparation.
+    settings = [ExperimentSetting(in_state=zeros_state(qubits),
+                                  observable=benchmarker.apply_clifford_to_pauli(program, iz_pauli))
+                for iz_pauli in all_traceless_pauli_z_terms(qubits)]
+    return ObservablesExperiment(settings, program=program)
 
 
 def generate_monte_carlo_state_dfe_experiment(benchmarker: BenchmarkConnection, program: Program,
@@ -209,11 +114,19 @@ def generate_monte_carlo_state_dfe_experiment(benchmarker: BenchmarkConnection, 
         constant less than ``2**len(qubits)``, otherwise ``exhaustive_state_dfe`` is more efficient.
     :return: an ObservablesExperiment that constitutes a state DFE experiment.
     """
-    expt = ObservablesExperiment(
-        list(_monte_carlo_dfe(benchmarker=benchmarker, program=program, qubits=qubits,
-                              in_states=[None, plusZ], n_terms=n_terms)),
-        program=program)
-    return expt
+    # pick n_terms different random combinations of I and Z on the qubits
+    rand_iz_paulis = np.random.choice(['I', 'Z'], size=(n_terms, len(qubits)))
+
+    settings = []
+    for iz_pauli in rand_iz_paulis:
+        # sample a new state if this one is all identity
+        while 'Z' not in iz_pauli:
+            iz_pauli = np.random.choice(['I', 'Z'], size=len(qubits))
+        # conjugate the non-trivial iz Pauli by the ideal state prep program
+        obs = benchmarker.apply_clifford_to_pauli(program, str_to_pauli_term(''.join(iz_pauli)))
+        settings.append(ExperimentSetting(zeros_state(qubits), obs))
+
+    return ObservablesExperiment(settings, program=program)
 
 
 def generate_monte_carlo_process_dfe_experiment(benchmarker: BenchmarkConnection, program: Program,
@@ -237,12 +150,36 @@ def generate_monte_carlo_process_dfe_experiment(benchmarker: BenchmarkConnection
         efficient.
     :return: an ObservablesExperiment that constitutes a process DFE experiment.
     """
-    expt = ObservablesExperiment(
-        list(_monte_carlo_dfe(benchmarker=benchmarker, program=program, qubits=qubits,
-                              in_states=[None, plusX, minusX, plusY, minusY, plusZ, minusZ],
-                              n_terms=n_terms)),
-        program=program)
-    return expt
+    single_q_paulis = ['I', 'X', 'Y', 'Z']
+    # pick n_terms different random combinations of I, X, Y, Z on the qubits
+    rand_paulis = np.random.randint(len(single_q_paulis), size=(n_terms, len(qubits)))
+
+    settings = []
+    for pauli_idxs in rand_paulis:
+        # sample a new state if this one is all identity
+        while sum(pauli_idxs) == 0:
+            pauli_idxs = np.random.randint(len(single_q_paulis), size=len(qubits))
+        # convert from indices to string
+        pauli_str = ''.join([single_q_paulis[idx] for idx in pauli_idxs])
+        # convert from string to PauliTerm on appropriate qubits
+        pauli = str_to_pauli_term(pauli_str, qubits)
+        # calculate the appropriate output pauli from applying the ideal program to the Pauli
+        observable = benchmarker.apply_clifford_to_pauli(program, pauli)
+
+        # now replace the identities with Z terms, so they can be decomposed into Z eigenstates
+        state_labels = ['Z' if label == 'I' else label for label in pauli_str]
+
+        # randomly pick between ±1 eigenstates of each Pauli
+        eigenstate = np.random.randint(2, size=len(qubits))
+        in_state = TensorProductState(_OneQState(l, s, q) for l, s, q in zip(state_labels,
+                                                                             eigenstate, qubits))
+        # make the observable negative if the in_state is a negative eigenstate
+        # only keep track of minus eigenstates associated to non-identity Paulis, i.e. idx >= 1
+        sign_contribution = (-1) ** np.dot(eigenstate, [min(1, idx) for idx in pauli_idxs])
+        settings.append(ExperimentSetting(in_state=in_state,
+                                          observable=observable * sign_contribution))
+
+    return ObservablesExperiment(settings, program=program)
 
 
 def acquire_dfe_data(qc: QuantumComputer, expt: ObservablesExperiment, num_shots: int = 10_000,
@@ -332,7 +269,7 @@ def estimate_dfe(results: List[ExperimentResult], kind: str) -> Tuple[float, flo
     qubits = list(functools.reduce(lambda x, y: set(x) | set(y),
                                    [res.setting.observable.get_qubits() for res in results]))
 
-    d = 2**len(qubits)
+    d = 2 ** len(qubits)
 
     # The subtlety in estimating the fidelity from a set of expectations of Pauli operators is that
     # it is essential to include the expectation of the identity in the calculation -- without it
@@ -357,13 +294,13 @@ def estimate_dfe(results: List[ExperimentResult], kind: str) -> Tuple[float, flo
     if kind.lower() == 'state':
         # introduce bias due to measuring the identity
         mean_est = (d - 1) / d * np.mean(expectations) + 1.0 / d
-        var_est = (d - 1)**2 / d**2 * np.sum(std_errs**2) / len(expectations) ** 2
+        var_est = (d - 1) ** 2 / d ** 2 * np.sum(std_errs ** 2) / len(expectations) ** 2
     elif kind.lower() == 'process':
         # introduce bias due to measuring the identity
-        p_mean = (d**2 - 1) / d**2 * np.mean(expectations) + 1.0 / d**2
-        mean_est = (d**2 * p_mean + d) / (d**2 + d)
-        var_est = d**2 / (d + 1)**2 * (d**2 - 1)**2 / d**4 * np.sum(std_errs**2) / \
-                  len(expectations)**2
+        p_mean = (d ** 2 - 1) / d ** 2 * np.mean(expectations) + 1.0 / d ** 2
+        mean_est = (d ** 2 * p_mean + d) / (d ** 2 + d)
+        var_est = d ** 2 / (d + 1) ** 2 * (d ** 2 - 1) ** 2 / d ** 4 * np.sum(std_errs ** 2) / len(
+            expectations) ** 2
     else:
         raise ValueError('Kind can only be \'state\' or \'process\'.')
 
