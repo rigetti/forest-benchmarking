@@ -9,6 +9,7 @@ Changelog
 - Fix compiler timeout during test (@jlapeyre) (gh-208)
 - Fix type error in pauli coefficient in observable calibration for recent pyquil versions (@kylegulshen) (gh-207)
 - Add noise definition only once to quil program (@kylegulshen) (gh-206)
+- Preserve program metadata in `basic_compile` (@kilimanjaro) (gh-214)
 
 
 v0.7.1 (November 25, 2019)
