@@ -190,9 +190,7 @@ def basic_compile(program: Program):
     :return: a program with some of the input non-native quil gates replaced with basic native quil
         gate implementations.
     """
-    new_prog = Program()
-    new_prog.num_shots = program.num_shots
-    new_prog.inst(program.defined_gates)
+    new_prog = program.copy_everything_except_instructions()
 
     daggered_defgates = []
 
