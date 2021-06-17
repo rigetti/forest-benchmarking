@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-from pyquil.gate_matrices import X, Y, Z, H
+from pyquil.simulation.matrices import X, Y, Z, H
 from forest.benchmarking.operator_tools.random_operators import haar_rand_unitary
 from forest.benchmarking.operator_tools.validate_operator import *
 

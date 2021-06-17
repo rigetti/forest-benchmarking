@@ -7,11 +7,11 @@ import forest.benchmarking.distance_measures as dm
 import numpy as np
 import pytest
 import os
-from pyquil.gate_matrices import I as I_MAT
-from pyquil.gate_matrices import X as X_MAT
-from pyquil.gate_matrices import Y as Y_MAT
-from pyquil.gate_matrices import H as H_MAT
-from pyquil.gate_matrices import CNOT as CNOT_MAT
+from pyquil.simulation.matrices import I as I_MAT
+from pyquil.simulation.matrices import X as X_MAT
+from pyquil.simulation.matrices import Y as Y_MAT
+from pyquil.simulation.matrices import H as H_MAT
+from pyquil.simulation.matrices import CNOT as CNOT_MAT
 
 numpy.random.seed(7)  # seed random number generation for all calls to rand_ops
 

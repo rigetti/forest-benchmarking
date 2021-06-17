@@ -1,0 +1,29 @@
+name: Tests
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.7, 3.8, 3.9]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Test (Python ${{ matrix.python-version }})
+        run: |
+          docker run --rm -itd -p 5555:5555 rigetti/quilc -S
+          docker run --rm -itd -p 5000:5000 rigetti/qvm -S
+          apt update -y && apt install -y libblas-dev liblapack-dev
+          pip install -r requirements-ci.txt && pip install -e .
+          MPLBACKEND=Agg pytest

@@ -31,7 +31,7 @@ def test_majority_gate(qvm):
         for q in range(3):
             prog += MEASURE(q, ro[q])
         exe = qvm.compiler.native_quil_to_executable(prog)
-        result = qvm.run(exe)
+        result = qvm.run(exe).readout_data.get('ro')
         assert tuple(result[0]) == true_truth_table[key]
 
 
@@ -59,7 +59,7 @@ def test_unmajority_add_gate(qvm):
         for q in range(3):
             prog += MEASURE(q, ro[q])
         exe = qvm.compiler.native_quil_to_executable(prog)
-        result = qvm.run(exe)
+        result = qvm.run(exe).readout_data.get('ro')
         assert tuple(result[0]) == true_truth_table[key]
 
 
@@ -87,7 +87,7 @@ def test_composition_of_majority_and_unmajority_gates(qvm):
         for q in range(3):
             prog += MEASURE(q, ro[q])
         exe = qvm.compiler.native_quil_to_executable(prog)
-        result = qvm.run(exe)
+        result = qvm.run(exe).readout_data.get('ro')
         assert tuple(result[0]) == true_truth_table[key]
 
 
@@ -118,7 +118,7 @@ def test_CNOT_in_X_basis(qvm):
         for q in range(2):
             prog += MEASURE(q, ro[q])
         exe = qvm.compiler.native_quil_to_executable(prog)
-        result = qvm.run(exe)
+        result = qvm.run(exe).readout_data.get('ro')
         assert tuple(result[0]) == true_truth_table[key]
 
 
@@ -153,5 +153,5 @@ def test_CCNOT_in_X_basis(qvm):
         for q in range(3):
             prog += MEASURE(q, ro[q])
         exe = qvm.compiler.native_quil_to_executable(prog)
-        result = qvm.run(exe)
+        result = qvm.run(exe).readout_data.get('ro')
         assert tuple(result[0]) == true_truth_table[key]

@@ -1,8 +1,7 @@
-import numpy as np
-from pyquil.gate_matrices import I, X, Y, Z, H, CNOT
-from forest.benchmarking.operator_tools.superoperator_transformations import kraus2choi
-from forest.benchmarking.operator_tools.validate_superoperator import *
+from pyquil.simulation.matrices import I, X, Y, Z, H, CNOT
+
 from forest.benchmarking.operator_tools.project_superoperators import *
+from forest.benchmarking.operator_tools.validate_superoperator import *
 
 
 def test_proj_to_cp():

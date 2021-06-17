@@ -5,7 +5,7 @@ from forest.benchmarking.operator_tools.random_operators import haar_rand_unitar
 from forest.benchmarking.tomography import generate_state_tomography_experiment, _R, \
     iterative_mle_state_estimate, estimate_variance, linear_inv_state_estimate, do_tomography
 from pyquil.gates import I, H, CZ
-from pyquil.numpy_simulator import NumpyWavefunctionSimulator
+from pyquil.simulation import NumpyWavefunctionSimulator
 from forest.benchmarking.observable_estimation import estimate_observables, ExperimentResult, \
     ExperimentSetting, zeros_state, calibrate_observable_estimates
 from pyquil.paulis import sI, sZ, sX

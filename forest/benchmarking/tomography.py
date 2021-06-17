@@ -9,7 +9,7 @@ from scipy.linalg import logm, pinv
 
 from pyquil import Program
 from pyquil.api import QuantumComputer
-from pyquil.unitary_tools import lifted_pauli as pauli2matrix, lifted_state_operator as state2matrix
+from pyquil.simulation.tools import lifted_pauli as pauli2matrix, lifted_state_operator as state2matrix
 
 import forest.benchmarking.distance_measures as dm
 from forest.benchmarking.utils import all_traceless_pauli_terms
