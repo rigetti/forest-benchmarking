@@ -35,7 +35,7 @@ def test_1q_general_pauli_noise(qvm, benchmarker):
     depths = [depth for depth in depths for _ in range(num_sequences_per_depth)]
     qubits = (0, )
 
-    sequences = generate_rb_experiment_sequences(benchmarker, qubits, depths)
+    sequences = generate_rb_experiment_sequences(benchmarker, qubits, depths, random_seed=1)
     add_noise_to_sequences(sequences, qubits)
 
     expts = group_sequences_into_parallel_experiments([sequences], [qubits])
@@ -66,7 +66,7 @@ def test_2q_general_pauli_noise(qvm, benchmarker):
     depths = [depth for depth in depths for _ in range(num_sequences_per_depth)]
     qubits = (0, 1)
 
-    sequences = generate_rb_experiment_sequences(benchmarker, qubits, depths)
+    sequences = generate_rb_experiment_sequences(benchmarker, qubits, depths, random_seed=1)
     add_noise_to_sequences(sequences, qubits)
 
     expts = group_sequences_into_parallel_experiments([sequences], [qubits])
@@ -190,7 +190,8 @@ def test_unitarity(qvm, benchmarker):
     kraus_ops = depolarizing_noise(len(qubits), expected_p)
 
     sequences = generate_rb_experiment_sequences(benchmarker, qubits, depths,
-                                                 use_self_inv_seqs=False)
+                                                 use_self_inv_seqs=False,
+                                                 random_seed=1)
     add_noise_to_sequences(sequences, qubits)
 
     expts = group_sequences_into_parallel_experiments([sequences], [qubits], is_unitarity_expt=True)
