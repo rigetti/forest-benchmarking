@@ -1,4 +1,4 @@
-pyquil>=3.0.0,<4.0.0
+pyquil~=3.0
 numpy
 networkx
 pandas

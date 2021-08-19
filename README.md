@@ -1,8 +1,6 @@
 Forest Benchmarking: QCVV using PyQuil
 ======================================
 
-[![Build Status](https://semaphoreci.com/api/v1/rigetti/forest-benchmarking/branches/master/shields_badge.svg)](https://semaphoreci.com/rigetti/forest-benchmarking)
-[![Documentation Status](https://readthedocs.org/projects/forest-benchmarking/badge/?version=latest)](https://forest-benchmarking.readthedocs.io/en/latest/?badge=latest)
 [![pypi version](https://img.shields.io/pypi/v/forest-benchmarking)](https://pypi.org/project/forest-benchmarking/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.3455847.svg)](https://doi.org/10.5281/zenodo.3455847)
 [![slack workspace](https://img.shields.io/badge/slack-rigetti--forest-812f82.svg?)](https://join.slack.com/t/rigetti-forest/shared_invite/enQtNTUyNTE1ODg3MzE2LWExZWU5OTE4YTJhMmE2NGNjMThjOTM1MjlkYTA5ZmUxNTJlOTVmMWE0YjA3Y2M2YmQzNTZhNTBlMTYyODRjMzA)
