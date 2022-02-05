@@ -6,7 +6,7 @@ from forest.benchmarking.direct_fidelity_estimation import \
 from pyquil import Program
 from pyquil.api import BenchmarkConnection
 from pyquil.gates import *
-from pyquil.numpy_simulator import NumpyWavefunctionSimulator
+from pyquil.simulation import NumpyWavefunctionSimulator
 from forest.benchmarking.observable_estimation import _one_q_state_prep
 
 from numpy.testing import assert_almost_equal, assert_allclose

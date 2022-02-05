@@ -9,9 +9,9 @@ from forest.benchmarking.observable_estimation import estimate_observables, Expe
     ObservablesExperiment, \
     _one_q_state_prep
 from pyquil import Program
-from pyquil import gate_matrices as mat
+from pyquil.simulation import matrices as mat
 from pyquil.gates import CNOT, X, H
-from pyquil.numpy_simulator import NumpyWavefunctionSimulator
+from pyquil.simulation import NumpyWavefunctionSimulator
 
 
 def wfn_estimate_observables(n_qubits, tomo_expt: ObservablesExperiment):

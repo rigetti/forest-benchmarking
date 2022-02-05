@@ -2,7 +2,6 @@ import re
 
 import numpy as np
 from pyquil import Program
-from pyquil.device import gates_in_isa
 from pyquil.gates import I, RX, CNOT, MEASURE
 from pyquil.noise import decoherence_noise_with_asymmetric_ro
 
@@ -36,7 +35,7 @@ def test_get_flipped_program():
 
 
 def test_readout_confusion_matrix_consistency(qvm):
-    noise_model = decoherence_noise_with_asymmetric_ro(gates=gates_in_isa(qvm.device.get_isa()))
+    noise_model = decoherence_noise_with_asymmetric_ro(qvm.quantum_processor.to_compiler_isa())
     qvm.qam.noise_model = noise_model
     qvm.qam.random_seed = 1
     num_shots = 500
@@ -74,7 +73,7 @@ def test_readout_confusion_matrix_consistency(qvm):
 
 
 def test_reset_confusion_consistency(qvm):
-    noise_model = decoherence_noise_with_asymmetric_ro(gates=gates_in_isa(qvm.device.get_isa()))
+    noise_model = decoherence_noise_with_asymmetric_ro(qvm.quantum_processor.to_compiler_isa())
     qvm.qam.noise_model = noise_model
     qvm.qam.random_seed = 1
     num_trials = 10

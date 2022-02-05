@@ -1,8 +1,19 @@
 Changelog
 =========
 
-[v0.7.2](https://github.com/rigetti/forest-benchmarking/compare/v0.7.1...master) (in development)
+[next](https://github.com/rigetti/forest-benchmarking/compare/v0.7.1...master) (in development)
 ------------------------------------------------------------------------------------
+
+### Announcements
+
+### Bugfixes
+
+v0.8.0 (February 4, 2022)
+------------------------------------------------------------------------------------
+
+### Announcements
+
+- Upgraded pyQuil to v3 (gh-215). As a result, the minimum supported Python version is now 3.7.
 
 ### Bugfixes
 

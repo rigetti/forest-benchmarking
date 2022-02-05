@@ -1,18 +1,18 @@
 import itertools
 from collections import OrderedDict
-from random import random, seed
-from typing import Sequence, List, Set, Tuple
 from datetime import date, datetime
-from git import Repo
-import numpy as np
-from numpy import pi
-import pandas as pd
+from random import random, seed
+from typing import Sequence, Tuple
 
+import numpy as np
+import pandas as pd
+from git import Repo
+from numpy import pi
+from pyquil.api import QuantumComputer
 from pyquil.gates import I, RX, RY, RZ, H, MEASURE
-from pyquil.gate_matrices import X, Y, Z
 from pyquil.paulis import PauliTerm
 from pyquil.quil import Program
-from pyquil.api import QuantumComputer
+from pyquil.simulation.matrices import X, Y, Z
 
 
 def is_pos_pow_two(x: int) -> bool:

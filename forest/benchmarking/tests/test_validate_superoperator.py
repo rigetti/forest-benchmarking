@@ -1,4 +1,4 @@
-from pyquil.gate_matrices import H
+from pyquil.simulation.matrices import H
 import forest.benchmarking.operator_tools.random_operators as rand_ops
 from forest.benchmarking.operator_tools.superoperator_transformations import chi2choi
 from forest.benchmarking.tests.test_superoperator_transformations import (

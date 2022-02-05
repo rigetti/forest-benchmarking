@@ -21,7 +21,7 @@ def test_one_bit_addition(qvm):
     for key, value in true_truth_table.items():
         adder_prog = adder([key[0]], [key[1]], [2], [1], 0, 3)
         exe = qvm.compile(adder_prog)
-        result = qvm.run(exe)
+        result = qvm.run(exe).readout_data.get('ro')
 
         assert tuple(result[0]) == value
 
@@ -38,6 +38,6 @@ def test_one_bit_addition_X_basis(qvm):
     for key, value in true_truth_table.items():
         adder_prog = adder([key[0]], [key[1]], [2], [1], 0, 3, in_x_basis=True)
         exe = qvm.compile(adder_prog)
-        result = qvm.run(exe)
+        result = qvm.run(exe).readout_data.get('ro')
 
         assert tuple(result[0]) == value

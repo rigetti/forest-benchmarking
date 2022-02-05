@@ -10,7 +10,7 @@ Checklist
 - [ ] There is a unit test that covers these changes.
 - [ ] The code respects the API separation discussed in .github/CONTRIBUTING.md.
 - [ ] Relevant references and equations are cited using our standard reference style.
-- [ ] All new and existing tests pass locally and on Semaphore.
+- [ ] All new and existing tests pass locally and on PR checks.
 - [ ] Parameters have type hints with [PEP 484 syntax](https://www.python.org/dev/peps/pep-0484/).
 - [ ] Functions and classes have useful sphinx-style docstrings.
 - [ ] (New Feature) The docs and example notebooks have been updated accordingly.

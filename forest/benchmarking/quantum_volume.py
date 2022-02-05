@@ -6,10 +6,11 @@ from statistics import median
 from copy import copy
 
 from pyquil.api import QuantumComputer
-from pyquil.numpy_simulator import NumpyWavefunctionSimulator
+from pyquil.simulation import NumpyWavefunctionSimulator
 from pyquil.quil import DefGate, Program, Pragma
 from rpcq.messages import TargetDevice
 from rpcq._utils import RPCErrorError
+from pyquil.external.rpcq import CompilerISA
 
 from forest.benchmarking.operator_tools.random_operators import haar_rand_unitary
 from forest.benchmarking.utils import bit_array_to_int
@@ -58,9 +59,9 @@ def _naive_program_generator(qc: QuantumComputer, qubits: Sequence[int],
         prog.measure(qubit, ro[idx])
 
     # restrict compilation to chosen qubits
-    isa_dict = qc.device.get_isa().to_dict()
-    single_qs = isa_dict['1Q']
-    two_qs = isa_dict['2Q']
+    isa = qc.quantum_processor.to_compiler_isa()
+    single_qs = isa.qubits
+    two_qs = isa.edges
 
     new_1q = {}
     for key, val in single_qs.items():
@@ -72,10 +73,10 @@ def _naive_program_generator(qc: QuantumComputer, qubits: Sequence[int],
         if int(q1) in qubits and int(q2) in qubits:
             new_2q[key] = val
 
-    new_isa = {'1Q': new_1q, '2Q': new_2q}
+    new_isa = CompilerISA.parse_obj({'1Q': new_1q, '2Q': new_2q})
 
     new_compiler = copy(qc.compiler)
-    new_compiler.target_device = TargetDevice(isa=new_isa, specs=qc.device.get_specs().to_dict())
+    new_compiler.target_device = TargetDevice(isa=new_isa.dict(by_alias=True), specs={})
     # try to compile with the restricted qubit topology
     try:
         native_quil = new_compiler.quil_to_native_quil(prog)
@@ -192,7 +193,7 @@ def sample_rand_circuits_for_heavy_out(qc: QuantumComputer,
         # run the program num_shots many times
         program.wrap_in_numshots_loop(num_shots)
         executable = qc.compiler.native_quil_to_executable(program)
-        results = qc.run(executable)
+        results = qc.run(executable).readout_data.get('ro')
 
         # classically simulate model circuit represented by the perms and gates for heavy outputs
         heavy_outputs = collect_heavy_outputs(wfn_sim, permutations, gates)

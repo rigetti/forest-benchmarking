@@ -1,13 +1,14 @@
 import numpy as np
-from pyquil.gate_matrices import I
-from forest.benchmarking.tests.test_superoperator_transformations import (amplitude_damping_choi,
-                                                                          ONE_STATE,
-                                                                          rho_out)
+from pyquil.simulation.matrices import I
+
 from forest.benchmarking.operator_tools.apply_superoperator import apply_choi_matrix_2_state
 from forest.benchmarking.operator_tools.calculational import (partial_trace,
                                                               outer_product,
                                                               inner_product,
                                                               sqrtm_psd)
+from forest.benchmarking.tests.test_superoperator_transformations import (amplitude_damping_choi,
+                                                                          ONE_STATE,
+                                                                          rho_out)
 
 
 def test_partial_trace():

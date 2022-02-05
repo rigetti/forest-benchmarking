@@ -1,4 +1,4 @@
-pyquil>=2.14
+pyquil~=3.0
 numpy
 networkx
 pandas
@@ -8,7 +8,6 @@ sympy
 python-rapidjson
 seaborn
 cvxpy>=1.0.0
-dataclasses; python_version < "3.7"
 tqdm
 gitpython
 matplotlib>=3.1.0
@@ -20,7 +19,7 @@ pytest-cov
 referenceqvm
 requests
 scikit-learn
-coverage<5
+coverage
 
 # doc dependencies
 sphinx

@@ -1,5 +1,5 @@
-import numpy as np
-from pyquil.gate_matrices import X, Y, Z, H
+from pyquil.simulation.matrices import X, Z, H
+
 from forest.benchmarking.operator_tools.superoperator_transformations import *
 
 

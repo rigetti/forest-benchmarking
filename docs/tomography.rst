@@ -10,14 +10,14 @@ Running State Tomography
 Prepare the experiments
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-We wish to perform state tomography on a graph state on qubits 0-1 on the 9q-generic-noisy-qvm
+We wish to perform state tomography on a graph state on qubits 0-1 on a noisy 9q-square-qvm
 
 .. code:: ipython3
 
     from pyquil import Program, get_qc
     from pyquil.gates import *
     qubits = [0, 1]
-    qc = get_qc("9q-generic-noisy-qvm")
+    qc = get_qc("9q-square-qvm", noisy=True)
 
     state_prep = Program([H(q) for q in qubits])
     state_prep.inst(CZ(0,1))

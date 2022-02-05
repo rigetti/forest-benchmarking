@@ -17,16 +17,15 @@ e.g.
         https://arxiv.org/abs/quant-ph/9511018
 """
 from typing import Sequence, Tuple, Optional
+
 import networkx as nx
 import numpy as np
+from pyquil.api import QuantumComputer
+from pyquil.gates import MEASURE, RESET
+from pyquil.quil import Pragma
+from pyquil.simulation.tools import all_bitstrings
 from scipy.spatial.distance import hamming
 from tqdm import tqdm
-
-from pyquil.gates import CNOT, CCNOT, X, I, H, CZ, MEASURE, RESET
-from pyquil import Program
-from pyquil.quil import Pragma
-from pyquil.api import QuantumComputer
-from pyquil.unitary_tools import all_bitstrings
 
 from forest.benchmarking.classical_logic.primitives import *
 from forest.benchmarking.utils import bit_array_to_int, int_to_bit_array, bitstring_prep, \
@@ -304,11 +303,11 @@ def get_n_bit_adder_results(qc: QuantumComputer, n_bits: int,
         nat_quil = qc.compiler.quil_to_native_quil(prog)
         exe = qc.compiler.native_quil_to_executable(nat_quil)
 
-        # Run it on the QPU or QVM
         if use_param_program:
-            results = qc.run(exe, memory_map={REG_NAME: bits})
-        else:
-            results = qc.run(exe)
+            exe.write_memory(region_name=REG_NAME, value=bits)
+
+        # Run it on the QPU or QVM
+        results = qc.run(exe).readout_data.get('ro')
         all_results.append(results)
 
     return all_results

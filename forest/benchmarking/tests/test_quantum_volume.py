@@ -1,6 +1,6 @@
 import numpy as np
 import warnings
-from pyquil.numpy_simulator import NumpyWavefunctionSimulator
+from pyquil.simulation import NumpyWavefunctionSimulator
 from forest.benchmarking.quantum_volume import *
 from forest.benchmarking.quantum_volume import _naive_program_generator
 
@@ -42,7 +42,7 @@ def test_qv_get_results_by_depth(qvm):
 
             program.wrap_in_numshots_loop(n_shots)
             executable = qvm.compiler.native_quil_to_executable(program)
-            results = qvm.run(executable)
+            results = qvm.run(executable).readout_data.get('ro')
             ckt_results.append(results)
 
             heavy_outputs = collect_heavy_outputs(wfn_sim, permutations, gates)

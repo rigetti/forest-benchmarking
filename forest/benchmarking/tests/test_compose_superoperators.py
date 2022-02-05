@@ -1,9 +1,10 @@
 import numpy as np
-from pyquil.gate_matrices import I, X, H
-from forest.benchmarking.tests.test_superoperator_transformations import amplitude_damping_kraus
-from forest.benchmarking.operator_tools.superoperator_transformations import kraus2superop
+from pyquil.simulation.matrices import I, X, H
+
 from forest.benchmarking.operator_tools.compose_superoperators import (compose_channel_kraus,
                                                                        tensor_channel_kraus)
+from forest.benchmarking.operator_tools.superoperator_transformations import kraus2superop
+from forest.benchmarking.tests.test_superoperator_transformations import amplitude_damping_kraus
 
 
 def bit_flip_kraus(p):

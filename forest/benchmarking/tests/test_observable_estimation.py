@@ -1,16 +1,12 @@
-import functools
-import itertools
 import random
 random.seed(1)  # seed random number generation for all calls to rand_ops
-import numpy as np
-from operator import mul
 
 import pytest
 from pyquil.quilbase import Pragma
-from pyquil import Program, get_qc
+from pyquil import get_qc
 from pyquil.gates import *
-from pyquil.api import WavefunctionSimulator, QVMConnection
-from pyquil.paulis import sI, sX, sY, sZ, PauliSum, PauliTerm
+from pyquil.api import WavefunctionSimulator
+from pyquil.paulis import sX, sY, sZ, PauliSum
 from forest.benchmarking.observable_estimation import *
 from forest.benchmarking.observable_estimation import _OneQState,\
     _max_tpb_overlap, _max_weight_operator, _max_weight_state, _one_q_sic_prep
@@ -220,7 +216,7 @@ def _random_2q_programs(n_progs=3):
         yield prog
 
 
-def test_estimate_observables_many_progs(forest):
+def test_estimate_observables_many_progs():
     # for "random programs" calculate wfn.expectation see if operator estimation gets it right
     expts = [
         ExperimentSetting(TensorProductState(), o1 * o2)
@@ -259,7 +255,7 @@ def test_append():
     assert (len(str(suite))) > 0
 
 
-def test_no_complex_coeffs(forest):
+def test_no_complex_coeffs():
     qc = get_qc('2q-qvm')
     qc.qam.random_seed = 1
     suite = ObservablesExperiment([ExperimentSetting(TensorProductState(), 1.j * sY(0))], program=Program(X(0)))
@@ -437,7 +433,7 @@ def test_expt_settings_diagonal_in_tpb():
     assert not _expt_settings_diagonal_in_tpb(expt_setting2, expt_setting4)
 
 
-def test_identity(forest):
+def test_identity():
     qc = get_qc('2q-qvm')
     qc.qam.random_seed = 1
     suite = ObservablesExperiment([ExperimentSetting(plusZ(0), 0.123 * sI(0))],
@@ -446,7 +442,7 @@ def test_identity(forest):
     assert result.expectation == 0.123
 
 
-def test_sic_process_tomo(forest):
+def test_sic_process_tomo():
     qc = get_qc('2q-qvm')
     qc.qam.random_seed = 1
     process = Program(X(0))
@@ -463,7 +459,7 @@ def test_sic_process_tomo(forest):
     assert len(results) == 4 * 4
 
 
-def test_estimate_observables_symmetrize(forest):
+def test_estimate_observables_symmetrize():
     """
     Symmetrization alone should not change the outcome on the QVM
     """
@@ -485,7 +481,7 @@ def test_estimate_observables_symmetrize(forest):
             assert np.abs(res.expectation) < 0.1
 
 
-def test_estimate_observables_symmetrize_calibrate(forest):
+def test_estimate_observables_symmetrize_calibrate():
     """
     Symmetrization + calibration should not change the outcome on the QVM
     """
@@ -509,7 +505,7 @@ def test_estimate_observables_symmetrize_calibrate(forest):
             assert np.abs(res.expectation) < 0.1
 
 
-def test_estimate_observables_zero_expectation(forest):
+def test_estimate_observables_zero_expectation():
     """
     Testing case when expectation value of observable should be close to zero
     """
@@ -555,7 +551,7 @@ def test_ratio_variance_array():
     np.testing.assert_allclose(ab_ratio_var, np.array([0.028125, 0.0028125, 0.00028125]))
 
 
-def test_estimate_observables_uncalibrated_asymmetric_readout(forest):
+def test_estimate_observables_uncalibrated_asymmetric_readout():
     qc = get_qc('1q-qvm')
     qc.qam.random_seed = 1
     expt1 = ExperimentSetting(TensorProductState(plusX(0)), sX(0))
@@ -579,7 +575,7 @@ def test_estimate_observables_uncalibrated_asymmetric_readout(forest):
     assert np.isclose(np.mean(expect_arr[2::3]), expected_expectation_z_basis, atol=3e-2)
 
 
-def test_estimate_observables_uncalibrated_symmetric_readout(forest):
+def test_estimate_observables_uncalibrated_symmetric_readout():
     #
     qc = get_qc('1q-qvm')
     qc.qam.random_seed = 1
@@ -606,7 +602,7 @@ def test_estimate_observables_uncalibrated_symmetric_readout(forest):
     assert np.isclose(np.mean(uncalibr_e[2::3]), expected_expectation_z_basis, atol=3e-2)
 
 
-def test_estimate_observables_calibrated_symmetric_readout(forest):
+def test_estimate_observables_calibrated_symmetric_readout():
     # expecting the result +1 for calibrated readout
     qc = get_qc('1q-qvm')
     expt1 = ExperimentSetting(TensorProductState(plusX(0)), sX(0))
@@ -630,7 +626,7 @@ def test_estimate_observables_calibrated_symmetric_readout(forest):
     np.testing.assert_allclose(results, 1.0, atol=3e-2)
 
 
-def test_estimate_observables_result_zero_symmetrization_calibration(forest):
+def test_estimate_observables_result_zero_symmetrization_calibration():
     # expecting expectation value to be 0 with symmetrization/calibration
     qc = get_qc('9q-qvm')
     expt1 = ExperimentSetting(TensorProductState(plusX(0)), sZ(0))
@@ -661,7 +657,7 @@ def test_estimate_observables_result_zero_symmetrization_calibration(forest):
     np.testing.assert_allclose(raw_results, 0.0, atol=3e-2)
 
 
-def test_estimate_observables_result_zero_no_noisy_readout(forest):
+def test_estimate_observables_result_zero_no_noisy_readout():
     # expecting expectation value to be 0 with no symmetrization/calibration
     # and no noisy readout
     qc = get_qc('9q-qvm')
@@ -684,7 +680,7 @@ def test_estimate_observables_result_zero_no_noisy_readout(forest):
     np.testing.assert_allclose(results, 0.0, atol=3e-2)
 
 
-def test_estimate_observables_result_zero_no_symm_calibr(forest):
+def test_estimate_observables_result_zero_no_symm_calibr():
     # expecting expectation value to be nonzero with symmetrization/calibration
     qc = get_qc('9q-qvm')
     qc.qam.random_seed = 1
@@ -710,7 +706,7 @@ def test_estimate_observables_result_zero_no_symm_calibr(forest):
     np.testing.assert_allclose(results, expected_result, atol=3e-2)
 
 
-def test_estimate_observables_2q_readout_error_one_measured(forest):
+def test_estimate_observables_2q_readout_error_one_measured():
     # 2q readout errors, but only 1 qubit measured
     qc = get_qc('9q-qvm')
     qc.qam.random_seed = 1
@@ -739,7 +735,7 @@ def test_estimate_observables_2q_readout_error_one_measured(forest):
     assert np.isclose(np.mean(cal_e), 0.849, atol=3e-2)
 
 
-def test_estimate_observables_inherit_noise_errors(forest):
+def test_estimate_observables_inherit_noise_errors():
     qc = get_qc('3q-qvm')
     qc.qam.random_seed = 1
     # specify simplest experiments
@@ -782,7 +778,7 @@ PRAGMA ADD-KRAUS H 2 "(0.0 0.31622776601683794 0.31622776601683794 0.0)"
     assert calibr_prog3.out() == Program(expected_prog).out()
 
 
-def test_expectations_sic0(forest):
+def test_expectations_sic0():
     qc = get_qc('1q-qvm')
     expt1 = ExperimentSetting(SIC0(0), sX(0))
     expt2 = ExperimentSetting(SIC0(0), sY(0))
@@ -804,7 +800,7 @@ def test_expectations_sic0(forest):
     np.testing.assert_allclose(results, expected_results, atol=3e-2)
 
 
-def test_expectations_sic1(forest):
+def test_expectations_sic1():
     qc = get_qc('1q-qvm')
     expt1 = ExperimentSetting(SIC1(0), sX(0))
     expt2 = ExperimentSetting(SIC1(0), sY(0))
@@ -826,7 +822,7 @@ def test_expectations_sic1(forest):
     np.testing.assert_allclose(results, expected_results, atol=3e-2)
 
 
-def test_expectations_sic2(forest):
+def test_expectations_sic2():
     qc = get_qc('1q-qvm')
     expt1 = ExperimentSetting(SIC2(0), sX(0))
     expt2 = ExperimentSetting(SIC2(0), sY(0))
@@ -850,7 +846,7 @@ def test_expectations_sic2(forest):
     np.testing.assert_allclose(results, expected_results, atol=3e-2)
 
 
-def test_expectations_sic3(forest):
+def test_expectations_sic3():
     qc = get_qc('1q-qvm')
     expt1 = ExperimentSetting(SIC3(0), sX(0))
     expt2 = ExperimentSetting(SIC3(0), sY(0))
@@ -874,7 +870,7 @@ def test_expectations_sic3(forest):
     np.testing.assert_allclose(results, expected_results, atol=3e-2)
 
 
-def test_sic_conditions(forest):
+def test_sic_conditions():
     """
     Test that the SIC states indeed yield SIC-POVMs
     """
@@ -914,7 +910,7 @@ def test_sic_conditions(forest):
         assert np.isclose(np.trace(proj_a.dot(proj_b)), 1 / 3)
 
 
-def test_estimate_observables_grouped_expts(forest):
+def test_estimate_observables_grouped_expts():
     qc = get_qc('3q-qvm')
     # this more explicitly uses the list-of-lists-of-ExperimentSettings in ObservablesExperiment
     # create experiments in different groups
@@ -952,7 +948,7 @@ def _point_channel_fidelity_estimate(v, dim=2):
     return (1.0 + np.sum(v) + dim) / (dim * (dim + 1))
 
 
-def test_bit_flip_channel_fidelity(forest):
+def test_bit_flip_channel_fidelity():
     """
     We use Eqn (5) of https://arxiv.org/abs/quant-ph/0701138 to compare the fidelity
     """
@@ -992,7 +988,7 @@ def test_bit_flip_channel_fidelity(forest):
     np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
 
 
-def test_depolarizing_channel_fidelity(forest):
+def test_depolarizing_channel_fidelity():
     """
     We use Eqn (5) of https://arxiv.org/abs/quant-ph/0701138 to compare the fidelity
     """
@@ -1033,7 +1029,7 @@ def test_depolarizing_channel_fidelity(forest):
     np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
 
 
-def test_unitary_channel_fidelity(forest):
+def test_unitary_channel_fidelity():
     """
     We use Eqn (5) of https://arxiv.org/abs/quant-ph/0701138 to compare the fidelity
     """
@@ -1068,7 +1064,7 @@ def test_unitary_channel_fidelity(forest):
     np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
 
 
-def test_bit_flip_channel_fidelity_readout_error(forest):
+def test_bit_flip_channel_fidelity_readout_error():
     """
     We use Eqn (5) of https://arxiv.org/abs/quant-ph/0701138 to compare the fidelity
     """
@@ -1112,7 +1108,7 @@ def test_bit_flip_channel_fidelity_readout_error(forest):
     np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
 
 
-def test_depolarizing_channel_fidelity_readout_error(forest):
+def test_depolarizing_channel_fidelity_readout_error():
     """
     We use Eqn (5) of https://arxiv.org/abs/quant-ph/0701138 to compare the fidelity
     """
@@ -1157,7 +1153,7 @@ def test_depolarizing_channel_fidelity_readout_error(forest):
     np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
 
 
-def test_unitary_channel_fidelity_readout_error(forest):
+def test_unitary_channel_fidelity_readout_error():
     """
     We use Eqn (5) of https://arxiv.org/abs/quant-ph/0701138 to compare the fidelity
     """
@@ -1197,7 +1193,7 @@ def test_unitary_channel_fidelity_readout_error(forest):
 
 
 @pytest.mark.slow
-def test_2q_unitary_channel_fidelity_readout_error(forest):
+def test_2q_unitary_channel_fidelity_readout_error():
     """
     We use Eqn (5) of https://arxiv.org/abs/quant-ph/0701138 to compare the fidelity
     This tests if our dimensionality factors are correct, even in the presence
@@ -1257,7 +1253,7 @@ def test_2q_unitary_channel_fidelity_readout_error(forest):
     np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
 
 
-def test_measure_1q_observable_raw_expectation(forest):
+def test_measure_1q_observable_raw_expectation():
     # testing that we get correct raw expectation in terms of readout errors
     qc = get_qc('1q-qvm')
     expt = ExperimentSetting(TensorProductState(plusZ(0)), sZ(0))
@@ -1285,7 +1281,7 @@ def test_measure_1q_observable_raw_expectation(forest):
     np.testing.assert_allclose(result, expected_result, atol=3e-2)
 
 
-def test_measure_1q_observable_raw_variance(forest):
+def test_measure_1q_observable_raw_variance():
     # testing that we get correct raw std_err in terms of readout errors
     qc = get_qc('1q-qvm')
     expt = ExperimentSetting(TensorProductState(plusZ(0)), sZ(0))
@@ -1314,7 +1310,7 @@ def test_measure_1q_observable_raw_variance(forest):
     np.testing.assert_allclose(result, expected_result, atol=3e-2)
 
 
-def test_measure_1q_observable_calibration_expectation(forest):
+def test_measure_1q_observable_calibration_expectation():
     # testing that we get correct calibration expectation in terms of readout errors
     qc = get_qc('1q-qvm')
     expt = ExperimentSetting(TensorProductState(plusZ(0)), sZ(0))
@@ -1342,7 +1338,7 @@ def test_measure_1q_observable_calibration_expectation(forest):
     np.testing.assert_allclose(result, expected_result, atol=3e-2)
 
 
-def test_measure_1q_observable_calibration_variance(forest):
+def test_measure_1q_observable_calibration_variance():
     # testing that we get correct calibration std_err in terms of readout errors
     qc = get_qc('1q-qvm')
     expt = ExperimentSetting(TensorProductState(plusZ(0)), sZ(0))
@@ -1371,7 +1367,7 @@ def test_measure_1q_observable_calibration_variance(forest):
     np.testing.assert_allclose(result, expected_result, atol=3e-2)
 
 
-def test_uncalibrated_asymmetric_readout_nontrivial_1q_state(forest):
+def test_uncalibrated_asymmetric_readout_nontrivial_1q_state():
     qc = get_qc('1q-qvm')
     expt = ExperimentSetting(TensorProductState(), sZ(0))
     # pick some random value for RX rotation
@@ -1398,7 +1394,7 @@ def test_uncalibrated_asymmetric_readout_nontrivial_1q_state(forest):
     assert np.isclose(np.mean(expect_arr), expected_expectation, atol=3e-2)
 
 
-def test_uncalibrated_symmetric_readout_nontrivial_1q_state(forest):
+def test_uncalibrated_symmetric_readout_nontrivial_1q_state():
     qc = get_qc('1q-qvm')
     qc.qam.random_seed = 1
     expt = ExperimentSetting(TensorProductState(), sZ(0))
@@ -1428,7 +1424,7 @@ def test_uncalibrated_symmetric_readout_nontrivial_1q_state(forest):
     assert np.isclose(np.mean(expect_arr), expected_expectation, atol=3e-2)
 
 
-def test_calibrated_symmetric_readout_nontrivial_1q_state(forest):
+def test_calibrated_symmetric_readout_nontrivial_1q_state():
     qc = get_qc('1q-qvm')
     qc.qam.random_seed = 1
     expt = ExperimentSetting(TensorProductState(), sZ(0))
@@ -1461,7 +1457,7 @@ def test_calibrated_symmetric_readout_nontrivial_1q_state(forest):
     assert np.isclose(np.mean(expect_arr), expected_expectation, atol=3e-2)
 
 
-def test_measure_2q_observable_raw_statistics(forest):
+def test_measure_2q_observable_raw_statistics():
     # testing that we get correct exhaustively symmetrized statistics
     # in terms of readout errors
     # Note: this only tests for exhaustive symmetrization in the presence
@@ -1509,7 +1505,7 @@ def test_measure_2q_observable_raw_statistics(forest):
     np.testing.assert_allclose(result_std_err, simulated_std_err, atol=3e-2)
 
 
-def test_raw_statistics_2q_nontrivial_nonentangled_state(forest):
+def test_raw_statistics_2q_nontrivial_nonentangled_state():
     # testing that we get correct exhaustively symmetrized statistics
     # in terms of readout errors, even for non-trivial 2q nonentangled states
     # Note: this only tests for exhaustive symmetrization in the presence
@@ -1580,7 +1576,7 @@ def test_raw_statistics_2q_nontrivial_nonentangled_state(forest):
     np.testing.assert_allclose(result_std_err, simulated_std_err, atol=3e-2)
 
 
-def test_raw_statistics_2q_nontrivial_entangled_state(forest):
+def test_raw_statistics_2q_nontrivial_entangled_state():
     # testing that we get correct exhaustively symmetrized statistics
     # in terms of readout errors, even for non-trivial 2q entangled states
     # Note: this only tests for exhaustive symmetrization in the presence
@@ -1645,7 +1641,7 @@ def _point_state_fidelity_estimate(v, dim=2):
     return (1.0 + np.sum(v)) / dim
 
 
-def test_bit_flip_state_fidelity(forest):
+def test_bit_flip_state_fidelity():
     qc = get_qc('1q-qvm')
     qc.qam.random_seed = 1
     # prepare experiment setting
@@ -1680,7 +1676,7 @@ def test_bit_flip_state_fidelity(forest):
     np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
 
 
-def test_dephasing_state_fidelity(forest):
+def test_dephasing_state_fidelity():
     qc = get_qc('1q-qvm')
     # prepare experiment setting
     expt = ExperimentSetting(TensorProductState(), sZ(0))
@@ -1713,7 +1709,7 @@ def test_dephasing_state_fidelity(forest):
     np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
 
 
-def test_depolarizing_state_fidelity(forest):
+def test_depolarizing_state_fidelity():
     qc = get_qc('1q-qvm')
     # prepare experiment setting
     expt = ExperimentSetting(TensorProductState(), sZ(0))
@@ -1748,7 +1744,7 @@ def test_depolarizing_state_fidelity(forest):
     np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
 
 
-def test_unitary_state_fidelity(forest):
+def test_unitary_state_fidelity():
     qc = get_qc('1q-qvm')
     # prepare experiment setting
     expt = ExperimentSetting(TensorProductState(), sZ(0))
@@ -1777,7 +1773,7 @@ def test_unitary_state_fidelity(forest):
     np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
 
 
-def test_bit_flip_state_fidelity_readout_error(forest):
+def test_bit_flip_state_fidelity_readout_error():
     qc = get_qc('1q-qvm')
     # prepare experiment setting
     expt = ExperimentSetting(TensorProductState(), sZ(0))
@@ -1814,7 +1810,7 @@ def test_bit_flip_state_fidelity_readout_error(forest):
     np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
 
 
-def test_dephasing_state_fidelity_readout_error(forest):
+def test_dephasing_state_fidelity_readout_error():
     qc = get_qc('1q-qvm')
     # prepare experiment setting
     expt = ExperimentSetting(TensorProductState(), sZ(0))
@@ -1850,7 +1846,7 @@ def test_dephasing_state_fidelity_readout_error(forest):
     np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
 
 
-def test_depolarizing_state_fidelity_readout_error(forest):
+def test_depolarizing_state_fidelity_readout_error():
     qc = get_qc('1q-qvm')
     # prepare experiment setting
     expt = ExperimentSetting(TensorProductState(), sZ(0))
@@ -1888,7 +1884,7 @@ def test_depolarizing_state_fidelity_readout_error(forest):
     np.testing.assert_allclose(expected_fidelity, estimated_fidelity, atol=3e-2)
 
 
-def test_unitary_state_fidelity_readout_error(forest):
+def test_unitary_state_fidelity_readout_error():
     qc = get_qc('1q-qvm')
     # prepare experiment setting
     expt = ExperimentSetting(TensorProductState(), sZ(0))
