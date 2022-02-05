@@ -1,7 +1,14 @@
 Changelog
 =========
 
-[v0.8.0](https://github.com/rigetti/forest-benchmarking/compare/v0.7.1...master) (in development)
+[next](https://github.com/rigetti/forest-benchmarking/compare/v0.7.1...master) (in development)
+------------------------------------------------------------------------------------
+
+### Announcements
+
+### Bugfixes
+
+v0.8.0 (February 4, 2022)
 ------------------------------------------------------------------------------------
 
 ### Announcements
