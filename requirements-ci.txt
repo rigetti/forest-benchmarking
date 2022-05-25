@@ -75,7 +75,7 @@ pycodestyle==2.7.0
 pydantic==1.8.2
 pyflakes==2.3.1
 Pygments==2.9.0
-PyJWT==1.7.1
+PyJWT==2.4.0
 pyparsing==2.4.7
 pyquil==3.0.0
 pyrsistent==0.18.0
