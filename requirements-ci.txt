@@ -25,7 +25,7 @@ gitdb==4.0.7
 GitPython==3.1.18
 h11==0.9.0
 httpcore==0.11.1
-httpx==0.15.5
+httpx==0.23.0
 idna==3.2
 imagesize==1.2.0
 importlib-metadata==3.10.1
