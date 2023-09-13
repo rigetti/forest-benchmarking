@@ -1,12 +1,13 @@
 """
 Test over all inputs
 """
+from pyquil.api import QAM
 from pyquil.quil import Program
 from pyquil.gates import X, I, CNOT, CCNOT, H, MEASURE
 from forest.benchmarking.classical_logic.primitives import *
 
 
-def test_majority_gate(qvm):
+def test_majority_gate(qvm: QAM):
     """
     Testing the majority gate with a truth table
     """
@@ -31,7 +32,7 @@ def test_majority_gate(qvm):
         for q in range(3):
             prog += MEASURE(q, ro[q])
         exe = qvm.compiler.native_quil_to_executable(prog)
-        result = qvm.run(exe).readout_data.get('ro')
+        result = qvm.run(exe).get_register_map().get('ro')
         assert tuple(result[0]) == true_truth_table[key]
 
 
@@ -59,7 +60,7 @@ def test_unmajority_add_gate(qvm):
         for q in range(3):
             prog += MEASURE(q, ro[q])
         exe = qvm.compiler.native_quil_to_executable(prog)
-        result = qvm.run(exe).readout_data.get('ro')
+        result = qvm.run(exe).get_register_map().get('ro')
         assert tuple(result[0]) == true_truth_table[key]
 
 
@@ -87,11 +88,11 @@ def test_composition_of_majority_and_unmajority_gates(qvm):
         for q in range(3):
             prog += MEASURE(q, ro[q])
         exe = qvm.compiler.native_quil_to_executable(prog)
-        result = qvm.run(exe).readout_data.get('ro')
+        result = qvm.run(exe).get_register_map().get('ro')
         assert tuple(result[0]) == true_truth_table[key]
 
 
-def test_CNOT_in_X_basis(qvm):
+def test_CNOT_in_X_basis(qvm: QAM):
     """
     Testing the definition of CNOT in the X basis.
     """
@@ -114,11 +115,11 @@ def test_CNOT_in_X_basis(qvm):
             meas_prog += H(qbit_idx)
 
         prog = state_prep_prog + CNOTX + meas_prog
-        ro = prog.declare('ro', 'BIT', 3)
+        ro = prog.declare('ro', 'BIT', 2)
         for q in range(2):
             prog += MEASURE(q, ro[q])
         exe = qvm.compiler.native_quil_to_executable(prog)
-        result = qvm.run(exe).readout_data.get('ro')
+        result = qvm.run(exe).get_register_map().get('ro')
         assert tuple(result[0]) == true_truth_table[key]
 
 
@@ -153,5 +154,5 @@ def test_CCNOT_in_X_basis(qvm):
         for q in range(3):
             prog += MEASURE(q, ro[q])
         exe = qvm.compiler.native_quil_to_executable(prog)
-        result = qvm.run(exe).readout_data.get('ro')
+        result = qvm.run(exe).get_register_map().get('ro')
         assert tuple(result[0]) == true_truth_table[key]

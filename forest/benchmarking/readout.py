@@ -50,7 +50,7 @@ def estimate_confusion_matrix(qc: QuantumComputer, qubit: int, num_shots: int = 
     ro_zero = zero_meas.declare("ro", "BIT", 1)
     zero_meas += MEASURE(qubit, ro_zero[0])
     zero_meas.wrap_in_numshots_loop(num_shots)
-    should_be_0 = qc.run(qc.compile(zero_meas)).readout_data.get('ro')
+    should_be_0 = qc.run(qc.compile(zero_meas)).get_register_map().get('ro')
 
     # prepare one and measure; repeat shots number of times
     one_meas = Program()
@@ -58,7 +58,7 @@ def estimate_confusion_matrix(qc: QuantumComputer, qubit: int, num_shots: int = 
     ro_one = one_meas.declare("ro", "BIT", 1)
     one_meas += MEASURE(qubit, ro_one[0])
     one_meas.wrap_in_numshots_loop(num_shots)
-    should_be_1 = qc.run(qc.compile(one_meas)).readout_data.get('ro')
+    should_be_1 = qc.run(qc.compile(one_meas)).get_register_map().get('ro')
 
     p00 = 1 - np.mean(should_be_0)
     p11 = np.mean(should_be_1)
@@ -152,9 +152,10 @@ def estimate_joint_confusion_in_set(qc: QuantumComputer, qubits: Sequence[int] =
             matrix = np.zeros((2 ** joint_group_size, 2 ** joint_group_size))
             for row, bitstring in enumerate(itertools.product([0, 1], repeat=joint_group_size)):
 
+                memory_map = {}
                 if use_param_program:
                     # specify bitstring in parameterization at run-time
-                    executable.write_memory(region_name=reg_name, value=[float(b) for b in bitstring])
+                    memory_map[reg_name] = [float(b) for b in bitstring]
 
                 else:
                     # generate program that measures given bitstring on group, and append to start
@@ -164,7 +165,7 @@ def estimate_joint_confusion_in_set(qc: QuantumComputer, qubits: Sequence[int] =
                     executable = qc.compiler.native_quil_to_executable(bitstring_program)
 
                 # update confusion matrix
-                results = qc.run(executable).readout_data.get('ro')
+                results = qc.run(executable, memory_map=memory_map).get_register_map().get('ro')
                 for result in results:
                     base = np.array([2 ** i for i in reversed(range(joint_group_size))])
                     observed = np.sum(base * result)
@@ -298,8 +299,8 @@ def estimate_joint_reset_confusion(qc: QuantumComputer, qubits: Sequence[int] = 
                     # try preparation at most 10 times.
                     for _ in range(10):
                         # prepare the given bitstring and measure
-                        prep_executable.write_memory(region_name=reg_name, value=[float(b) for b in bitstring])
-                        result = qc.run(prep_executable).readout_data.get('ro')
+                        memory_map = {reg_name: [float(b) for b in bitstring]}
+                        result = qc.run(prep_executable, memory_map).get_register_map().get('ro')
 
                         # if the preparation is successful, move on to reset.
                         if np.array_equal(result[0], bitstring):
@@ -317,7 +318,7 @@ def estimate_joint_reset_confusion(qc: QuantumComputer, qubits: Sequence[int] = 
                     for idx, qubit in enumerate(group):
                         reset_measure_program += MEASURE(qubit, ro[idx])
                     executable = qc.compiler.native_quil_to_executable(reset_measure_program)
-                    results = qc.run(executable).readout_data.get('ro')
+                    results = qc.run(executable).get_register_map().get('ro')
 
                     # update confusion matrix
                     for result in results:

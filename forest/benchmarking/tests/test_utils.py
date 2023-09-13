@@ -64,17 +64,17 @@ def test_bitstring_prep():
                                             'RX(0) 5']
     # mixed flips
     flip_prog = bitstring_prep([0, 1, 2, 3, 4, 5], [1, 1, 0, 1, 0, 1])
-    assert flip_prog.out().splitlines() == ['RX(pi) 0',
-                                            'RX(pi) 1',
+    assert flip_prog.out().splitlines() == [f'RX({np.pi}) 0',
+                                            f'RX({np.pi}) 1',
                                             'RX(0) 2',
-                                            'RX(pi) 3',
+                                            f'RX({np.pi}) 3',
                                             'RX(0) 4',
-                                            'RX(pi) 5']
+                                            f'RX({np.pi}) 5']
     # flip all
     flip_prog = bitstring_prep([0, 1, 2, 3, 4, 5], [1, 1, 1, 1, 1, 1])
-    assert flip_prog.out().splitlines() == ['RX(pi) 0',
-                                            'RX(pi) 1',
-                                            'RX(pi) 2',
-                                            'RX(pi) 3',
-                                            'RX(pi) 4',
-                                            'RX(pi) 5']
+    assert flip_prog.out().splitlines() == [f'RX({np.pi}) 0',
+                                            f'RX({np.pi}) 1',
+                                            f'RX({np.pi}) 2',
+                                            f'RX({np.pi}) 3',
+                                            f'RX({np.pi}) 4',
+                                            f'RX({np.pi}) 5']
