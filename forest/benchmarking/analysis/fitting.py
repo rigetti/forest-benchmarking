@@ -186,9 +186,9 @@ BEIGE = '#EAE8C6'
 GRAY = '#494949'
 
 FIT_PLOT_KWS = {
-    'data_kws': {'color': 'black', 'marker': 'o', 'markersize': 4.0},
+    'data_kws': {'color': 'black', 'markersize': 4.0},
     'init_kws': {'color': TEAL, 'alpha': 0.4, 'linestyle': '--'},
-    'fit_kws': {'color': TEAL, 'alpha': 1.0, 'linewidth': 2.0},
+    'fit_kws': {'alpha': 1.0, 'linewidth': 2.0},
     'numpoints': 1000
 }
 
@@ -238,7 +238,7 @@ def plot_figure_for_fit(fit_result: ModelResult, xlabel: str = 'x', ylabel: str 
     axs[0].set_title(title, fontsize=axis_fontsize)
 
     # residuals don't need a legend
-    axs[1].legend().set_visible(False)
+    # axs[1].legend().set_visible(False)
 
     # adjust tick labels for scales
     xticks = ticker.FuncFormatter(lambda x, pos: '{0:g}'.format(x / xscale))

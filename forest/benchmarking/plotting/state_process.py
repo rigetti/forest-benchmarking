@@ -105,7 +105,7 @@ def plot_pauli_transfer_matrix(ptransfermatrix: np.ndarray, ax, labels=None, tit
     im = ax.imshow(ptransfermatrix, interpolation="nearest", cmap="RdBu", vmin=-1, vmax=1)
     if labels is None:
         dim_squared = ptransfermatrix.shape[0]
-        num_qubits = np.int(np.log2(np.sqrt(dim_squared)))
+        num_qubits = np.int32(np.log2(np.sqrt(dim_squared)))
         labels = [''.join(x) for x in itertools.product('IXYZ', repeat=num_qubits)]
     else:
         dim_squared = len(labels)
