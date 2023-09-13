@@ -8,9 +8,7 @@ from forest.benchmarking.entangled_states import *
 
 def test_create_ghz_program(wfn):
     tree = nx.from_edgelist([(0, 1), (0, 2)], create_using=nx.DiGraph())
-    prog = create_ghz_program(tree)
-    for _ in tree.nodes:
-        prog.pop()  # remove measurements
+    prog = create_ghz_program(tree, skip_measurements=True)
     prog = address_qubits(prog)
     wf = wfn.wavefunction(prog)
     should_be = [0.5] + [0] * (2 ** tree.number_of_nodes() - 2) + [0.5]
@@ -52,9 +50,8 @@ def test_create_graph_state():
 def test_measure_graph_state():
     graph = nx.complete_graph(4)
     prog, addr = measure_graph_state(graph, focal_node=0)
-    print(prog.out())
 
-    assert 'RY(theta)' in str(prog)
+    assert 'RY(theta[0])' in str(prog)
     assert addr == list(range(4))
     for a in addr:
         assert f'ro[{a}]' in prog.out()

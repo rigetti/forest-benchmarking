@@ -237,9 +237,6 @@ def plot_figure_for_fit(fit_result: ModelResult, xlabel: str = 'x', ylabel: str 
     axs[0].set_ylabel(ylabel, fontsize=axis_fontsize)
     axs[0].set_title(title, fontsize=axis_fontsize)
 
-    # residuals don't need a legend
-    # axs[1].legend().set_visible(False)
-
     # adjust tick labels for scales
     xticks = ticker.FuncFormatter(lambda x, pos: '{0:g}'.format(x / xscale))
     axs[1].xaxis.set_major_formatter(xticks)
