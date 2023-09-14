@@ -77,7 +77,7 @@ pyflakes==2.3.1
 Pygments==2.9.0
 PyJWT==1.7.1
 pyparsing==2.4.7
-pyquil==3.0.0
+pyquil~=4.0.0rc53
 pyrsistent==0.18.0
 pytest==6.2.4
 pytest-cov==2.12.1
