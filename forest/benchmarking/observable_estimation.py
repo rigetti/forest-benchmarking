@@ -900,7 +900,7 @@ def estimate_observables(qc: QuantumComputer, obs_expt: ObservablesExperiment,
     programs, meas_qubits = generate_experiment_programs(obs_expt, active_reset)
     for prog, meas_qs, settings in zip(tqdm(programs, disable=not show_progress_bar), meas_qubits,
                                        obs_expt):
-        results = qc.run_symmetrized_readout(prog, num_shots, symm_type, meas_qs)
+        results = qc.run_symmetrized_readout(prog, num_shots, symm_type, meas_qs or [0])
 
         for setting in settings:
             observable = setting.observable
@@ -1009,7 +1009,7 @@ def calibrate_observable_estimates(qc: QuantumComputer, expt_results: List[Exper
     calibrations = {}
     for prog, meas_qs, obs in zip(tqdm(programs, disable=not show_progress_bar), meas_qubits,
                                   observables):
-        results = qc.run_symmetrized_readout(prog, num_shots, symm_type, meas_qs)
+        results = qc.run_symmetrized_readout(prog, num_shots, symm_type, meas_qs or [0])
 
         # Obtain statistics from result of experiment
         obs_mean, obs_var = shots_to_obs_moments(results, meas_qs, obs)
