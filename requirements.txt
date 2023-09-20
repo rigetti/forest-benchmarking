@@ -1,4 +1,4 @@
-pyquil~=4.0.0rc53
+pyquil>=4.0.0,<5.0.0
 numpy
 networkx
 pandas
