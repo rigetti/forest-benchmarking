@@ -264,7 +264,7 @@ def generate_t2_echo_experiments(qubits: Sequence[int], times: Sequence[float],
         program = Program()
         settings = []
         for q in qubits:
-            half_delay += Delay(frames=[], qubits=[q], duration=half_time)
+            half_delay = Delay(frames=[], qubits=[q], duration=half_time)
             # echo
             program += [half_delay, RY(pi, q), half_delay]
             # apply detuning
