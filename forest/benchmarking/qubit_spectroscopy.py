@@ -83,7 +83,7 @@ def get_stats_by_qubit(expt_results: List[List[ExperimentResult]]) \
 # ==================================================================================================
 
 
-def generate_t1_experiments(qubits: Sequence[int], times: Sequence[float], is_qvm: bool = False) \
+def generate_t1_experiments(qubits: Sequence[int], times: Sequence[float]) \
         -> List[ObservablesExperiment]:
     """
     Return a ObservablesExperiment containing programs which constitute a t1 experiment to
@@ -95,8 +95,6 @@ def generate_t1_experiments(qubits: Sequence[int], times: Sequence[float], is_qv
     :param qubits: list of qubits to measure.
     :param times: The times at which to measure, given in seconds. Each time is rounded to the
         nearest .1 microseconds.
-    :param is_qvm: If this experiment is destined to run on a QVM. If so,
-        PRAGMA DELAY are not added.
     :return: ObservablesExperiments which will measure the decay of each qubit after
         initialization to the 1 state and delay of t seconds for each t in times.
     """
@@ -106,8 +104,7 @@ def generate_t1_experiments(qubits: Sequence[int], times: Sequence[float], is_qv
         program = Program()
         settings = []
         for q in qubits:
-            if not is_qvm:
-                program += Delay(frames=[], qubits=[q], duration=t)
+            program += Delay(frames=[], qubits=[q], duration=t)
             settings.append(ExperimentSetting(minusZ(q), PauliTerm('Z', q)))
 
         expts.append(ObservablesExperiment([settings], program))
@@ -186,7 +183,7 @@ def do_t1_or_t2(qc: QuantumComputer, qubits: Sequence[int], times: Sequence[floa
     else:
         raise ValueError('Kind must be one of \'t1\', \'t2_star\', or \'t2_echo\'.')
 
-    expts = gen_method(qubits, times, is_qvm='qvm' in qc.name)
+    expts = gen_method(qubits, times)
     results = acquire_qubit_spectroscopy_data(qc, expts, num_shots, show_progress_bar)
     stats = get_stats_by_qubit(results)
     decay_time_by_qubit = {}
@@ -203,7 +200,7 @@ def do_t1_or_t2(qc: QuantumComputer, qubits: Sequence[int], times: Sequence[floa
 #   T2 star and T2 echo functions
 # ==================================================================================================
 def generate_t2_star_experiments(qubits: Sequence[int], times: Sequence[float],
-                                 detuning: float = 1e6, is_qvm: bool = False) -> List[ObservablesExperiment]:
+                                 detuning: float = 1e6) -> List[ObservablesExperiment]:
     """
     Return ObservablesExperiments containing programs which constitute a T2 star experiment to
     measure the T2 star coherence decay time for each qubit in qubits.
@@ -218,8 +215,6 @@ def generate_t2_star_experiments(qubits: Sequence[int], times: Sequence[float],
     :param times: the times at which to measure, given in seconds. Each time is rounded to the
         nearest .1 microseconds.
     :param detuning: The additional detuning frequency about the z axis in Hz.
-    :param is_qvm: If this experiment is destined to run on a QVM. If so,
-        PRAGMA DELAY are not added.
     :return: ObservablesExperiments which can be run to acquire an estimate of T2* for each qubit
     """
     expts = []
@@ -228,8 +223,7 @@ def generate_t2_star_experiments(qubits: Sequence[int], times: Sequence[float],
         program = Program()
         settings = []
         for q in qubits:
-            if not is_qvm:
-                program += Delay(frames=[], qubits=[q], duration=t)
+            program += Delay(frames=[], qubits=[q], duration=t)
             program += RZ(2 * pi * t * detuning, q)
             settings.append(ExperimentSetting(minusY(q), PauliTerm('Y', q)))
 
@@ -239,7 +233,7 @@ def generate_t2_star_experiments(qubits: Sequence[int], times: Sequence[float],
 
 
 def generate_t2_echo_experiments(qubits: Sequence[int], times: Sequence[float],
-                                 detuning: float = 1e6, is_qvm: bool = False) -> List[ObservablesExperiment]:
+                                 detuning: float = 1e6) -> List[ObservablesExperiment]:
     """
     Return ObservablesExperiments containing programs which constitute a T2 echo experiment to
     measure the T2 echo coherence decay time.
@@ -261,8 +255,6 @@ def generate_t2_echo_experiments(qubits: Sequence[int], times: Sequence[float],
     :param times: the times at which to measure, given in seconds. Each time is rounded to the
         nearest .1 microseconds.
     :param detuning: The additional detuning frequency about the z axis.
-    :param is_qvm: If this experiment is destined to run on a QVM. If so,
-        PRAGMA DELAY are not added.
     :return: ObservablesExperiments which can be run to acquire an estimate of T2 for each qubit.
     """
     expts = []
@@ -272,12 +264,9 @@ def generate_t2_echo_experiments(qubits: Sequence[int], times: Sequence[float],
         program = Program()
         settings = []
         for q in qubits:
-            if not is_qvm:
-                half_delay += Delay(frames=[], qubits=[q], duration=half_time)
-                # echo
-                program += [half_delay, RY(pi, q), half_delay]
-            else:
-                program += RY(pi, q)
+            half_delay += Delay(frames=[], qubits=[q], duration=half_time)
+            # echo
+            program += [half_delay, RY(pi, q), half_delay]
             # apply detuning
             program += RZ(2 * pi * t * detuning, q)
             settings.append(ExperimentSetting(minusY(q), PauliTerm('Y', q)))
