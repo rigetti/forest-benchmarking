@@ -902,7 +902,7 @@ def estimate_observables(qc: QuantumComputer, obs_expt: ObservablesExperiment,
     for prog, meas_qs, settings in zip(tqdm(programs, disable=not show_progress_bar), meas_qubits,
                                        obs_expt):
         if isinstance(qc.qam, QVM):
-            prog = prog.remove_quilt_instructions()
+            prog = prog.remove_quil_t_instructions()
 
         results = qc.run_symmetrized_readout(prog, num_shots, symm_type, meas_qs or [0])
 
