@@ -26,8 +26,8 @@ def assert_all_close_up_to_global_phase(actual, desired, rtol: float = 1e-7, ato
 
 def test_basic_compile_defgate():
     p = Program()
-    p.inst(RX(pi, 0))
     p.defgate("test", [[0, 1], [1, 0]])
+    p.inst(RX(pi, 0))
     p.inst(("test", 2))
     p.inst(RZ(pi / 2, 0))
 

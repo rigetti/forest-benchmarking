@@ -193,7 +193,7 @@ def sample_rand_circuits_for_heavy_out(qc: QuantumComputer,
         # run the program num_shots many times
         program.wrap_in_numshots_loop(num_shots)
         executable = qc.compiler.native_quil_to_executable(program)
-        results = qc.run(executable).readout_data.get('ro')
+        results = qc.run(executable).get_register_map().get('ro')
 
         # classically simulate model circuit represented by the perms and gates for heavy outputs
         heavy_outputs = collect_heavy_outputs(wfn_sim, permutations, gates)

@@ -8,11 +8,12 @@ from pyquil.quilbase import Pragma
 from forest.benchmarking.compilation import basic_compile
 
 
-def create_ghz_program(tree: nx.DiGraph):
+def create_ghz_program(tree: nx.DiGraph, skip_measurements = False):
     """
     Create a Bell/GHZ state with CNOTs described by tree.
 
     :param tree: A tree that describes the CNOTs to perform to create a bell/GHZ state.
+    :param skip_measurements: Whether to skip adding MEASURE instructions to the program.
     :return: the program
     """
     assert nx.is_tree(tree), 'Needs to be a tree'
@@ -25,8 +26,9 @@ def create_ghz_program(tree: nx.DiGraph):
             program += CNOT(node, child)
 
     ro = program.declare('ro', 'BIT', n_qubits)
-    for i, q in enumerate(nodes):
-        program += MEASURE(q, ro[i])
+    if not skip_measurements:
+        for i, q in enumerate(nodes):
+            program += MEASURE(q, ro[i])
 
     return program
 

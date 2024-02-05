@@ -12,7 +12,7 @@ def out(command):
 
 
 def run_notebook(filename: str):
-    return out('pytest --nbval-lax ' + EXAMPLES_PATH + f'/{filename}')
+    return out('python -m pytest --nbval-lax ' + EXAMPLES_PATH + f'/{filename}')
 
 
 def _is_not_empty_str(string: str) -> bool:

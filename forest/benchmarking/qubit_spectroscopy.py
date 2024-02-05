@@ -6,9 +6,9 @@ from lmfit.model import ModelResult
 from tqdm import tqdm
 
 from pyquil.api import QuantumComputer
-from pyquil.gates import RX, RY, RZ, CZ, MEASURE
+from pyquil.gates import RX, RY, RZ, CZ
 from pyquil.quil import Program
-from pyquil.quilbase import Pragma
+from pyquil.quilbase import Delay
 from pyquil.paulis import PauliTerm
 
 from forest.benchmarking.utils import transform_pauli_moments_to_bit
@@ -104,7 +104,7 @@ def generate_t1_experiments(qubits: Sequence[int], times: Sequence[float]) \
         program = Program()
         settings = []
         for q in qubits:
-            program += Pragma('DELAY', [q], str(t))
+            program += Delay(frames=[], qubits=[q], duration=t)
             settings.append(ExperimentSetting(minusZ(q), PauliTerm('Z', q)))
 
         expts.append(ObservablesExperiment([settings], program))
@@ -223,7 +223,7 @@ def generate_t2_star_experiments(qubits: Sequence[int], times: Sequence[float],
         program = Program()
         settings = []
         for q in qubits:
-            program += Pragma('DELAY', [q], str(t))
+            program += Delay(frames=[], qubits=[q], duration=t)
             program += RZ(2 * pi * t * detuning, q)
             settings.append(ExperimentSetting(minusY(q), PauliTerm('Y', q)))
 
@@ -264,7 +264,7 @@ def generate_t2_echo_experiments(qubits: Sequence[int], times: Sequence[float],
         program = Program()
         settings = []
         for q in qubits:
-            half_delay = Pragma('DELAY', [q], str(half_time))
+            half_delay = Delay(frames=[], qubits=[q], duration=half_time)
             # echo
             program += [half_delay, RY(pi, q), half_delay]
             # apply detuning

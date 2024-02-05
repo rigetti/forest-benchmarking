@@ -154,7 +154,7 @@ def rand_map_with_BCSZ_dist(dim: int, kraus_rank: int) -> np.ndarray:
     # But as we use column stacking we need:
     Q = np.kron(sqrtm(la.inv(rho_red)), np.eye(dim))
     Z = Q @ rho @ Q
-    return Z
+    return Z.astype(np.complex128)
 
 
 def permute_tensor_factors(dims: Union[int, List[int]], perm: List[int]) -> np.ndarray:

@@ -303,11 +303,12 @@ def get_n_bit_adder_results(qc: QuantumComputer, n_bits: int,
         nat_quil = qc.compiler.quil_to_native_quil(prog)
         exe = qc.compiler.native_quil_to_executable(nat_quil)
 
+        memory_map = {}
         if use_param_program:
-            exe.write_memory(region_name=REG_NAME, value=bits)
+            memory_map[REG_NAME] = [bits]
 
         # Run it on the QPU or QVM
-        results = qc.run(exe).readout_data.get('ro')
+        results = qc.run(exe, memory_map).get_register_map().get('ro')
         all_results.append(results)
 
     return all_results

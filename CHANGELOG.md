@@ -1,12 +1,17 @@
 Changelog
 =========
 
-[next](https://github.com/rigetti/forest-benchmarking/compare/v0.7.1...master) (in development)
+v0.9.0 (September 20, 2023)
 ------------------------------------------------------------------------------------
 
 ### Announcements
 
+- Upgraded pyQuil to v4 (gh-237). As a result, the minimum supported Python version is now 3.8.
+
 ### Bugfixes
+
+- Omits `PRAGMA DELAY` from experiments to be run on the QVM.
+
 
 v0.8.0 (February 4, 2022)
 ------------------------------------------------------------------------------------

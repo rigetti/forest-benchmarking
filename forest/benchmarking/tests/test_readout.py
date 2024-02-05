@@ -29,7 +29,7 @@ def test_get_flipped_program():
         if ma is not None:
             matched += 1
             assert int(ma.group(1)) == int(ma.group(2))
-            assert l1 == 'RX(pi) {}'.format(int(ma.group(1)))
+            assert l1 == f'RX({np.pi}) {ma.group(1)}'
 
     assert matched == 2
 
