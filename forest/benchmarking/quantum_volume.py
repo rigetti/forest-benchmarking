@@ -4,6 +4,8 @@ from tqdm import tqdm
 import numpy as np
 from statistics import median
 from copy import copy
+import networkx as nx
+import itertools
 
 from pyquil.api import QuantumComputer
 from pyquil.simulation import NumpyWavefunctionSimulator
@@ -254,6 +256,13 @@ def measure_quantum_volume(qc: QuantumComputer, qubits: Sequence[int] = None,
     :func:`extract_quantum_volume_from_results` for obtaining the quantum volume from the results
     returned by this method.
 
+    .. caution::
+        The default _naive_program_generator picks an arbitrary (non-random) subgraph for each
+        depth. As such, it will likely not select the best subgraph at each depth and may under
+        report the quantum volume. :func:`do_exhaustive_measurement` provides an
+        inefficient solution to this issue. Utilizing a more clever program_generator may also
+        ameliorate this problem.
+
     .. [QVol] Validating quantum computers using randomized model circuits.
            Cross et al.
            arXiv:1811.12926v1  (2018).
@@ -395,3 +404,90 @@ def extract_quantum_volume_from_results(results: Dict[int, Tuple[float, float]])
 
     quantum_volume = 2**max_depth
     return quantum_volume
+
+
+def generate_connected_subgraphs(graph: nx.Graph, n_vert: int):
+    """
+    Given a lattice on the QPU or QVM, specified by a networkx graph, return a list of all
+    induced subgraphs with n_vert connected vertices.
+    :params n_vert: number of vertices of connected subgraph.
+    :params graph: networkx graph
+    :returns: list of subgraphs with n_vert connected vertices
+    """
+    subgraph_list = []
+    for sub_nodes in itertools.combinations(graph.nodes(), n_vert):
+        subg = graph.subgraph(sub_nodes)
+        if nx.is_connected(subg):
+            subgraph_list.append(subg)
+    return subgraph_list
+
+
+def do_exhaustive_measurement(qc: QuantumComputer, lattice: nx.Graph = None,
+                              program_generator: Callable[[QuantumComputer, Sequence[int],
+                                                           Sequence[np.ndarray], np.ndarray],
+                                                          Program] = _naive_program_generator,
+                              num_circuits: int = 100, num_shots: int = 1000,
+                              depths: np.ndarray = None, achievable_threshold: float = 2/3,
+                              stop_when_fail: bool = True, show_progress_bar: bool = False) \
+        -> Dict[int, List[Tuple[float, float]]]:
+    """
+    A wrapper around :func:`measure_quantum_volume` which exhaustively performs quantum volume
+    measurements for all depth-sized induced subgraphs of the lattice for each depth.
+
+    This function reports all of the measured probabilities and one-sided confidence intervals
+    estimated for each induced subgraph. The maximum lower bound for a single depth can be
+    evaluated to decide whether that depth qualifies as achievable. The quantum volume is the
+    maximum depth that is achievable and for which all smaller depths are also achievable.
+
+    Note that this differs from :func:`measure_quantum_volume`, which measures a single arbitrary
+    subgraph for each depth; consequently, this exhaustive measurement will generally report a
+    larger quantum volume, but will also be much slower.
+
+    :param qc: the quantum resource whose volume you wish to measure
+    :param lattice: the lattice of qubits to exhaustively search. Default is the topology of qc.
+    :param program_generator: a method which
+
+        1) takes in a quantum computer, the qubits on that
+            computer available for use, a series of sequences representing the qubit permutations
+            in a model circuit, an array of matrices representing the 2q gates in the model circuit
+        2) outputs a native quil program that implements the circuit and measures the appropriate
+            qubits in the order implicitly dictated by the model circuit representation created in
+            sample_rand_circuits_for_heavy_out.
+
+        The default option simply picks the smallest qubit labels and lets the compiler do the rest.
+    :param num_circuits: number of unique random circuits that will be sampled.
+    :param num_shots: number of shots for each circuit sampled.
+    :param depths: the circuit depths to scan over. Defaults to all depths from 2 to len(qubits)
+    :param achievable_threshold: threshold at which a depth is considered 'achieved'. Eq. 6 of
+        [QVol]_ defines this to be the default of 2/3. To be considered achievable, the estimated
+        probability of sampling a heavy output at the given depth must be large enough such that
+        the one-sided confidence interval of this estimate is greater than the given threshold.
+    :param stop_when_fail: if true, the measurement will stop after the first un-achievable depth
+    :param show_progress_bar: displays a progress bar for each depth if true.
+    :return: dict with key depth and value which is a list containing the tuple
+        (prob_sample_heavy, ons_sided_conf_interval) for each induced subgraph with depth qubits.
+    """
+    if lattice is None:
+        lattice = qc.qubit_topology()
+
+    if depths is None:
+        depths = np.arange(2, lattice.number_of_nodes() + 1)
+
+    lattice_results = {d: [] for d in depths}
+    for d in depths:
+        log.info("Starting depth {}".format(d))
+        subgraphs = generate_connected_subgraphs(lattice, d)
+        for graph in tqdm(subgraphs, disable=not show_progress_bar):
+            lattice_results[d].append(measure_quantum_volume(qc, list(graph.nodes()),
+                                                             program_generator,
+                                                             num_circuits, num_shots, [d],
+                                                             achievable_threshold,
+                                                             stop_when_fail=False)[d])
+        depth_lower_bounds = [result[1] for result in lattice_results[d]]
+        graphs_achieved = [lower_bound > achievable_threshold for lower_bound in depth_lower_bounds]
+        is_achievable = any(graphs_achieved)
+
+        if stop_when_fail and not is_achievable:
+            break
+
+    return lattice_results
