@@ -239,6 +239,8 @@ def basic_compile(program: Program):
                 new_prog += _H(inst.qubits[0])
             elif inst.name == "X":
                 new_prog += _X(inst.qubits[0])
+            elif inst.name == "Z":
+                new_prog += RZ(pi, inst.qubits[0])
             elif inst.name in [gate.name for gate in new_prog.defined_gates]:
                 if needs_dagger and inst.name not in daggered_defgates:
                     new_prog.defgate(inst.name + 'DAG', inst.matrix.T.conj())
