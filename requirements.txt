@@ -1,4 +1,4 @@
-eyquil>=4.14.3,<5.0.0
+pyquil>=4.14.3,<5.0.0
 numpy
 networkx
 packaging
