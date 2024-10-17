@@ -5,6 +5,7 @@ packaging
 pandas
 lmfit
 scipy
+setuptools
 sympy
 python-rapidjson
 seaborn
