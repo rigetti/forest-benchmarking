@@ -11,7 +11,7 @@ from pyquil.quantum_processor import NxQuantumProcessor
 PATH = os.path.dirname(os.path.realpath(__file__))
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def test_qc():
     import networkx as nx
     from forest.benchmarking.compilation import basic_compile
@@ -20,16 +20,18 @@ def test_qc():
     from pyquil.gates import I
 
     class BasicQVMCompiler(AbstractCompiler):
-
         def quil_to_native_quil(self, program: Program, protoquil=None):
             return basic_compile(program)
 
         def native_quil_to_executable(self, nq_program: Program):
             return nq_program
 
+        def reset(self):
+            pass
+
     try:
         qc = QuantumComputer(
-            name='testing-qc',
+            name="testing-qc",
             qam=QVM(random_seed=52),
             compiler=BasicQVMCompiler(
                 quantum_processor=NxQuantumProcessor(nx.complete_graph(2)),
@@ -43,30 +45,35 @@ def test_qc():
         return pytest.skip("This test requires a running local QVM: {}".format(e))
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def qvm():
     try:
-        qc = get_qc('9q-square-qvm', compiler_timeout=10.0)
+        qc = get_qc("9q-square-qvm", compiler_timeout=10.0)
         qc.run(Program(I(0)))
         return qc
     except (RequestError, TimeoutError) as e:
-        return pytest.skip("This test requires a running local QVM and quilc: {}".format(e))
+        return pytest.skip(
+            "This test requires a running local QVM and quilc: {}".format(e)
+        )
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def wfn():
     return WavefunctionSimulator()
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def benchmarker():
     try:
         benchmarker = BenchmarkConnection(timeout=10)
         benchmarker.apply_clifford_to_pauli(Program(I(0)), sX(0))
         return benchmarker
     except (RequestError, TimeoutError) as e:
-        return pytest.skip("This test requires a running local benchmarker endpoint (ie quilc): {}"
-                           .format(e))
+        return pytest.skip(
+            "This test requires a running local benchmarker endpoint (ie quilc): {}".format(
+                e
+            )
+        )
 
 
 def pytest_addoption(parser):
