@@ -35,7 +35,7 @@ def test_qc():
             qam=QVM(random_seed=52),
             compiler=BasicQVMCompiler(
                 quantum_processor=NxQuantumProcessor(nx.complete_graph(2)),
-                timeout=10.0,
+                timeout=20.0,
                 client_configuration=None,
             ),
         )
@@ -65,7 +65,7 @@ def wfn():
 @pytest.fixture(scope="session")
 def benchmarker():
     try:
-        benchmarker = BenchmarkConnection(timeout=10)
+        benchmarker = BenchmarkConnection(timeout=30)
         benchmarker.apply_clifford_to_pauli(Program(I(0)), sX(0))
         return benchmarker
     except (RequestError, TimeoutError) as e:
