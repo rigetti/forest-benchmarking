@@ -35,7 +35,7 @@ def test_qc():
             qam=QVM(random_seed=52),
             compiler=BasicQVMCompiler(
                 quantum_processor=NxQuantumProcessor(nx.complete_graph(2)),
-                timeout=20.0,
+                timeout=15.0,
                 client_configuration=None,
             ),
         )
@@ -45,24 +45,26 @@ def test_qc():
         return pytest.skip("This test requires a running local QVM: {}".format(e))
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def qvm():
     try:
-        qc = get_qc('9q-square-qvm', compiler_timeout=10.0)
+        qc = get_qc("9q-square-qvm", compiler_timeout=15.0)
         qc.run(Program(I(0)))
         return qc
     except (RequestError, TimeoutError) as e:
-        return pytest.skip("This test requires a running local QVM and quilc: {}".format(e))
+        return pytest.skip(
+            "This test requires a running local QVM and quilc: {}".format(e)
+        )
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def wfn():
     return WavefunctionSimulator()
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def benchmarker():
-    try(:
+    try:
         benchmarker = BenchmarkConnection(timeout=30)
         benchmarker.apply_clifford_to_pauli(Program(I(0)), sX(0))
         return benchmarker
