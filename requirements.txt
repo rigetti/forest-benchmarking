@@ -1,6 +1,7 @@
 pyquil>=4.14.3,<5.0.0
 numpy
 networkx
+packaging
 pandas
 lmfit
 scipy
