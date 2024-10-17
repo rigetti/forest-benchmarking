@@ -66,14 +66,14 @@ def _naive_program_generator(qc: QuantumComputer, qubits: Sequence[int],
     new_1q = {}
     for key, val in single_qs.items():
         if int(key) in qubits:
-            new_1q[key] = val
+            new_1q[key] = dict(val.dict())
     new_2q = {}
     for key, val in two_qs.items():
-        q1, q2 = key.split('-')
+        q1, q2 = key.split("-")
         if int(q1) in qubits and int(q2) in qubits:
-            new_2q[key] = val
+            new_2q[key] = val.dict()
 
-    new_isa = CompilerISA.parse_obj({'1Q': new_1q, '2Q': new_2q})
+    new_isa = CompilerISA.parse_obj({"1Q": new_1q, "2Q": new_2q})
 
     new_compiler = copy(qc.compiler)
     new_compiler.target_device = TargetDevice(isa=new_isa.dict(by_alias=True), specs={})
