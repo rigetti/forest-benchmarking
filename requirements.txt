@@ -11,6 +11,7 @@ cvxpy>=1.0.0
 tqdm
 gitpython
 matplotlib>=3.1.0
+qcs-sdk-python>=0.20.1
 
 # test dependencies
 flake8

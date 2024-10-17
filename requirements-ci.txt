@@ -88,14 +88,14 @@ pydantic==1.10.14
 pyflakes==3.2.0
 Pygments==2.17.2
 pyparsing==3.1.1
-pyquil==4.5.0
+pyquil==4.14.3
 pytest==7.4.4
 pytest-cov==4.1.0
 python-dateutil==2.8.2
 python-rapidjson==1.14
 pytz==2023.3.post1
 pyzmq==25.1.2
-qcs-sdk-python==0.16.3
+qcs-sdk-python==0.20.1
 qdldl==0.1.7.post0
 quil==0.6.5
 referenceqvm==0.3
