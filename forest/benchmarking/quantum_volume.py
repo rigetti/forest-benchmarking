@@ -66,7 +66,7 @@ def _naive_program_generator(qc: QuantumComputer, qubits: Sequence[int],
     new_1q = {}
     for key, val in single_qs.items():
         if int(key) in qubits:
-            new_1q[key] = dict(val.dict())
+            new_1q[key] = val.dict()
     new_2q = {}
     for key, val in two_qs.items():
         q1, q2 = key.split('-')
