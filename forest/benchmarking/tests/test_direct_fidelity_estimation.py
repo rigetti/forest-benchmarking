@@ -46,7 +46,7 @@ def test_exhaustive_process_dfe_run(benchmarker: BenchmarkConnection):
         prog += process
 
         expectation = wfnsim.reset().do_program(prog).expectation(setting.observable)
-        assert expectation == 1.
+        assert_almost_equal(expectation, 1.0)
 
 
 def test_exhaustive_state_dfe_run(benchmarker: BenchmarkConnection):
@@ -62,7 +62,7 @@ def test_exhaustive_state_dfe_run(benchmarker: BenchmarkConnection):
         prog += process
 
         expectation = wfnsim.reset().do_program(prog).expectation(setting.observable)
-        assert expectation == 1.
+        assert_almost_equal(expectation, 1.0)
 
 
 def test_exhaustive_process_dfe_analytical(benchmarker: BenchmarkConnection, qvm):

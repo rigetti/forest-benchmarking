@@ -1,6 +1,12 @@
 Changelog
 =========
 
+v0.10.0 (October 15, 2024)
+
+### Announcements
+
+- Upgrade pyQuil to a minimum of v4.14.3 (gh-240).
+
 v0.9.0 (September 20, 2023)
 ------------------------------------------------------------------------------------
 
@@ -34,7 +40,7 @@ Improvements and Changes:
 
 - Add PyPI version and Slack badges (gh-196).
 - Add Zenodo badge and BibTeX file for citation (gh-197).
-- Accommodate XY gate in `basic_compile` (gh-202). 
+- Accommodate XY gate in `basic_compile` (gh-202).
 - Increase PyQuil version requirement to accommodate XY gate (gh-203).
 
 
@@ -43,7 +49,7 @@ v0.7 (September 20, 2019)
 Breaking Changes:
 
 - Major module re-org of superoperator tools into `operator_tools` also moved `random_operators` to the operator tools module. Added type checking in random operators, added new module to check plain old operators are unitary etc (gh-150, 140, 164).
-- Remove symmetrization functionality from `observable_estimation` in favor of pyquil functionality (gh-194). 
+- Remove symmetrization functionality from `observable_estimation` in favor of pyquil functionality (gh-194).
 - Methods in `fitting` renamed to be less ambiguous `decay_constant_param_decay` -> `decay_time_param_decay` and
 `fit_decay_constant_param_decay` -> `fit_decay_time_param_decay`. Correspondingly, the fit parameter was renamed
 `decay_constant` -> `decay_time`(gh-175)
@@ -51,19 +57,19 @@ Breaking Changes:
 - `acquire_cz_phase_ramsey_data` removed in favor of `estimate_observables` and all other specific `acquire_*` methods
 in `qubit_spectroscopy.py` were removed in favor of `acquire_qubit_spectroscopy_data` (gh-175)
 - argument order standardized, which changed the api of `generate_exhaustive_process_dfe_experiment`,
-`generate_exhaustive_state_dfe_experiment`, `generate_monte_carlo_state_dfe_experiment`, 
-`generate_monte_carlo_process_dfe_experiment`, `robust_phase_estimate`, 
-and positional arg name of `acquire_dfe_data` (gh-182) 
+`generate_exhaustive_state_dfe_experiment`, `generate_monte_carlo_state_dfe_experiment`,
+`generate_monte_carlo_process_dfe_experiment`, `robust_phase_estimate`,
+and positional arg name of `acquire_dfe_data` (gh-182)
 
 Improvements and Changes:
 
 - Fixed the years in this Change log file 2018 -> 2019
 - Added linear inversion process tomography (gh-142)
-- Changed qubit tensor factor ordering of state tomography estimates to match that of process tomography, e.g. 
-tomographizing the plus eigenstate of `X0 * Z1` and passing in `qubits = [0,1]` will yield the state 
+- Changed qubit tensor factor ordering of state tomography estimates to match that of process tomography, e.g.
+tomographizing the plus eigenstate of `X0 * Z1` and passing in `qubits = [0,1]` will yield the state
 estimate corresponding to `|+0> = (1, 0, 1, 0)/sqrt(2)` rather than `|0+>` (gh-142)
 - Improved the `superoperator_tools` notebook and the `random_operators` notebook (gh-98)
-- Improvements to Ripple carry adder notebook, added tests for non parametric bit string 
+- Improvements to Ripple carry adder notebook, added tests for non parametric bit string
 prep program in utils (gh-98)
 - Added the ability to project a Choi matrix to the closest unitary (gh-159, 157)
 - Reduced local test run time from 11min to 5min (gh-160)
@@ -100,7 +106,7 @@ Breaking Changes:
 
 - `operator_estimation.group_experiments` -> `observable_estimation.group_settings`
 
-- `utils.all_pauli_terms` -> `utils.all_traceless_pauli_terms` 
+- `utils.all_pauli_terms` -> `utils.all_traceless_pauli_terms`
 
 - `DFEData` and `DFEEstimate` dataclasses removed in favor of `ExperimentResult` and tuple of results respectively (gh-134).
 
@@ -108,13 +114,13 @@ Breaking Changes:
 
 - `pandas.DataFrame` is no longer used in `randomized_benchmarking` (gh-133), `qubit_spectroscopy` (gh-129), and `robust_phase_estimation` (gh-135). These now make use of `observable_estimation.ObservablesExperiment`, and as such the API has changed substantially. Please refer to example notebooks for new usage.
 
-- `pandas.DataFrame` methods removed from `quantum_volume`. See examples notebook for alternative usage (gh-136). 
+- `pandas.DataFrame` methods removed from `quantum_volume`. See examples notebook for alternative usage (gh-136).
 
 - `utils.determine_simultaneous_grouping()` removed in favor of similar functionality in `observable_estimation.group_settings`
 
 - SIC state helpers removed from `utils`
 
-- default `utils.str_to_pauli_term` now associates left-most character of input `pauli_str` with qubit 0. If `qubit_labels` are provided then the qubits label the characters in order.  
+- default `utils.str_to_pauli_term` now associates left-most character of input `pauli_str` with qubit 0. If `qubit_labels` are provided then the qubits label the characters in order.
 
 - `utils.all_pauli_*_terms` -> `utils.all_traceless_pauli_*_terms` to reflect fact that identity term is not included.
 
@@ -131,8 +137,8 @@ Improvements and Changes:
     - optional symmetrization, which expands each program into a group of programs that accomplish symmetrization
     - data collection and optional `consolidate_symmetrization_outputs()` which collects data used for estimates
     - `calibrate_observable_estimates()` which can be used to update estimates after collecting calibration data
-   
-- `plotting.state_process.plot_pauli_transfer_matrix()` now automatically casts input to `np.real_if_close` 
+
+- `plotting.state_process.plot_pauli_transfer_matrix()` now automatically casts input to `np.real_if_close`
 
 - `_state_tomo_settings()` no longer includes all-Identity term.
 
@@ -149,7 +155,7 @@ Improvements and Changes:
 - Added functoinality to `plotting` module: two ways to visualize a quantum state in the Pauli basis, plotting of a Pauli Transfer Matrix, plotting a real matrix using a Hinton diagram, the addition of the computational basis as a predefined basis object (gh-119)
 - Refactor iterative MLE to use ExperimentResults directly (gh-120)
 - Combined `graph_state` and `bell_state` modules into `entangled_state` module, added deprecation warnings for the old modules (gh-122)
-- Made Ipython Notebooks a part of testing (gh-123) 
+- Made Ipython Notebooks a part of testing (gh-123)
 - Resolve test warnings and doc string formatting issues (gh-124)
 - **Breaking change.** Bump version and delete `graph_state` and `bell_state` modules (gh-125)
 - Added the ability to check if the Kraus operators are valid (PR 128)
