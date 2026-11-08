@@ -1,6 +1,14 @@
 Changelog
 =========
 
+
+v0.9.1 (unreleased)
+------------------------------------------------------------------------------------
+
+### Bugfixes
+
+- Support complex Kraus operators and states in `apply_kraus_ops_2_state` by initializing accumulator with complex dtype.
+
 v0.9.0 (September 20, 2023)
 ------------------------------------------------------------------------------------
 

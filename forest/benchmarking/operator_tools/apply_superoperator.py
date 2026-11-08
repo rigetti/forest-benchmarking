@@ -34,7 +34,8 @@ def apply_kraus_ops_2_state(kraus_ops: Sequence[np.ndarray], state: np.ndarray) 
     r"""
     Apply a quantum channel, specified by Kraus operators, to state.
 
-    The Kraus operators need not be square.
+    The Kraus operators need not be square. Both real and complex Kraus operators and states
+    are supported.
 
     :param kraus_ops: A list or tuple of N Kraus operators, each operator is M by dim ndarray
     :param state: A dim by dim ndarray which is the density matrix for the state
@@ -50,7 +51,7 @@ def apply_kraus_ops_2_state(kraus_ops: Sequence[np.ndarray], state: np.ndarray) 
     if dim != cols:
         raise ValueError("Dimensions of state and Kraus operator are incompatible")
 
-    new_state = np.zeros((rows, rows))
+    new_state = np.zeros((rows, rows), dtype=complex)
     for M in kraus_ops:
         new_state += M @ state @ np.transpose(M.conj())
 
